@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0F172A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finanzas">
+<link rel="manifest" href="manifest.json">
+<title>Finanzas Personales 2026</title>
+<style>
+:root{--bg:#0F172A;--surf:#1E293B;--surf2:#253347;--brd:rgba(148,163,184,.12);--brd2:rgba(148,163,184,.22);--txt:#F1F5F9;--mut:#94A3B8;--acc:#22D3EE;--acc-d:rgba(34,211,238,.12);--grn:#34D399;--grn-d:rgba(52,211,153,.12);--red:#F87171;--red-d:rgba(248,113,113,.12);--amb:#FBBF24;--amb-d:rgba(251,191,36,.12);--pur:#A78BFA;--pur-d:rgba(167,139,250,.12);--r:12px;--r2:8px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px}
+#app{height:100%;display:flex;flex-direction:column;max-width:430px;margin:0 auto}
+.topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:10px 16px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding-top:max(10px,env(safe-area-inset-top))}
+.topbar-left{display:flex;align-items:center;gap:6px}
+.mnav{background:none;border:none;color:var(--mut);font-size:22px;width:30px;height:30px;cursor:pointer;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.mnav:active{background:var(--surf2)}
+.mlbl{font-size:17px;font-weight:700;color:var(--txt)}
+.myr{font-size:12px;color:var(--mut)}
+.topbar-right{display:flex;gap:6px}
+.ibtn{background:none;border:1px solid var(--brd2);border-radius:var(--r2);width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut);font-size:16px}
+.ibtn:active{background:var(--surf2)}
+.pbanner{padding:8px 16px;display:flex;gap:8px;flex-shrink:0}
+.pcard{flex:1;background:var(--surf);border-radius:var(--r2);padding:8px 10px;border:1px solid var(--brd)}
+.pcard.urgent{border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.07)}
+.pcard.soon{border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.07)}
+.pcard.ok{border-color:rgba(52,211,153,.3)}
+.ptag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-bottom:2px}
+.pfecha{font-size:12px;font-weight:600;color:var(--txt)}
+.pdias{font-size:11px;margin-top:1px}
+.du{color:var(--red)}.ds{color:var(--amb)}.do{color:var(--grn)}
+.summary{background:var(--surf);padding:10px 14px;border-bottom:1px solid var(--brd);display:grid;grid-template-columns:repeat(4,1fr);gap:5px;flex-shrink:0}
+.stat{background:var(--bg);border-radius:var(--r2);padding:7px 6px}
+.slbl{font-size:9px;color:var(--mut);margin-bottom:2px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sval{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sg{color:var(--grn)}.sr{color:var(--red)}.sa{color:var(--amb)}.sb{color:var(--acc)}.sp{color:var(--pur)}
+.tabs{display:flex;background:var(--surf);border-bottom:1px solid var(--brd);flex-shrink:0}
+.tab{flex:1;padding:9px 0 8px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;color:var(--mut);border:none;background:none;border-bottom:2px solid transparent;transition:.15s}
+.tab.active{color:var(--acc);border-bottom-color:var(--acc)}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 80px}
+.card{background:var(--surf);border-radius:var(--r);border:1px solid var(--brd);margin-bottom:10px;overflow:hidden}
+.chead{padding:10px 14px 8px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center}
+.ctitle{font-size:13px;font-weight:600;color:var(--txt)}
+.badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600}
+.bg{background:var(--grn-d);color:var(--grn)}.br{background:var(--red-d);color:var(--red)}
+.ba{background:var(--amb-d);color:var(--amb)}.bb{background:var(--acc-d);color:var(--acc)}
+.bp{background:var(--pur-d);color:var(--pur)}
+.grow{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--brd);gap:10px;cursor:pointer}
+.grow:last-child{border-bottom:none}
+.grow:active{background:var(--surf2)}
+.gchk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--brd2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer}
+.gchk.paid{background:var(--grn);border-color:var(--grn);color:#0F172A}
+.ginfo{flex:1;min-width:0}
+.gname{font-size:13px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gname.pd{color:var(--mut);text-decoration:line-through;text-decoration-color:rgba(148,163,184,.4)}
+.gmeta{font-size:11px;color:var(--mut);margin-top:1px}
+.gamt{font-size:13px;font-weight:600;color:var(--txt)}
+.gamt.pa{color:var(--grn)}
+.gmth{font-size:11px;color:var(--mut)}
+.sdiv{font-size:10px;font-weight:600;color:var(--mut);padding:7px 14px 4px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--brd)}
+.trow{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(0,0,0,.2)}
+.tlbl{font-size:12px;color:var(--mut);font-weight:500}
+.tval{font-size:14px;font-weight:700}
+.pw{margin:4px 14px 8px;height:3px;background:var(--bg);border-radius:3px;overflow:hidden}
+.pb{height:100%;border-radius:3px;transition:width .3s}
+.pbok{background:var(--grn)}.pbw{background:var(--amb)}.pbo{background:var(--red)}
+.tcrow{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--brd);gap:10px;cursor:pointer}
+.tcrow:last-child{border-bottom:none}
+.tcrow:active{background:var(--surf2)}
+.tc-group{border-bottom:1px solid var(--brd)}
+.tc-group:last-child{border-bottom:none}
+.tc-group-head{display:flex;align-items:center;padding:10px 14px;gap:10px;cursor:pointer}
+.tc-group-head:active{background:var(--surf2)}
+.tc-chevron{font-size:18px;color:var(--mut);transition:transform .2s,color .2s;flex-shrink:0}
+.tc-detail-wrap{background:rgba(0,0,0,.15);border-top:1px solid var(--brd)}
+.tc-detail{display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 52px;border-bottom:1px solid var(--brd);cursor:pointer}
+.tc-detail:last-child{border-bottom:none}
+.tc-detail:active{background:var(--surf2)}
+.tc-count{display:inline-block;font-size:10px;font-weight:700;background:var(--acc-d);color:var(--acc);padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle}
+.tcic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.tcic.c{background:var(--red-d);color:var(--red)}.tcic.a{background:var(--grn-d);color:var(--grn)}
+.tcdesc{font-size:13px;color:var(--txt);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcdate{font-size:11px;color:var(--mut);margin-top:1px}
+.tcval{font-size:13px;font-weight:600}.tcval.c{color:var(--red)}.tcval.a{color:var(--grn)}
+.tcsaldo{font-size:11px;color:var(--mut);text-align:right;margin-top:1px}
+.nom-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 14px;border-bottom:1px solid var(--brd)}
+.ncard{background:var(--bg);border-radius:var(--r2);padding:10px 12px}
+.ncard-lbl{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.ncard-val{font-size:15px;font-weight:700}
+.ncard-sub{font-size:11px;color:var(--mut);margin-top:2px}
+.ncard-tag{font-size:10px;background:var(--pur-d);color:var(--pur);padding:2px 6px;border-radius:10px;display:inline-block;margin-top:4px}
+.nrow{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--brd)}
+.nrow:last-child{border-bottom:none}
+.nlbl{font-size:13px;color:var(--mut);display:flex;align-items:center;gap:5px}
+.npct{font-size:10px;opacity:.7}
+.nval{font-size:13px;font-weight:600}
+.nval.g{color:var(--grn)}.nval.r{color:var(--red)}
+.nrow.ntot{background:rgba(0,0,0,.2)}
+.nrow.ntot .nlbl{color:var(--txt);font-weight:600}
+.nrow.ntot .nval{font-size:15px}
+.nedit{background:none;border:1px solid var(--brd2);border-radius:5px;padding:2px 7px;font-size:11px;color:var(--mut);cursor:pointer;margin-left:4px}
+.fab{position:fixed;bottom:max(22px,env(safe-area-inset-bottom));right:18px;width:50px;height:50px;background:var(--acc);border:none;border-radius:50%;color:#0F172A;font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:100}
+.fab:active{transform:scale(.92)}
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .2s}
+.mbg.open{opacity:1;pointer-events:all}
+.modal{background:var(--surf);border-radius:20px 20px 0 0;padding:18px 18px max(18px,env(safe-area-inset-bottom));width:100%;max-height:90vh;overflow-y:auto;transform:translateY(100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.mbg.open .modal{transform:translateY(0)}
+.mhandle{width:36px;height:4px;background:var(--brd2);border-radius:4px;margin:0 auto 16px}
+.mtitle{font-size:16px;font-weight:700;margin-bottom:14px;color:var(--txt)}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px;font-weight:500}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px 12px;font-size:14px;color:var(--txt);outline:none}
+.field input:focus,.field select:focus{border-color:var(--acc)}
+.field select option{background:var(--surf)}
+.trow2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.topt{padding:9px;border-radius:var(--r2);border:1px solid var(--brd2);background:none;color:var(--mut);font-size:13px;font-weight:500;cursor:pointer;text-align:center}
+.topt.sc{border-color:var(--red);background:var(--red-d);color:var(--red)}
+.topt.sa{border-color:var(--grn);background:var(--grn-d);color:var(--grn)}
+.macts{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:16px}
+.bcnl{background:none;border:1px solid var(--brd2);border-radius:var(--r2);padding:11px;color:var(--mut);font-size:14px;cursor:pointer}
+.bpri{background:var(--acc);border:none;border-radius:var(--r2);padding:11px;color:#0F172A;font-size:14px;font-weight:700;cursor:pointer}
+.bdel{background:var(--red-d);border:1px solid rgba(248,113,113,.4);border-radius:var(--r2);padding:9px;color:var(--red);font-size:13px;cursor:pointer;width:100%;margin-top:8px}
+.cbx-row{display:flex;align-items:center;gap:8px;padding:8px 0}
+.cbx-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc)}
+.grow-nopag{background:rgba(251,191,36,.04)}
+.gchk.nopag{border-color:var(--amb);color:var(--amb);font-size:13px}
+.gname.np{color:var(--amb)}
+.gamt.na{color:var(--amb)}
+.nopag-badge{font-size:10px;font-weight:600;background:var(--amb-d);color:var(--amb);padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:middle}
+.g-group{border-bottom:1px solid var(--brd)}
+.g-group:last-child{border-bottom:none}
+.g-group-head{display:flex;align-items:center;padding:9px 14px;gap:10px;cursor:pointer}
+.g-group-head:active{background:var(--surf2)}
+.g-chevron{font-size:18px;color:var(--mut);transition:transform .2s,color .2s;flex-shrink:0;margin-left:4px}
+.g-sub-wrap{background:rgba(0,0,0,.12);border-top:1px solid var(--brd)}
+.g-sub-row{display:flex;align-items:center;padding:8px 14px 8px 44px;border-bottom:1px solid var(--brd);gap:10px;cursor:pointer}
+.g-sub-row:last-child{border-bottom:none}
+.g-sub-add{display:flex;align-items:center;justify-content:center;padding:8px 14px 8px 44px;cursor:pointer;color:var(--acc);font-size:12px;font-weight:600;gap:6px;border-top:1px solid var(--brd)}
+.g-sub-add:active{background:var(--surf2)}
+.empty{text-align:center;padding:36px 20px;color:var(--mut)}
+.empty .eic{font-size:36px;margin-bottom:10px}
+.empty p{font-size:13px;line-height:1.5}
+.toast{position:fixed;bottom:82px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surf2);border:1px solid var(--brd2);border-radius:20px;padding:8px 16px;font-size:13px;color:var(--txt);opacity:0;transition:.25s;z-index:300;white-space:nowrap;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="mnav" onclick="prevM()">&#8249;</button>
+      <div><span class="mlbl" id="lm">-</span><span class="myr" id="ly"> -</span></div>
+      <button class="mnav" onclick="nextM()">&#8250;</button>
+    </div>
+    <div class="topbar-right">
+      <button class="ibtn" onclick="exportCSV()" title="Exportar">&#128196;</button>
+      <button class="ibtn" onclick="openNewMonth()" title="Nuevo mes">&#43;</button>
+    </div>
+  </div>
+  <div class="pbanner" id="pbanner"></div>
+  <div class="summary" id="summary"></div>
+  <div class="tabs">
+    <button class="tab active" onclick="sw(0)">Q1</button>
+    <button class="tab" onclick="sw(1)">Q2</button>
+    <button class="tab" onclick="sw(2)">Tarjeta</button>
+    <button class="tab" onclick="sw(3)">Nómina</button>
+  </div>
+  <div class="scroll" id="scroll"></div>
+  <button class="fab" onclick="onFab()">&#43;</button>
+</div>
+<div class="mbg" id="mbg" onclick="closeBg(event)">
+  <div class="modal"><div class="mhandle"></div><div id="mc"></div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const FE   = new Set(["2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01", "2026-05-18", "2026-06-08", "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07", "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16", "2026-12-08", "2026-12-25"]);
+const INIT = {"0": {"nombre": "Enero", "año": 2026, "q1_gastos": [{"id": "q1_0", "nombre": "C. Casa", "presupuesto": 950000.0, "metodo": "BBVA", "pagado_real": 945134.94, "pagado_flag": true}, {"id": "q1_1", "nombre": "Carro", "presupuesto": 750000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_2", "nombre": "Gasolina", "presupuesto": 100000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q1_3", "nombre": "Agua", "presupuesto": 60000.0, "metodo": "PSE", "pagado_real": 51624.38, "pagado_flag": true}, {"id": "q1_4", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_5", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_6", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "PSE", "pagado_real": 158148.0, "pagado_flag": true}, {"id": "q1_7", "nombre": "Ingles", "presupuesto": 120000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}, {"id": "q1_8", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_9", "nombre": "Kate", "presupuesto": 85000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}], "q2_gastos": [{"id": "q2_0", "nombre": "Colegio", "presupuesto": 550000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_1", "nombre": "Carro", "presupuesto": 300000.0, "metodo": "Tarjeta", "pagado_real": 0.0, "pagado_flag": true}, {"id": "q2_2", "nombre": "UNE", "presupuesto": 160000.0, "metodo": "Tarjeta", "pagado_real": 0.0, "pagado_flag": true}, {"id": "q2_3", "nombre": "Gym", "presupuesto": 120000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_4", "nombre": "Parqueadero", "presupuesto": 100000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_5", "nombre": "Baile", "presupuesto": 80000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_6", "nombre": "Pastilla Milo", "presupuesto": 60000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}, {"id": "q2_7", "nombre": "Gimnasia", "presupuesto": 60000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_8", "nombre": "Casa", "presupuesto": 80000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_9", "nombre": "CEL.K", "presupuesto": 40000.0, "metodo": "Tarjeta", "pagado_real": 0.0, "pagado_flag": true}, {"id": "q2_10", "nombre": "Tarjeta", "presupuesto": 491593.06, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q2_11", "nombre": "Transporte", "presupuesto": 180000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_12", "nombre": "Pastilla Lola", "presupuesto": 80000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_13", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_14", "nombre": "BBVA", "presupuesto": 200000.0, "metodo": "BBVA", "pagado_real": 197254.74, "pagado_flag": true}, {"id": "q2_15", "nombre": "Kate", "presupuesto": -200000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_16", "nombre": "Luci", "presupuesto": 115000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_17", "nombre": "IntCesantias", "presupuesto": -740000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}], "tarjeta": [], "nomina": {"basico_total": 6173334.0, "bonos_total": 899315.0, "basico_q1": 3086667.0, "basico_q2": 3292444.8, "bonos_q1": 449657.5, "bonos_q2": 449657.5, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 123466.68}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 123466.68}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 61733.34}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "Gasto", "porcentaje": null, "valor_fijo": 300000.0}], "ded_q2": [{"nombre": "F. Soli", "porcentaje": 0.01, "valor_fijo": 63791.12}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 131697.79}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 131697.79}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 61733.34}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "Gasto", "porcentaje": null, "valor_fijo": 300000.0}]}}, "1": {"nombre": "Febrero", "año": 2026, "q1_gastos": [{"id": "q1_0", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_1", "nombre": "C. Casa", "presupuesto": 950000.0, "metodo": "BBVA", "pagado_real": 945007.95, "pagado_flag": true}, {"id": "q1_2", "nombre": "Carro", "presupuesto": 750000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_3", "nombre": "Agua", "presupuesto": 60000.0, "metodo": "PSE", "pagado_real": 49223.0, "pagado_flag": true}, {"id": "q1_4", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_5", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "PSE", "pagado_real": 158148.0, "pagado_flag": true}, {"id": "q1_6", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_7", "nombre": "Gimnasia", "presupuesto": 90000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q1_8", "nombre": "Gasolina", "presupuesto": 100000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_9", "nombre": "Ingles", "presupuesto": 120000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_10", "nombre": "PrestamoFondo", "presupuesto": 171098.0, "metodo": "", "pagado_real": null, "pagado_flag": false}], "q2_gastos": [{"id": "q2_0", "nombre": "Colegio", "presupuesto": 550000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_1", "nombre": "Carro", "presupuesto": 300000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_2", "nombre": "Gym", "presupuesto": 130000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_3", "nombre": "Parqueadero", "presupuesto": 100000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_4", "nombre": "Baile", "presupuesto": 80000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_5", "nombre": "Pastilla Milo", "presupuesto": 60000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_6", "nombre": "Gimnasia", "presupuesto": 60000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_7", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_8", "nombre": "CEL.K", "presupuesto": 45000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_9", "nombre": "Tarjeta", "presupuesto": 0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q2_10", "nombre": "Transporte", "presupuesto": 180000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_11", "nombre": "Pastilla Lola", "presupuesto": 80000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_12", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_13", "nombre": "BBVA", "presupuesto": 200000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_14", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_15", "nombre": "UNE", "presupuesto": 160000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_16", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "PSE", "pagado_real": 158148.0, "pagado_flag": true}], "tarjeta": [], "nomina": {"basico_total": 6173334.0, "bonos_total": 899315.0, "basico_q1": 3086667.0, "basico_q2": 2675111.4, "bonos_q1": 449657.5, "bonos_q2": 449657.5, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 123466.68}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 123466.68}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 61733.34}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "Gasto", "porcentaje": null, "valor_fijo": 300000.0}], "ded_q2": [{"nombre": "F. Soli", "porcentaje": null, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 107004.46}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 107004.46}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 61733.34}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": null}]}}, "2": {"nombre": "Marzo", "año": 2026, "q1_gastos": [{"id": "q1_0", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_1", "nombre": "C. Casa", "presupuesto": 950000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q1_2", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_3", "nombre": "Agua", "presupuesto": 60000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_4", "nombre": "Carro", "presupuesto": 750000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_5", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_6", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_7", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q1_8", "nombre": "Gasolina", "presupuesto": 100000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_9", "nombre": "Ingles", "presupuesto": 120000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_10", "nombre": "CuotaFE", "presupuesto": 180126.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}], "q2_gastos": [{"id": "q2_0", "nombre": "Colegio", "presupuesto": 550000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_1", "nombre": "Carro", "presupuesto": 170000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_2", "nombre": "Gym", "presupuesto": 130000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_3", "nombre": "Parqueadero", "presupuesto": 100000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_4", "nombre": "Baile", "presupuesto": 80000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_5", "nombre": "Pastilla Milo", "presupuesto": 60000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_6", "nombre": "Gimnasia", "presupuesto": 60000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_7", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_8", "nombre": "CEL.K", "presupuesto": 45000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_9", "nombre": "Tarjeta", "presupuesto": 506929.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q2_10", "nombre": "Transporte", "presupuesto": 180000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_11", "nombre": "Pastilla Lola", "presupuesto": 80000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_12", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_13", "nombre": "UNE", "presupuesto": 160000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_14", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_15", "nombre": "Ludicas", "presupuesto": 380000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_16", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q2_17", "nombre": "Int Luci", "presupuesto": 30000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_18", "nombre": "Mama", "presupuesto": 660000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}], "tarjeta": [{"id": "tc_0", "fecha": "2026-03-06", "descripcion": "Dollarcity viva l", "tipo": "Compra", "valor": 16500.0, "saldo": 16500.0}, {"id": "tc_1", "fecha": "2026-03-13", "descripcion": "Abono", "tipo": "Abono", "valor": -14586.0, "saldo": 0.0}, {"id": "tc_2", "fecha": "2026-03-08", "descripcion": "Boulevar mundo de", "tipo": "Compra", "valor": 149900.0, "saldo": 149900.0}, {"id": "tc_3", "fecha": "2026-03-23", "descripcion": "Departamento de a", "tipo": "Compra", "valor": 182500.0, "saldo": 12500.0}, {"id": "tc_4", "fecha": "2026-03-31", "descripcion": "Departamento de a", "tipo": "Abono", "valor": -170000.0, "saldo": null}, {"id": "tc_5", "fecha": "2026-03-24", "descripcion": "Drogas la rebaja", "tipo": "Compra", "valor": 54010.0, "saldo": 54010.0}, {"id": "tc_6", "fecha": "2026-03-06", "descripcion": "Miniso viva la ce", "tipo": "Compra", "valor": 44900.0, "saldo": 44900.0}, {"id": "tc_7", "fecha": "2026-03-07", "descripcion": "Seguro", "tipo": "Compra", "valor": 4800.0, "saldo": 4800.0}, {"id": "tc_8", "fecha": "2026-03-01", "descripcion": "Tu estacion Eds", "tipo": "Compra", "valor": 130051.0, "saldo": 250105.0}, {"id": "tc_9", "fecha": "2026-03-28", "descripcion": "Tu estacion eds", "tipo": "Compra", "valor": 120054.0, "saldo": 0.0}, {"id": "tc_10", "fecha": "2026-03-06", "descripcion": "Une telco une pag", "tipo": "Compra", "valor": 149900.0, "saldo": -11200.0}, {"id": "tc_11", "fecha": "2026-03-24", "descripcion": "Une telco une pag", "tipo": "Compra", "valor": 43900.0, "saldo": 0.0}, {"id": "tc_12", "fecha": "2026-03-17", "descripcion": "Une telco une pag", "tipo": "Abono", "valor": -205000.0, "saldo": 0.0}], "nomina": {"basico_total": 6173334.0, "bonos_total": 899315.0, "basico_q1": 3086667.0, "basico_q2": 3292444.8, "bonos_q1": 449657.5, "bonos_q2": 449657.5, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 123466.68}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 123466.68}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 61733.34}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}], "ded_q2": [{"nombre": "F. Soli", "porcentaje": null, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 131697.79}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 131697.79}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 61733.34}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}]}}, "3": {"nombre": "Abril", "año": 2026, "q1_gastos": [{"id": "q1_0", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_1", "nombre": "C. Casa", "presupuesto": 950000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q1_2", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_3", "nombre": "Agua", "presupuesto": 60000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_4", "nombre": "Carro", "presupuesto": 750000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_5", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_6", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_7", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q1_8", "nombre": "Gasolina", "presupuesto": 100000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_9", "nombre": "Ingles", "presupuesto": 120000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}], "q2_gastos": [{"id": "q2_0", "nombre": "Colegio", "presupuesto": 550000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_1", "nombre": "Luci", "presupuesto": 200000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_2", "nombre": "Gym", "presupuesto": 210000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_3", "nombre": "Parqueadero", "presupuesto": 100000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_4", "nombre": "Baile", "presupuesto": 80000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_5", "nombre": "Pastilla Milo", "presupuesto": 60000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_6", "nombre": "Gimnasia", "presupuesto": 60000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_7", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_8", "nombre": "CEL.K", "presupuesto": 45000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_9", "nombre": "Tarjeta", "presupuesto": 500000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q2_10", "nombre": "Transporte", "presupuesto": 180000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_11", "nombre": "Pastilla Lola", "presupuesto": 80000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_12", "nombre": "Natillera", "presupuesto": 170000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_13", "nombre": "UNE", "presupuesto": 160000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_14", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_15", "nombre": "Int. Luci", "presupuesto": 30000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_16", "nombre": "Luz", "presupuesto": 56550.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}], "tarjeta": [{"id": "tc_0", "fecha": "2026-04-15", "descripcion": "Abono", "tipo": "Abono", "valor": -827704.0, "saldo": 0.0}, {"id": "tc_1", "fecha": "2026-04-22", "descripcion": "Abono", "tipo": "Abono", "valor": -2100900.0, "saldo": 0.0}, {"id": "tc_2", "fecha": "2026-04-30", "descripcion": "Abono", "tipo": "Abono", "valor": -1370000.0, "saldo": 0.0}, {"id": "tc_3", "fecha": "2026-04-22", "descripcion": "Alkosto-ktronix i", "tipo": "Compra", "valor": 1949050.0, "saldo": 1949050.0}, {"id": "tc_4", "fecha": "2026-04-02", "descripcion": "Colombiana de cin", "tipo": "Compra", "valor": 32000.0, "saldo": 0.0}, {"id": "tc_5", "fecha": "2026-04-07", "descripcion": "Colombiana de cin", "tipo": "Abono", "valor": -32000.0, "saldo": 0.0}, {"id": "tc_6", "fecha": "2026-03-31", "descripcion": "Departamento de a", "tipo": "Compra", "valor": 389500.0, "saldo": 436100.0}, {"id": "tc_7", "fecha": "2026-04-28", "descripcion": "Departamento de a", "tipo": "Compra", "valor": 46600.0, "saldo": 0.0}, {"id": "tc_8", "fecha": "2026-04-19", "descripcion": "Estacia n de serv", "tipo": "Compra", "valor": 80276.0, "saldo": 80276.0}, {"id": "tc_9", "fecha": "2026-04-01", "descripcion": "Fitnessport la ce", "tipo": "Compra", "valor": 129900.0, "saldo": 129900.0}, {"id": "tc_10", "fecha": "2026-04-16", "descripcion": "Frisby h68", "tipo": "Compra", "valor": 22500.0, "saldo": 22500.0}, {"id": "tc_11", "fecha": "2026-04-15", "descripcion": "Gasolin", "tipo": "Compra", "valor": 120002.0, "saldo": 120002.0}, {"id": "tc_12", "fecha": "2026-04-25", "descripcion": "Hogar y moda la c", "tipo": "Compra", "valor": 1596590.0, "saldo": 1596590.0}, {"id": "tc_13", "fecha": "2026-04-16", "descripcion": "Presto", "tipo": "Compra", "valor": 83600.0, "saldo": 83600.0}, {"id": "tc_14", "fecha": "2026-04-04", "descripcion": "SEGURO", "tipo": "Compra", "valor": 4800.0, "saldo": 4800.0}, {"id": "tc_15", "fecha": "2026-04-16", "descripcion": "Tiendas tomaticos", "tipo": "Compra", "valor": 181986.0, "saldo": 181986.0}, {"id": "tc_16", "fecha": "2026-04-06", "descripcion": "Une telco une pag", "tipo": "Compra", "valor": 149900.0, "saldo": 149900.0}, {"id": "tc_17", "fecha": "2026-04-22", "descripcion": "Une telco une pagK", "tipo": "Compra", "valor": 43900.0, "saldo": 43900.0}], "nomina": {"basico_total": 6512867.37, "bonos_total": 948777.32, "basico_q1": 3256433.69, "basico_q2": 3256433.69, "bonos_q1": 474388.66, "bonos_q2": 474388.66, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 65128.67}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}], "ded_q2": [{"nombre": "F. Soli", "porcentaje": null, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 65128.67}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}]}}, "4": {"nombre": "Mayo", "año": 2026, "q1_gastos": [{"id": "q1_0", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_1", "nombre": "C. Casa", "presupuesto": 950000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q1_2", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_3", "nombre": "Agua", "presupuesto": 60000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_4", "nombre": "Carro", "presupuesto": 750000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_5", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q1_6", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_7", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q1_8", "nombre": "Gasolina", "presupuesto": 100000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_9", "nombre": "Ingles", "presupuesto": 120000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_10", "nombre": "Luci", "presupuesto": 120000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}], "q2_gastos": [{"id": "q2_0", "nombre": "Colegio", "presupuesto": 550000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_1", "nombre": "Luci", "presupuesto": 120000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q2_2", "nombre": "Gym", "presupuesto": 220000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_3", "nombre": "Parqueadero", "presupuesto": 100000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_4", "nombre": "Baile", "presupuesto": 80000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_5", "nombre": "Pastilla Milo", "presupuesto": 60000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_6", "nombre": "Gimnasia", "presupuesto": 60000.0, "metodo": "", "pagado_real": null, "pagado_flag": true}, {"id": "q2_7", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_8", "nombre": "CEL.K", "presupuesto": 22000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_9", "nombre": "Tarjeta", "presupuesto": 490000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q2_10", "nombre": "Transporte", "presupuesto": 180000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_11", "nombre": "Pastilla Lola", "presupuesto": 80000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_12", "nombre": "Natillera", "presupuesto": 340000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_13", "nombre": "UNE", "presupuesto": 160000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_14", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_15", "nombre": "Luz", "presupuesto": 55000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": true}, {"id": "q2_16", "nombre": "LuciP", "presupuesto": 165000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}, {"id": "q2_17", "nombre": "Predial", "presupuesto": 80000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q2_18", "nombre": "Blancusquis", "presupuesto": 70000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": true}], "tarjeta": [{"id": "tc_0", "fecha": "2026-05-12", "descripcion": "Abono", "tipo": "Abono", "valor": -132793.0, "saldo": 0.0}, {"id": "tc_1", "fecha": "2026-05-15", "descripcion": "Abono", "tipo": "Abono", "valor": -12565.0, "saldo": 0.0}, {"id": "tc_2", "fecha": "2026-05-08", "descripcion": "La jauria boutiqu", "tipo": "Compra", "valor": 58500.0, "saldo": 58500.0}, {"id": "tc_3", "fecha": "2026-05-12", "descripcion": "Mercado pago*us", "tipo": "Compra", "valor": 620000.0, "saldo": 620000.0}, {"id": "tc_4", "fecha": "2026-05-05", "descripcion": "SEGURO", "tipo": "Compra", "valor": 4800.0, "saldo": 4800.0}, {"id": "tc_5", "fecha": "2026-05-11", "descripcion": "Tu estacion eds", "tipo": "Compra", "valor": 112158.0, "saldo": 112158.0}, {"id": "tc_6", "fecha": "2026-05-05", "descripcion": "Une telco une pag", "tipo": "Compra", "valor": 149900.0, "saldo": -10100.0}, {"id": "tc_7", "fecha": "2026-05-29", "descripcion": "Une telco une pag", "tipo": "Abono", "valor": -160000.0, "saldo": 0.0}], "nomina": {"basico_total": 6512867.37, "bonos_total": 948777.32, "basico_q1": 3256433.69, "basico_q2": 3473529.26, "bonos_q1": 474388.66, "bonos_q2": 474388.66, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 65128.67}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}], "ded_q2": [{"nombre": "F. Soli", "porcentaje": null, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 138941.17}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 138941.17}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 65128.67}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 75000.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}]}}, "5": {"nombre": "Junio", "año": 2026, "q1_gastos": [{"id": "q1_0", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_1", "nombre": "C. Casa", "presupuesto": 950000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q1_2", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_3", "nombre": "Agua", "presupuesto": 60000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": true}, {"id": "q1_4", "nombre": "Carro", "presupuesto": 750000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_5", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}, {"id": "q1_6", "nombre": "Natillera", "presupuesto": 85000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_7", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": true}, {"id": "q1_8", "nombre": "Gasolina", "presupuesto": 100000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_9", "nombre": "Ingles", "presupuesto": 120000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q1_10", "nombre": "Luci", "presupuesto": 120000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}, {"id": "q1_11", "nombre": "Tarjeta", "presupuesto": 150000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": true}], "q2_gastos": [{"id": "q2_0", "nombre": "Colegio", "presupuesto": 550000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": false}, {"id": "q2_1", "nombre": "Luci", "presupuesto": 204000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": false}, {"id": "q2_2", "nombre": "Gym", "presupuesto": 210000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": false}, {"id": "q2_3", "nombre": "Parqueadero", "presupuesto": 100000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": false}, {"id": "q2_4", "nombre": "Baile", "presupuesto": 80000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": false}, {"id": "q2_5", "nombre": "Pastilla Milo", "presupuesto": 60000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_6", "nombre": "Gimnasia", "presupuesto": 60000.0, "metodo": "", "pagado_real": null, "pagado_flag": false}, {"id": "q2_7", "nombre": "Casa", "presupuesto": 50000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}, {"id": "q2_8", "nombre": "CEL.K", "presupuesto": 22000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": false}, {"id": "q2_9", "nombre": "Tarjeta", "presupuesto": 1209408.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": false}, {"id": "q2_10", "nombre": "Transporte", "presupuesto": 180000.0, "metodo": "Nequi", "pagado_real": null, "pagado_flag": false}, {"id": "q2_11", "nombre": "Pastilla Lola", "presupuesto": 80000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}, {"id": "q2_12", "nombre": "Natillera", "presupuesto": 340000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}, {"id": "q2_13", "nombre": "UNE", "presupuesto": 160000.0, "metodo": "Tarjeta", "pagado_real": null, "pagado_flag": true}, {"id": "q2_14", "nombre": "Gasto", "presupuesto": 300000.0, "metodo": "Cuenta", "pagado_real": null, "pagado_flag": false}, {"id": "q2_15", "nombre": "SeguroCarro", "presupuesto": 160000.0, "metodo": "PSE", "pagado_real": null, "pagado_flag": false}, {"id": "q2_16", "nombre": "Luz", "presupuesto": 70000.0, "metodo": "BBVA", "pagado_real": null, "pagado_flag": false}, {"id": "q2_17", "nombre": "Carro", "presupuesto": 750000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}, {"id": "q2_18", "nombre": "Mama", "presupuesto": 950000.0, "metodo": "Retiro", "pagado_real": null, "pagado_flag": false}], "tarjeta": [{"id": "tc_0", "fecha": "2026-06-05", "descripcion": "Une telco une pag", "tipo": "Compra", "valor": 149900.0, "saldo": 149900.0}, {"id": "tc_1", "fecha": "2026-06-30", "descripcion": "Abono", "tipo": "Abono", "valor": -160000.0, "saldo": 0.0}, {"id": "tc_2", "fecha": "2026-06-11", "descripcion": "Clinica", "tipo": "Compra", "valor": 33700.0, "saldo": 33700.0}, {"id": "tc_3", "fecha": "2026-06-19", "descripcion": "Exito", "tipo": "Compra", "valor": 22440.0, "saldo": 22440.0}, {"id": "tc_4", "fecha": "2026-06-05", "descripcion": "Hincapie lopez ju", "tipo": "Compra", "valor": 99900.0, "saldo": 99900.0}, {"id": "tc_5", "fecha": "2026-06-19", "descripcion": "MercadoLibre", "tipo": "Compra", "valor": 176408.0, "saldo": 176408.0}, {"id": "tc_6", "fecha": "2026-06-19", "descripcion": "offcors", "tipo": "Compra", "valor": 55993.0, "saldo": 55993.0}, {"id": "tc_7", "fecha": "2026-06-15", "descripcion": "Reloj", "tipo": "Compra", "valor": 117526.0, "saldo": 117526.0}, {"id": "tc_8", "fecha": "2026-06-06", "descripcion": "Seguro", "tipo": "Compra", "valor": 4800.0, "saldo": 4800.0}, {"id": "tc_9", "fecha": "2026-06-15", "descripcion": "SOAT", "tipo": "Compra", "valor": 343300.0, "saldo": 343300.0}, {"id": "tc_10", "fecha": "2026-06-06", "descripcion": "Tu estacion eds", "tipo": "Compra", "valor": 105027.0, "saldo": 182440.0}, {"id": "tc_11", "fecha": "2026-06-19", "descripcion": "Tu estacion eds", "tipo": "Compra", "valor": 77413.0, "saldo": 0.0}, {"id": "tc_12", "fecha": "2026-06-11", "descripcion": "virgin", "tipo": "Compra", "valor": 23000.0, "saldo": 23000.0}, {"id": "tc_13", "fecha": "2026-06-15", "descripcion": "zzzz", "tipo": "Compra", "valor": 1.0, "saldo": 1.0}], "nomina": {"basico_total": 6512867.37, "bonos_total": 948777.32, "basico_q1": 3256433.69, "basico_q2": 3256433.69, "bonos_q1": 474388.66, "bonos_q2": 474388.66, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 65128.67}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 75000.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}], "ded_q2": [{"nombre": "F. Soli", "porcentaje": null, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "Pension", "porcentaje": 0.04, "valor_fijo": 130257.35}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": 65128.67}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 75000.0}, {"nombre": "PrestaFE", "porcentaje": null, "valor_fijo": 171098.0}]}}};
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+// ── Migración automática de estructura antigua ────────────────────────────────
+function migrateMonth(m) {
+  if (!m.nomina) {
+    const q1 = m.nom_q1 || {}, q2 = m.nom_q2 || {};
+    const bt  = (q1.basico || 0) + (q2.basico || 0);
+    const bon = q1.bonos || 0;
+    m.nomina = {
+      basico_total: bt, bonos_total: bon,
+      basico_q1: q1.basico || Math.round(bt/2),
+      basico_q2: q2.basico || Math.round(bt/2),
+      bonos_q1: Math.round(bon/2), bonos_q2: Math.round(bon/2),
+      ded_q1: (q1.deducciones || []).map(d=>({nombre:d.nombre||'',porcentaje:d.porcentaje||null,valor_fijo:d.valor_fijo||null})),
+      ded_q2: (q2.deducciones || []).map(d=>({nombre:d.nombre||'',porcentaje:d.porcentaje||null,valor_fijo:d.valor_fijo||null})),
+    };
+    delete m.nom_q1; delete m.nom_q2;
+  }
+  const nom = m.nomina;
+  if (!nom.basico_total)  nom.basico_total  = 0;
+  if (!nom.bonos_total)   nom.bonos_total   = 0;
+  if (nom.basico_q1 == null) nom.basico_q1  = Math.round(nom.basico_total/2);
+  if (nom.basico_q2 == null) nom.basico_q2  = Math.round(nom.basico_total/2);
+  if (nom.bonos_q1  == null) nom.bonos_q1   = Math.round(nom.bonos_total/2);
+  if (nom.bonos_q2  == null) nom.bonos_q2   = Math.round(nom.bonos_total/2);
+  if (!Array.isArray(nom.ded_q1)) nom.ded_q1 = [];
+  if (!Array.isArray(nom.ded_q2)) nom.ded_q2 = [];
+  if (!Array.isArray(m.q1_gastos)) m.q1_gastos = [];
+  if (!Array.isArray(m.q2_gastos)) m.q2_gastos = [];
+  if (!Array.isArray(m.tarjeta))   m.tarjeta   = [];
+  return m;
+}
+
+let db;
+try {
+  const raw = localStorage.getItem('fin26');
+  db = raw ? JSON.parse(raw) : null;
+  if (db) Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
+} catch(e) { db = null; }
+if (!db) {
+  db = JSON.parse(JSON.stringify(INIT));
+  Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
+}
+save();
+
+let curM   = parseInt(localStorage.getItem('fin26m') || '0');
+let gFiltro = {'q1':'todos','q2':'todos'}; // filtro por método en Q1/Q2
+let curTab = 0;
+let tcTipo = 'Compra';
+
+function save()  { localStorage.setItem('fin26', JSON.stringify(db)); }
+function getM()  { return db[curM]; }
+function getNom(m) { return m.nomina || {}; }
+
+function cop(v) {
+  if (v == null || isNaN(v)) return '$0';
+  return '$' + Math.round(Math.abs(v)).toLocaleString('es-CO');
+}
+function uid()  { return Math.random().toString(36).slice(2,9); }
+function fmtD(d) {
+  if (!d) return '';
+  const [,m,day] = d.split('-');
+  return parseInt(day)+' '+['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][parseInt(m)-1];
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// ── Fechas de pago ────────────────────────────────────────────────────────────
+function isFest(d) { return FE.has(d.toISOString().slice(0,10)); }
+function isWknd(d) { return d.getDay()===0||d.getDay()===6; }
+function prevBiz(d) {
+  let x=new Date(d); x.setDate(x.getDate()-1);
+  while(isWknd(x)||isFest(x)) x.setDate(x.getDate()-1);
+  return x;
+}
+function getPago(año,mi) {
+  let q1=new Date(año,mi,15);
+  if(isWknd(q1)||isFest(q1)) { q1=prevBiz(q1); }
+  else { let v=new Date(año,mi,14); while(v.getDay()!==5) v.setDate(v.getDate()-1); while(isFest(v)) v.setDate(v.getDate()-1); q1=v; }
+  let q2=new Date(año,mi+1,0);
+  while(isWknd(q2)||isFest(q2)) q2=prevBiz(q2);
+  return {q1,q2};
+}
+function diasHasta(dt) {
+  const h=new Date(); h.setHours(0,0,0,0);
+  const t=new Date(dt); t.setHours(0,0,0,0);
+  return Math.round((t-h)/86400000);
+}
+function pcardHTML(dt,lbl) {
+  const dias=diasHasta(dt);
+  const fecha=dt.toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'});
+  let cls='ok',dcls='do',dtxt='en '+dias+' días';
+  if(dias<0)       {cls='';       dcls='';   dtxt='ya pagó';}
+  else if(dias===0){cls='urgent'; dcls='du'; dtxt='¡Hoy!';}
+  else if(dias<=3) {cls='urgent'; dcls='du'; dtxt='en '+dias+(dias===1?' día':' días');}
+  else if(dias<=7) {cls='soon';   dcls='ds'; dtxt='en '+dias+' días';}
+  return `<div class="pcard ${cls}"><div class="ptag">${lbl}</div><div class="pfecha">${fecha}</div><div class="pdias ${dcls}">${dtxt}</div></div>`;
+}
+
+// ── Cálculo nómina — bonos SOLO informativos, NO se incluyen en el cálculo ───
+// Q1 = basico_total / 2
+// Q2 = basico_total / 30 × dias_Q2  (días desde el 16 hasta fin de mes)
+// Las deducciones porcentuales se aplican solo sobre el básico quincenal
+
+function diasQ2(año, mesIdx) {
+  // Días del mes
+  const diasMes = new Date(año, mesIdx + 1, 0).getDate();
+  // Febrero bisiesto: diasMes=29 → diasQ2=14; normal: 28 → 13
+  // Meses de 30 días → 15; meses de 31 días → 16
+  return diasMes - 15;
+}
+
+function basicoQ1(m) {
+  const n = getNom(m);
+  return Math.round((n.basico_total || 0) / 2 * 100) / 100;
+}
+
+function basicoQ2(m) {
+  const n = getNom(m);
+  const mi = MESES.indexOf(m.nombre);
+  const dias = mi >= 0 ? diasQ2(m.año, mi) : 15;
+  return Math.round((n.basico_total || 0) / 30 * dias * 100) / 100;
+}
+
+function calcNeto(bq, deds) {
+  const base = bq || 0;
+  let ajuste = 0;
+  for (const d of (deds||[])) {
+    // tipo: 'resta' (default) o 'suma'
+    const signo = (d.tipo === 'suma') ? 1 : -1;
+    const val = d.porcentaje ? base * d.porcentaje : (d.valor_fijo || 0);
+    ajuste += signo * val;
+  }
+  return base + ajuste;
+}
+function netoQ1(m) { return calcNeto(basicoQ1(m), getNom(m).ded_q1); }
+function netoQ2(m) { return calcNeto(basicoQ2(m), getNom(m).ded_q2); }
+
+// ── Render principal ──────────────────────────────────────────────────────────
+function render() {
+  const m=getM();
+  document.getElementById('lm').textContent = m.nombre;
+  document.getElementById('ly').textContent = ' '+m.año;
+  localStorage.setItem('fin26m', curM);
+
+  const mi = MESES.indexOf(m.nombre);
+  const {q1,q2} = getPago(m.año, mi>=0?mi:0);
+  document.getElementById('pbanner').innerHTML = pcardHTML(q1,'Pago Q1')+pcardHTML(q2,'Pago Q2');
+
+  const nom = getNom(m);
+  const n1=netoQ1(m), n2=netoQ2(m), tNom=n1+n2;
+  const tGas=[...(m.q1_gastos||[]).filter(x=>!x.sinpagar),...(m.q2_gastos||[]).filter(x=>!x.sinpagar)].reduce((a,x)=>a+Math.abs(x.presupuesto||0),0);
+  const tc=m.tarjeta||[];
+  const tcSaldo=tc.filter(x=>x.tipo==='Compra').reduce((a,x)=>a+Math.abs(x.valor||0),0)
+              -tc.filter(x=>x.tipo==='Abono').reduce((a,x)=>a+Math.abs(x.valor||0),0);
+
+  document.getElementById('summary').innerHTML=`
+    <div class="stat"><div class="slbl">Básico mes</div><div class="sval sb">${cop(nom.basico_total)}</div></div>
+    <div class="stat"><div class="slbl">Neto mes</div><div class="sval sg">${cop(tNom)}</div></div>
+    <div class="stat"><div class="slbl">Gastos</div><div class="sval sr">${cop(tGas)}</div></div>
+    <div class="stat"><div class="slbl">Tarjeta</div><div class="sval sa">${cop(tcSaldo)}</div></div>`;
+
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===curTab));
+  const el=document.getElementById('scroll');
+  if      (curTab===0) el.innerHTML=renderGastos(m.q1_gastos||[],'q1');
+  else if (curTab===1) el.innerHTML=renderGastos(m.q2_gastos||[],'q2');
+  else if (curTab===2) el.innerHTML=renderTC(m);
+  else                 el.innerHTML=renderNom(m);
+}
+
+// ── Gastos ───────────────────────────────────────────────────────────────────
+function setGFiltro(which,f){
+  gFiltro[which]=f;
+  document.querySelectorAll('.g-pill-'+which).forEach(function(el){
+    el.style.background=el.dataset.f===f?'var(--acc)':'var(--surf2)';
+    el.style.color=el.dataset.f===f?'#0F172A':'var(--mut)';
+  });
+  var m=getM();
+  document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
+}
+
+function renderGastos(gastos,which) {
+  if(!gastos.length) return '<div class="empty"><div class="eic">📋</div><p>Sin gastos. Toca + para agregar.</p></div>';
+
+  // Collect unique methods for filter pills
+  var metodos=['todos'];
+  gastos.forEach(function(g){
+    if(g.metodo&&metodos.indexOf(g.metodo)<0) metodos.push(g.metodo);
+    // Also from subgastos (they have parentId)
+  });
+  var activeFiltro=gFiltro[which]||'todos';
+
+  const subMap={};
+  const topGastosAll=[];
+  for(const g of gastos){
+    if(g.parentId){ if(!subMap[g.parentId]) subMap[g.parentId]=[]; subMap[g.parentId].push(g); }
+    else topGastosAll.push(g);
+  }
+
+  // Apply method filter to top-level gastos (groups always shown)
+  const topGastos=activeFiltro==='todos'?topGastosAll:topGastosAll.filter(function(g){
+    return g.esGrupo || g.metodo===activeFiltro;
+  });
+
+  const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
+  const total=activos.reduce(function(a,x){
+    if(x.esGrupo){
+      // Si tiene base propia (saldo tarjeta), usar esa; sino sumar subgastos
+      var base=x.presupuesto&&x.presupuesto>0?x.presupuesto:0;
+      if(base>0) return a+base;
+      return a+(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
+    }
+    return a+Math.abs(x.presupuesto||0);
+  },0);
+  const pagado=activos.reduce(function(a,x){
+    if(x.esGrupo){
+      var base=x.presupuesto&&x.presupuesto>0?x.presupuesto:0;
+      var paid=(subMap[x.id]||[]).filter(function(s){return !s.sinpagar&&s.pagado_flag;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
+      // Si tiene base, "pagado" del grupo = lo que se ha abonado vía subgastos
+      return a+paid;
+    }
+    return x.pagado_flag?a+Math.abs(x.presupuesto||0):a;
+  },0);
+  const sinPagarTotal=topGastosAll.filter(function(x){return x.sinpagar;}).reduce(function(a,x){return a+Math.abs(x.presupuesto||0);},0);
+  const pct=total>0?Math.round(pagado/total*100):0;
+  const bc=pct<60?'pbok':pct<90?'pbw':'pbo';
+  const netoQ=which==='q1'?netoQ1(getM()):netoQ2(getM());
+  const disp=netoQ-total;
+
+  function buildSubRow(s,wh){
+    var sp=s.pagado_flag,st=s.sinpagar;
+    var sd=(s.pagado_real!=null&&s.pagado_real!==s.presupuesto)?s.presupuesto-s.pagado_real:null;
+    var sdh=sd!==null?' · <span style="color:var(--'+(sd>0?'grn':'red')+')\">'+(sd>0?'Sobró':'Faltó')+' '+cop(Math.abs(sd))+'</span>':'';
+    var chkCls=sp?'paid':st?'nopag':'';
+    var nameCls=sp?'pd':st?'np':'';
+    var amtCls=sp?'pa':'';
+    var nopagBadge=st?'<span class="nopag-badge">Sin pagar</span>':'';
+    var chkTxt=sp?'✓':st?'→':'';
+    return '<div class="g-sub-row">'
+      +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+ chkTxt +'</div>'
+      +'<div class="ginfo"><div class="gname '+nameCls+'">'+s.nombre+nopagBadge+'</div>'
+      +'<div class="gmeta">'+(s.metodo||'')+sdh+'</div></div>'
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')">'+ cop(s.presupuesto) +'</div></div>'
+      +'</div>';
+  }
+
+  var rows=topGastos.map(function(g,gi){
+    if(g.esGrupo){
+      var subs=subMap[g.id]||[];
+      // Base del grupo: si tiene presupuesto propio (ej. saldo tarjeta), usarlo; si no, sumar subgastos
+      var base=g.presupuesto&&g.presupuesto>0?g.presupuesto:0;
+      var subsPagados=subs.filter(function(s){return s.pagado_flag&&!s.sinpagar;}).reduce(function(a,s){return a+Math.abs(s.presupuesto||0);},0);
+      var subsPendientes=subs.filter(function(s){return !s.pagado_flag&&!s.sinpagar;}).reduce(function(a,s){return a+Math.abs(s.presupuesto||0);},0);
+      // Si tiene base propia: pendiente = base - pagado; si no: pendiente = suma subgastos no pagados
+      var totalGrupo=base>0?base:subsPendientes+subsPagados;
+      var pendiente=base>0?base-subsPagados:subsPendientes;
+      var allPaid=base>0?(pendiente<=0):subs.length>0&&subs.filter(function(s){return !s.sinpagar;}).every(function(s){return s.pagado_flag;});
+      var countBadge=subs.length>0?'<span class="tc-count">'+subs.length+'</span>':'';
+      var subRowsHtml=subs.map(function(s){return buildSubRow(s,which);}).join('');
+      var addBtn='<div class="g-sub-add" onclick="openGasto(null,\''+which+'\',\''+g.id+'\')">＋ Agregar al grupo</div>';
+      var grpChk=allPaid?'paid':'';
+      var grpTxt=allPaid?'✓':'';
+      // Línea de detalle: total y pendiente
+      var pendienteHtml=base>0&&subsPagados>0
+        ?'<div style="font-size:10px;color:var(--amb);margin-top:1px">Pend: '+cop(pendiente)+'</div>'
+        :'';
+      return '<div class="g-group">'
+        +'<div class="g-group-head" onclick="toggleGG(\'gg-'+gi+'\',\'gc-'+gi+'\')">'
+        +'<div class="gchk '+grpChk+'">'+grpTxt+'</div>'
+        +'<div class="ginfo"><div class="gname">'+g.nombre+countBadge+(g.tcLinked?'<span style="font-size:10px;color:var(--acc);margin-left:5px">⟳</span>':'')+' </div><div class="gmeta">'+(g.metodo||'')+'</div></div>'
+        +'<div style="text-align:right;display:flex;align-items:center;gap:6px">'
+        +'<div><div class="gamt">'+cop(totalGrupo)+'</div>'+pendienteHtml+'</div>'
+        +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);font-size:15px;padding:4px 6px;cursor:pointer;flex-shrink:0">✎</button>'
+        +'<div class="g-chevron" id="gc-'+gi+'">›</div></div>'
+        +'</div>'
+        +'<div id="gg-'+gi+'" style="display:none"><div class="g-sub-wrap">'+subRowsHtml+addBtn+'</div></div>'
+        +'</div>';
+    }
+    var p=g.pagado_flag,tras=g.sinpagar;
+    var diff=(g.pagado_real!=null&&g.pagado_real!==g.presupuesto)?g.presupuesto-g.pagado_real:null;
+    var dh=diff!==null?' · <span style="color:var(--'+(diff>0?'grn':'red')+')\">'+(diff>0?'Sobró':'Faltó')+' '+cop(Math.abs(diff))+'</span>':'';
+    var gCls=tras?'grow-nopag':'';
+    var chkCls=p?'paid':tras?'nopag':'';
+    var namCls=p?'pd':tras?'np':'';
+    var amtCls=p?'pa':'';
+    var nopag=tras?'<span class="nopag-badge">Sin pagar</span>':'';
+    var chkTxt=p?'✓':tras?'→':'';
+    var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):g.metodo||'';
+    return '<div class="grow '+gCls+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')">'
+      +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
+      +'<div class="ginfo"><div class="gname '+namCls+'">'+g.nombre+nopag+'</div><div class="gmeta">'+(g.metodo||'')+dh+'</div></div>'
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'">'+cop(g.presupuesto)+'</div><div class="gmth">'+realLine+'</div></div>'
+      +'</div>';
+  }).join('');
+
+  var spNote=sinPagarTotal>0?'<span style="color:var(--amb);font-size:11px;font-weight:500;margin-left:6px">· '+cop(sinPagarTotal)+' sin pagar</span>':'';
+  var dispColor=disp>=0?'grn':'red';
+  var dispTxt=(disp<0?'-':'')+cop(disp);
+  var qLabel=which==='q1'?'1':'2';
+
+  // Filter pills by método
+  var pillsHtml='<div style="position:relative"><div style="display:flex;gap:6px;overflow-x:auto;padding:8px 14px 6px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory">'
+    +metodos.map(function(m){
+      var active=m===activeFiltro;
+      var label=m==='todos'?'Todos':m;
+      var mTotal=m==='todos'?total:topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+      var pillOnClick='onclick="setGFiltro(\''+which+'\''+',\''+m+'\')"';
+      return '<button class="g-pill-'+which+'" data-f="'+m+'" '+pillOnClick+' style="'
+        +'flex-shrink:0;padding:4px 10px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;scroll-snap-align:start;'
+        +'background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'
+        +label+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
+    }).join('')+'</div></div>';
+
+  return '<div class="card">'
+    +'<div class="chead">'
+    +'<div><div class="ctitle">Quincena '+qLabel+'</div>'
+    +'<div style="font-size:11px;color:var(--mut);margin-top:2px">Neto: <span style="color:var(--grn);font-weight:600">'+cop(netoQ)+'</span></div></div>'
+    +'<div style="text-align:right"><span class="badge br">'+cop(total)+'</span>'
+    +'<div style="font-size:11px;margin-top:4px">Disponible: <span style="color:var(--'+dispColor+');font-weight:600">'+dispTxt+'</span></div></div>'
+    +'</div>'
+    +pillsHtml
+    +'<div class="pw"><div class="pb '+bc+'" style="width:'+pct+'%"></div></div>'
+    +rows
+    +'<div class="trow"><span class="tlbl">Pagado '+pct+'%</span>'
+    +'<span class="tval"><span style="color:var(--grn)">'+cop(pagado)+'</span> <span style="color:var(--mut);font-size:12px;font-weight:400">/ '+cop(total)+'</span>'+spNote+'</span></div>'
+    +'</div>';
+}
+function toggleGG(wrapId,chevId){
+  const w=document.getElementById(wrapId),ch=document.getElementById(chevId);
+  const open=w.style.display==='none';
+  w.style.display=open?'block':'none';
+  ch.style.transform=open?'rotate(90deg)':'rotate(0)';
+  ch.style.color=open?'var(--acc)':'var(--mut)';
+}
+
+function convertirGrupo(id,which){
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(x=>x.id===id); if(!g)return;
+  window._cvtId=id; window._cvtWhich=which;
+  const tcSaldo=calcTCSaldo(m);
+  const isLinked=g.tcLinked||false;
+  const baseVal=(!isLinked&&g.presupuesto)?g.presupuesto:'';
+  const fieldStyle=isLinked?'opacity:.4;pointer-events:none':'';
+  openModal('<div class="mtitle">'+(g.esGrupo?'Editar grupo':'Convertir en grupo')+'</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
+    +'Los subgastos pagados se descuentan del total mostrando el saldo pendiente.</p>'
+    +'<div class="cbx-row"><input type="checkbox" id="grp-linked"'+(isLinked?' checked':'')
+    +' onchange="var f=document.getElementById(\'grp-base-field\');f.style.opacity=this.checked?\'0.4\':\'1\';f.style.pointerEvents=this.checked?\'none\':\'auto\';">'
+    +'<label for="grp-linked" style="font-size:13px;color:var(--acc)">Vincular al saldo de tarjeta (auto: '+cop(tcSaldo)+')</label></div>'
+    +'<div class="field" id="grp-base-field" style="'+fieldStyle+'">'
+    +'<label>Monto base manual</label>'
+    +'<input id="grp-base" type="number" value="'+baseVal+'" placeholder="Ej: 1209417"></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveConvertir()">'+(g.esGrupo?'Guardar':'Convertir')+'</button>'
+    +'</div>');
+}
+function saveConvertir(){
+  const id=window._cvtId, which=window._cvtWhich;
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(x=>x.id===id); if(!g)return;
+  const linkedEl=document.getElementById('grp-linked');
+  const linked=linkedEl?linkedEl.checked:false;
+  g.esGrupo=true;
+  g.tcLinked=linked;
+  if(linked){
+    g.presupuesto=calcTCSaldo(m);
+  } else {
+    g.presupuesto=parseFloat(document.getElementById('grp-base').value)||0;
+  }
+  save();closeModal();render();toast(g.nombre+' convertido en grupo');
+}
+// ── Tarjeta ───────────────────────────────────────────────────────────────────
+function renderTC(m) {
+  const tc=m.tarjeta||[];
+  if(!tc.length) return '<div class="empty"><div class="eic">💳</div><p>Sin movimientos. Toca + para agregar.</p></div>';
+
+  const compras=tc.filter(function(x){return x.tipo==='Compra';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  const abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  const saldo=compras-abonos;
+
+  // Group by description, sorted by first date
+  var grupos={};
+  var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?1:a.fecha<b.fecha?-1:0;});
+  sorted.forEach(function(x){
+    var key=x.descripcion||'Sin descripción';
+    if(!grupos[key]) grupos[key]=[];
+    grupos[key].push(x);
+  });
+  var gruposArr=Object.entries(grupos).map(function(entry){
+    var nombre=entry[0], items=entry[1];
+    var total=items.reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+    var tipo=items[0].tipo;
+    var firstFecha=items[0]?items[0].fecha:'';
+    return {nombre:nombre,items:items,total:total,tipo:tipo,firstFecha:firstFecha};
+  }).sort(function(a,b){return a.firstFecha>b.firstFecha?1:a.firstFecha<b.firstFecha?-1:0;});
+
+
+  // Group rows
+  var grupoRows=gruposArr.map(function(g,gi){
+    var ab=g.tipo==='Abono';
+    var detalles=g.items.map(function(x){
+      return '<div class="tc-detail" onclick="editTC(\''+x.id+'\')">'
+        +'<div style="font-size:12px;color:var(--mut)">'+fmtD(x.fecha)+'</div>'
+        +'<div style="font-size:12px;font-weight:600;color:var(--'+(ab?'grn':'red')+')">'+(ab?'-':'+')+cop(Math.abs(x.valor||0))+'</div>'
+        +'</div>';
+    }).join('');
+    var countBadge=g.items.length>1?'<span class="tc-count">'+g.items.length+'</span>':'';
+    var dateRange=g.items.length===1?fmtD(g.items[0].fecha):fmtD(g.items[0].fecha)+' – '+fmtD(g.items[g.items.length-1].fecha);
+    return '<div class="tc-group" id="tcg-'+gi+'">'
+      +'<div class="tc-group-head" onclick="toggleTCG('+gi+')">'
+      +'<div class="tcic '+(ab?'a':'c')+'">'+(ab?'↓':'↑')+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div class="tcdesc">'+g.nombre+countBadge+'</div>'
+      +'<div class="tcdate">'+dateRange+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;display:flex;align-items:center;gap:8px">'
+      +'<div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(g.total)+'</div>'
+      +'<div class="tc-chevron" id="tcc-'+gi+'">›</div>'
+      +'</div>'
+      +'</div>'
+      +'<div class="tc-detail-wrap" id="tcd-'+gi+'" style="display:none">'+detalles+'</div>'
+      +'</div>';
+  }).join('');
+
+
+
+  return '<div class="card">'
+    +'<div class="chead"><span class="ctitle">Tarjeta de crédito</span><span class="badge ba">Saldo '+cop(saldo)+'</span></div>'
+    +grupoRows
+    +'<div class="trow"><span class="tlbl">Compras · Abonos</span>'
+    +'<span class="tval"><span style="color:var(--red)">'+cop(compras)+'</span> · <span style="color:var(--grn)">'+cop(abonos)+'</span></span></div>'
+    +'</div>';
+}
+function toggleTCG(gi) {
+  const wrap=document.getElementById('tcd-'+gi);
+  const chev=document.getElementById('tcc-'+gi);
+  const open=wrap.style.display==='none';
+  wrap.style.display=open?'block':'none';
+  chev.style.transform=open?'rotate(90deg)':'rotate(0deg)';
+  chev.style.color=open?'var(--acc)':'var(--mut)';
+}
+
+// ── Nómina ───────────────────────────────────────────────────────────────────
+function renderNom(m) {
+  const nom=getNom(m);
+  const n1=netoQ1(m), n2=netoQ2(m);
+
+  function block(lbl, bq, bonq, deds) {
+    const neto=calcNeto(bq,deds);
+    const drows=(deds||[]).map((d,i)=>{
+      _dedTipo = d.tipo || 'resta';
+  const isSuma = d.tipo === 'suma';
+      const val = d.porcentaje ? bq * d.porcentaje : (d.valor_fijo || 0);
+      const display = isSuma ? val : -val;
+      const cls = isSuma ? 'g' : 'r';
+      const sign = isSuma ? '+' : '-';
+      return `<div class="nrow">
+        <span class="nlbl">
+          <span style="font-size:11px;font-weight:700;color:var(--${isSuma?'grn':'red'})">${sign}</span>
+          ${d.nombre}${d.porcentaje?`<span class="npct">${(d.porcentaje*100).toFixed(0)}%</span>`:''}
+          <button class="nedit" onclick="editDed(event,'${lbl}',${i})">✎</button>
+        </span>
+        <span class="nval ${cls}">${isSuma?'+':''}${cop(display)}</span>
+      </div>`;
+    }).join('');
+    return `<div class="card">
+      <div class="chead"><span class="ctitle">${lbl}</span><span class="badge bg">${cop(neto)}</span></div>
+      <div class="nom-grid">
+        <div class="ncard">
+          <div class="ncard-lbl">Básico quincenal</div>
+          <div class="ncard-val" style="color:var(--acc)">${cop(bq)}</div>
+          <div class="ncard-sub">Mes: ${cop(nom.basico_total)}</div>
+        </div>
+        <div class="ncard">
+          <div class="ncard-lbl">Bonos quincenal</div>
+          <div class="ncard-val" style="color:var(--pur)">${cop(bonq)}</div>
+          <div class="ncard-sub">Mes: ${cop(nom.bonos_total)}</div>
+          <div class="ncard-tag">Solo informativo</div>
+        </div>
+      </div>
+      <div class="nrow"><span class="nlbl">Base de cálculo</span><span class="nval g">${cop(bq)}</span></div>
+      <div class="sdiv">Deducciones (sobre básico)</div>
+      ${drows}
+      <div class="nrow" style="justify-content:flex-end">
+        <button class="nedit" style="padding:4px 12px;font-size:12px" onclick="addDed('${lbl}')">+ Deducción</button>
+      </div>
+      <div class="nrow ntot"><span class="nlbl">Neto a recibir</span><span class="nval g">${cop(neto)}</span></div>
+    </div>`;
+  }
+
+  // Tarjeta resumen mensual
+  const resumen = `<div class="card" style="margin-bottom:10px">
+    <div class="chead"><span class="ctitle">Resumen mensual</span><span class="badge bb">${cop(nom.basico_total)}</span></div>
+    <div class="nom-grid">
+      <div class="ncard">
+        <div class="ncard-lbl">Básico total</div>
+        <div class="ncard-val" style="color:var(--acc)">${cop(nom.basico_total)}</div>
+        <div class="ncard-sub">Q1: ${cop(basicoQ1(m))} · Q2: ${cop(basicoQ2(m))}</div>
+      </div>
+      <div class="ncard">
+        <div class="ncard-lbl">Bonos total</div>
+        <div class="ncard-val" style="color:var(--pur)">${cop(nom.bonos_total)}</div>
+        <div class="ncard-sub">Q1: ${cop(nom.bonos_q1)} · Q2: ${cop(nom.bonos_q2)}</div>
+        <div class="ncard-tag">Solo informativo</div>
+      </div>
+    </div>
+    <div class="nrow"><span class="nlbl">Neto Q1</span><span class="nval g">${cop(n1)}</span></div>
+    <div class="nrow"><span class="nlbl">Neto Q2</span><span class="nval g">${cop(n2)}</span></div>
+    <div class="nrow ntot"><span class="nlbl">Neto total mes</span><span class="nval g">${cop(n1+n2)}</span></div>
+    <div class="nrow" style="justify-content:flex-end;border-top:1px solid var(--brd)">
+      <button class="nedit" style="padding:4px 12px;font-size:12px" onclick="editBasico()">✎ Editar básico y bonos</button>
+    </div>
+  </div>`;
+
+  return resumen
+    + block('Nómina Q1', basicoQ1(m), nom.bonos_q1||0, nom.ded_q1||[])
+    + block('Nómina Q2', basicoQ2(m), nom.bonos_q2||0, nom.ded_q2||[]);
+}
+
+// ── Navegación ────────────────────────────────────────────────────────────────
+function prevM(){if(curM>0){curM--;gFiltro={q1:'todos',q2:'todos'};curTab=0;render();}}
+function nextM(){const mx=Math.max(...Object.keys(db).map(Number));if(curM<mx){curM++;gFiltro={q1:'todos',q2:'todos'};curTab=0;render();}}
+function sw(i){curTab=i;render();}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal(h){document.getElementById('mc').innerHTML=h;document.getElementById('mbg').classList.add('open');}
+function closeModal(){document.getElementById('mbg').classList.remove('open');}
+function closeBg(e){if(e.target===document.getElementById('mbg'))closeModal();}
+
+// ── FAB ───────────────────────────────────────────────────────────────────────
+function onFab(){
+  if(curTab===0)openGasto(null,'q1');
+  else if(curTab===1)openGasto(null,'q2');
+  else if(curTab===2)openTCModal(null);
+  else addDed('Nómina Q1');
+}
+
+// ── CRUD Gastos ───────────────────────────────────────────────────────────────
+function openGasto(g,which,parentId){
+  const e=g||{nombre:'',presupuesto:0,metodo:'Nequi',pagado_real:null,pagado_flag:false};
+  const isE=!!g;
+  const pid=parentId||'';
+  const eid=isE?e.id:'';
+  const wh=which||'q1';
+
+  // Build all variable parts with simple concatenation — no nested backticks
+  const spLabel=wh==='q1'?'Sin pagar (mover a Q2)':'Sin pagar (solo recordatorio)';
+  const spChecked=e.sinpagar?' checked':'';
+  const pdChecked=e.pagado_flag?' checked':'';
+  const metodos=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
+  const opts=metodos.map(function(x){return '<option'+(e.metodo===x?' selected':'')+'>'+x+'</option>';}).join('');
+
+  const delBtn=isE?'<button class="bdel" onclick="delG(\''+eid+'\',\''+wh+'\')">Eliminar gasto</button>':'';
+  var grpBtn='';
+  if(isE&&!e.parentId&&!e.esGrupo){
+    grpBtn='<button class="bdel" style="background:var(--acc-d);border-color:var(--acc);color:var(--acc);margin-top:6px" onclick="convertirGrupo(\''+eid+'\',\''+wh+'\')">Convertir en grupo desplegable</button>';
+  } else if(isE&&e.esGrupo){
+    grpBtn='<button class="bdel" style="background:var(--acc-d);border-color:var(--acc);color:var(--acc);margin-top:6px" onclick="convertirGrupo(\''+eid+'\',\''+wh+'\')">Editar grupo / base</button>'
+          +'<button class="bdel" style="margin-top:6px" onclick="delGrupo(\''+eid+'\',\''+wh+'\')">Eliminar grupo (y subgastos)</button>';
+  }
+
+  const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
+    +'<div class="field"><label>Nombre</label><input id="g-n" value="'+e.nombre+'" placeholder="C. Casa, Luz..."></div>'
+    +'<div class="field"><label>Presupuesto</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
+    +'<div class="field"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
+    +'<div class="field"><label>Método</label><select id="g-m">'+opts+'</select></div>'
+    +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Marcado como pagado</label></div>'
+    +'<div class="cbx-row"><input type="checkbox" id="g-sp"'+spChecked+'><label for="g-sp" style="font-size:13px;color:var(--amb)">'+spLabel+'</label></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
+    +delBtn+grpBtn;
+  openModal(html);
+}
+function saveG(id,which,parentId){
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const nombre=document.getElementById('g-n').value.trim();
+  const presup=parseFloat(document.getElementById('g-p').value)||0;
+  const real=parseFloat(document.getElementById('g-r').value)||null;
+  const metodo=document.getElementById('g-m').value;
+  const paid=document.getElementById('g-pd').checked;
+  const sinpagar=document.getElementById('g-sp')?.checked||false;
+  if(!nombre){alert('Escribe un nombre');return;}
+  let gasto;
+  if(id){
+    gasto=list.find(x=>x.id===id);
+    if(gasto){gasto.nombre=nombre;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;}
+  } else {
+    gasto={id:uid(),nombre,presupuesto:presup,metodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null};
+    list.push(gasto);
+  }
+  save(); closeModal(); render();
+  // Si es Q1 y se marcó "Sin pagar", ofrecer crear el gasto en Q2
+  if(which==='q1' && sinpagar) {
+    ofrecerCopiarQ2(gasto);
+  } else {
+    toast(id?'Gasto actualizado':'Gasto agregado');
+  }
+}
+
+function ofrecerCopiarQ2(g) {
+  openModal('<div class="mtitle">¿Mover a Q2?</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:16px">'
+    +'El gasto <b style="color:var(--txt)">'+g.nombre+'</b> se marcó como sin pagar.<br>'
+    +'¿Deseas crearlo también en la quincena 2 para recordar que quedó pendiente?</p>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal();toast(\'Gasto guardado\')">No, solo Q1</button>'
+    +'<button class="bpri" onclick="copiarGastoQ2(\''+g.id+'\')">Sí, agregar a Q2</button>'
+    +'</div>');
+}
+function copiarGastoQ2(id) {
+  const m=getM();
+  const g=m.q1_gastos.find(x=>x.id===id);
+  if(!g){closeModal();return;}
+  const copia={id:uid(),nombre:g.nombre,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,pagado_flag:false,sinpagar:false};
+  m.q2_gastos.push(copia);
+  save(); closeModal(); render(); toast('Copiado a Q2');
+}
+function delGrupo(id,which){
+  if(!confirm('¿Eliminar el grupo y todos sus subgastos?'))return;
+  const m=getM(), k=which==='q1'?'q1_gastos':'q2_gastos';
+  m[k]=m[k].filter(x=>x.id!==id&&x.parentId!==id);
+  save();closeModal();render();toast('Grupo eliminado');
+}
+function delG(id,which){
+  if(!confirm('¿Eliminar este gasto?'))return;
+  const m=getM(),k=which==='q1'?'q1_gastos':'q2_gastos';
+  m[k]=m[k].filter(x=>x.id!==id);
+  save();closeModal();render();toast('Gasto eliminado');
+}
+function editGasto(id,which){
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(x=>x.id===id);if(g)openGasto(g,which);
+}
+function toggleP(e,id,which){
+  e.stopPropagation();
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(x=>x.id===id);if(g){g.pagado_flag=!g.pagado_flag;save();render();}
+}
+
+// ── CRUD Tarjeta ──────────────────────────────────────────────────────────────
+function openTCModal(tc){
+  const isE=tc!==null;
+  const t=tc||{descripcion:'',tipo:'Compra',fecha:new Date().toISOString().slice(0,10),valor:0,saldo:null};
+  tcTipo=t.tipo;
+  const eid=isE?t.id:'';
+  const cCls=t.tipo==='Compra'?' sc':'', aCls=t.tipo==='Abono'?' sa':'';
+  const valStr=Math.abs(t.valor||0)||'';
+  const saldoStr=t.saldo!=null?t.saldo:'';
+  const delBtn=isE?'<button class="bdel" onclick="delTC(\''+eid+'\')">Eliminar movimiento</button>':'';
+  openModal('<div class="mtitle">'+(isE?'Editar movimiento':'Nuevo movimiento')+'</div>'
+    +'<div class="trow2">'
+    +'<button class="topt'+cCls+'" id="oc" onclick="setTC(\'Compra\')">↑ Compra</button>'
+    +'<button class="topt'+aCls+'" id="oa" onclick="setTC(\'Abono\')">↓ Abono</button>'
+    +'</div>'
+    +'<div class="field"><label>Descripción</label><input id="tc-d" value="'+t.descripcion+'" placeholder="Gasolina, UNE..."></div>'
+    +'<div class="field"><label>Valor</label><input id="tc-v" type="number" value="'+valStr+'"></div>'
+    +'<div class="field"><label>Fecha</label><input id="tc-f" type="date" value="'+t.fecha+'"></div>'
+    +'<div class="field"><label>Saldo resultante (opcional)</label><input id="tc-s" type="number" value="'+saldoStr+'"></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveTC(\''+eid+'\')">Guardar</button></div>'
+    +delBtn);
+}
+function setTC(tipo){
+  tcTipo=tipo;
+  document.getElementById('oc').className='topt'+(tipo==='Compra'?' sc':'');
+  document.getElementById('oa').className='topt'+(tipo==='Abono'?' sa':'');
+}
+function calcTCSaldo(m){
+  var tc=m.tarjeta||[];
+  var compras=tc.filter(function(x){return x.tipo==='Compra';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  var abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  return Math.round((compras-abonos)*100)/100;
+}
+function syncTCGrupo(m){
+  var saldo=calcTCSaldo(m);
+  [m.q1_gastos||[],m.q2_gastos||[]].forEach(function(list){
+    list.forEach(function(g){ if(g.esGrupo&&g.tcLinked) g.presupuesto=saldo; });
+  });
+}
+function saveTC(id){
+  const m=getM();if(!m.tarjeta)m.tarjeta=[];
+  const desc=document.getElementById('tc-d').value.trim();
+  const val=parseFloat(document.getElementById('tc-v').value)||0;
+  const fecha=document.getElementById('tc-f').value;
+  const saldo=document.getElementById('tc-s').value!==''?parseFloat(document.getElementById('tc-s').value):null;
+  if(!desc){alert('Escribe una descripción');return;}
+  const valor=tcTipo==='Abono'?-Math.abs(val):Math.abs(val);
+  if(id){const t=m.tarjeta.find(x=>x.id===id);if(t){t.descripcion=desc;t.tipo=tcTipo;t.valor=valor;t.fecha=fecha;t.saldo=saldo;}}
+  else m.tarjeta.push({id:uid(),descripcion:desc,tipo:tcTipo,valor,fecha,saldo});
+  syncTCGrupo(m);
+  save();closeModal();render();toast(id?'Movimiento actualizado':'Movimiento agregado');
+}
+function delTC(id){
+  if(!confirm('¿Eliminar?'))return;
+  const m=getM();m.tarjeta=(m.tarjeta||[]).filter(x=>x.id!==id);
+  syncTCGrupo(m);
+  save();closeModal();render();toast('Eliminado');
+}
+function editTC(id){
+  const m=getM(),t=(m.tarjeta||[]).find(x=>x.id===id);
+  if(t){tcTipo=t.tipo;openTCModal(t);}
+}
+
+// ── Editar básico y bonos ─────────────────────────────────────────────────────
+function editBasico(){
+  const m=getM(), n=getNom(m);
+  const mi=MESES.indexOf(m.nombre), dias=mi>=0?diasQ2(m.año,mi):15;
+  const infoTxt='Q1 = básico ÷ 2 &nbsp;·&nbsp; Q2 = básico ÷ 30 × '+dias+' días ('+m.nombre+')';
+  openModal('<div class="mtitle">Editar básico y bonos</div>'
+    +'<p style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
+    +'Ingresa los valores <b style="color:var(--txt)">totales del mes</b>. Los bonos son solo informativos.<br><br>'
+    +'<b style="color:var(--txt)">'+infoTxt+'</b></p>'
+    +'<div class="field"><label>Básico total mes</label>'
+    +'<input id="b-bt" type="number" value="'+(n.basico_total||'')+'"></div>'
+    +'<div class="field"><label>Bonos total mes (solo informativo)</label>'
+    +'<input id="b-bon" type="number" value="'+(n.bonos_total||'')+'"></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveBasico()">Guardar</button></div>');
+}
+function saveBasico(){
+  const m=getM(),n=m.nomina;
+  const bt =parseFloat(document.getElementById('b-bt').value)||0;
+  const bon=parseFloat(document.getElementById('b-bon').value)||0;
+  n.basico_total=bt; n.bonos_total=bon;
+  // Q1 y Q2 se calculan automáticamente con la fórmula
+  n.basico_q1=basicoQ1({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
+  n.basico_q2=basicoQ2({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
+  n.bonos_q1=Math.round(bon/2); n.bonos_q2=Math.round(bon/2);
+  save();closeModal();render();toast('Nómina actualizada');
+}
+
+// ── CRUD Deducciones ──────────────────────────────────────────────────────────
+function editDed(e,lbl,i){
+  e.stopPropagation();
+  const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2,d=deds[i];
+  _dedTipo=d.tipo||'resta';
+  const isSuma=d.tipo==='suma';
+  const rCls=!isSuma?' sc':'', sCls=isSuma?' sa':'';
+  openModal('<div class="mtitle">Editar deducción</div>'
+    +'<div class="field"><label>Nombre</label><input id="d-n" value="'+d.nombre+'"></div>'
+    +'<div class="trow2">'
+    +'<button class="topt'+rCls+'" id="d-resta" onclick="setDedTipo(\'resta\')">− Resta</button>'
+    +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
+    +'</div>'
+    +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001" value="'+(d.porcentaje||'')+'"></div>'
+    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="number" value="'+(d.valor_fijo||'')+'"></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveDed(\''+lbl+'\','+i+')">Guardar</button></div>'
+    +'<button class="bdel" onclick="delDed(\''+lbl+'\','+i+')">Eliminar deducción</button>');
+}
+function addDed(lbl){
+  _dedTipo='resta';
+  openModal('<div class="mtitle">Nueva deducción / ingreso</div>'
+    +'<div class="field"><label>Nombre</label><input id="d-n" placeholder="Prima, Salud, Bono..."></div>'
+    +'<div class="trow2">'
+    +'<button class="topt sc" id="d-resta" onclick="setDedTipo(\'resta\')">− Resta</button>'
+    +'<button class="topt" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
+    +'</div>'
+    +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001"></div>'
+    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="number"></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveDed(\''+lbl+'\',-1)">Agregar</button></div>');
+}
+let _dedTipo = 'resta';
+function setDedTipo(t) {
+  _dedTipo = t;
+  const r=document.getElementById('d-resta'), s=document.getElementById('d-suma');
+  if(r) r.className = 'topt' + (t==='resta'?' sc':'');
+  if(s) s.className = 'topt' + (t==='suma'?' sa':'');
+}
+function saveDed(lbl,i){
+  const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2;
+  const nombre=document.getElementById('d-n').value.trim();
+  const pct=parseFloat(document.getElementById('d-p').value)||null;
+  const vf=parseFloat(document.getElementById('d-v').value)||null;
+  if(!nombre){alert('Escribe un nombre');return;}
+  const entry={nombre,porcentaje:pct,valor_fijo:vf,tipo:_dedTipo};
+  if(i===-1)deds.push(entry);
+  else deds[i]=entry;
+  save();closeModal();render();toast('Guardado');
+}
+function delDed(lbl,i){
+  if(!confirm('¿Eliminar?'))return;
+  const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2;
+  deds.splice(i,1);save();closeModal();render();toast('Eliminada');
+}
+
+// ── Nuevo mes ─────────────────────────────────────────────────────────────────
+function openNewMonth(){
+  const keys=Object.keys(db).map(Number),last=Math.max(...keys),lm=db[last];
+  const sig=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(last+2));
+  openModal('<div class="mtitle">Nuevo mes</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
+    +'Se creará <b style="color:var(--txt)">'+sig+' '+lm.año+'</b> copiando la estructura de <b style="color:var(--txt)">'+lm.nombre+'</b>. Los gastos quedan pendientes y la tarjeta empieza vacía.</p>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="createMonth()">Crear '+sig+'</button></div>');
+}
+function createMonth(){
+  const keys=Object.keys(db).map(Number),last=Math.max(...keys),lm=db[last];
+  const nk=last+1;
+  const nm=migrateMonth(JSON.parse(JSON.stringify(lm)));
+  nm.nombre=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(nk+1));
+  nm.tarjeta=[];
+  nm.q1_gastos=nm.q1_gastos.map(g=>({...g,id:uid(),pagado_flag:false,pagado_real:null}));
+  nm.q2_gastos=nm.q2_gastos.map(g=>({...g,id:uid(),pagado_flag:false,pagado_real:null}));
+  db[nk]=nm;save();curM=nk;curTab=0;gFiltro={q1:'todos',q2:'todos'};closeModal();render();toast(nm.nombre+' creado');
+}
+
+// ── Exportar CSV ──────────────────────────────────────────────────────────────
+function exportCSV(){
+  const m=getM(),nom=getNom(m);
+  const rows=[['Sección','Nombre','Presupuesto','Método','Pagado Real','Estado','Fecha']];
+  for(const g of(m.q1_gastos||[]))rows.push(['Q1',g.nombre,g.presupuesto,g.metodo,g.pagado_real||'',g.pagado_flag?'Pagado':'Pendiente','']);
+  for(const g of(m.q2_gastos||[]))rows.push(['Q2',g.nombre,g.presupuesto,g.metodo,g.pagado_real||'',g.pagado_flag?'Pagado':'Pendiente','']);
+  for(const t of(m.tarjeta||[]))rows.push(['Tarjeta',t.descripcion,Math.abs(t.valor||0),t.tipo,'','',t.fecha]);
+  rows.push(['Nomina','Basico Total',nom.basico_total,'','','',''],['Nomina','Bonos Total (informativo)',nom.bonos_total,'','','','']);
+  for(const d of(nom.ded_q1||[]))rows.push(['NominaQ1',d.nombre,d.valor_fijo||'',d.porcentaje?(d.porcentaje*100).toFixed(0)+'%':'','','','']);
+  for(const d of(nom.ded_q2||[]))rows.push(['NominaQ2',d.nombre,d.valor_fijo||'',d.porcentaje?(d.porcentaje*100).toFixed(0)+'%':'','','','']);
+  const csv=rows.map(r=>r.map(c=>'"'+String(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'})),download:'Finanzas_'+m.nombre+'_2026.csv'});
+  a.click();toast('Exportado · Ábrelo en Excel');
+}
+
+render();
+</script>
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
