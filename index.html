@@ -23,14 +23,18 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .topbar-right{display:flex;gap:6px}
 .ibtn{background:none;border:1px solid var(--brd2);border-radius:var(--r2);width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut);font-size:16px}
 .ibtn:active{background:var(--surf2)}
-.pbanner{padding:8px 16px;display:flex;gap:8px;flex-shrink:0}
-.pcard{flex:1;background:var(--surf);border-radius:var(--r2);padding:8px 10px;border:1px solid var(--brd)}
+.pbanner{padding:8px 16px;flex-shrink:0}
+.pcard{background:var(--surf);border-radius:var(--r);padding:10px 14px;border:1px solid var(--brd);cursor:pointer;transition:.15s;user-select:none}
+.pcard:active{opacity:.8}
 .pcard.urgent{border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.07)}
 .pcard.soon{border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.07)}
 .pcard.ok{border-color:rgba(52,211,153,.3)}
-.ptag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-bottom:2px}
-.pfecha{font-size:12px;font-weight:600;color:var(--txt)}
-.pdias{font-size:11px;margin-top:1px}
+.pcard.open{border-color:var(--acc);background:var(--acc-d)}
+.pcard-inner{display:flex;align-items:center;gap:8px}
+.pcard-cal{margin-top:8px;padding-top:8px;border-top:1px solid var(--brd)}
+.ptag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+
+.pdias{font-size:11px}
 .du{color:var(--red)}.ds{color:var(--amb)}.do{color:var(--grn)}
 .summary{background:var(--surf);padding:10px 14px;border-bottom:1px solid var(--brd);display:grid;grid-template-columns:repeat(4,1fr);gap:5px;flex-shrink:0}
 .stat{background:var(--bg);border-radius:var(--r2);padding:7px 6px}
@@ -143,6 +147,36 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .empty{text-align:center;padding:36px 20px;color:var(--mut)}
 .empty .eic{font-size:36px;margin-bottom:10px}
 .empty p{font-size:13px;line-height:1.5}
+.cal-wrap{padding:12px 16px}
+.cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cal-title{font-size:15px;font-weight:700;color:var(--txt)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-dow{font-size:10px;color:var(--mut);text-align:center;padding:4px 0;font-weight:600}
+.cal-day{border-radius:var(--r2);padding:4px 2px;text-align:center;cursor:pointer;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;transition:.15s}
+.cal-day:active{opacity:.7}
+.cal-day-num{font-size:12px;font-weight:600;color:var(--txt)}
+.cal-day.empty{cursor:default}
+.cal-day.today .cal-day-num{background:var(--acc);color:#0F172A;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px}
+.cal-day.has-pago{background:var(--surf2)}
+.cal-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.cal-dot.paid{background:var(--grn)}
+.cal-dot.pending{background:var(--amb)}
+.cal-dot.overdue{background:var(--red)}
+.cal-dot.nomina{background:var(--acc)}
+.cal-legend{display:flex;gap:12px;padding:8px 16px;flex-wrap:wrap}
+.cal-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mut)}
+.cal-event-list{margin-top:10px}
+.cal-event{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--brd);cursor:pointer}
+.cal-event:last-child{border-bottom:none}
+.cal-event:active{background:var(--surf2)}
+.cal-ev-left{display:flex;align-items:center;gap:10px}
+.cal-ev-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.cal-ev-name{font-size:13px;color:var(--txt)}
+.cal-ev-sub{font-size:11px;color:var(--mut);margin-top:1px}
+.cal-ev-right{text-align:right}
+.cal-ev-amt{font-size:13px;font-weight:600}
+.cal-ev-status{font-size:11px;margin-top:1px}
+.toast{position:fixed
 .toast{position:fixed;bottom:82px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surf2);border:1px solid var(--brd2);border-radius:20px;padding:8px 16px;font-size:13px;color:var(--txt);opacity:0;transition:.25s;z-index:300;white-space:nowrap;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
@@ -270,15 +304,95 @@ function diasHasta(dt) {
   const t=new Date(dt); t.setHours(0,0,0,0);
   return Math.round((t-h)/86400000);
 }
-function pcardHTML(dt,lbl) {
-  const dias=diasHasta(dt);
-  const fecha=dt.toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'});
-  let cls='ok',dcls='do',dtxt='en '+dias+' días';
-  if(dias<0)       {cls='';       dcls='';   dtxt='ya pagó';}
-  else if(dias===0){cls='urgent'; dcls='du'; dtxt='¡Hoy!';}
-  else if(dias<=3) {cls='urgent'; dcls='du'; dtxt='en '+dias+(dias===1?' día':' días');}
-  else if(dias<=7) {cls='soon';   dcls='ds'; dtxt='en '+dias+' días';}
-  return `<div class="pcard ${cls}"><div class="ptag">${lbl}</div><div class="pfecha">${fecha}</div><div class="pdias ${dcls}">${dtxt}</div></div>`;
+function diasStatus(dias){
+  if(dias<0)       return {cls:'urgent',dcls:'du',txt:'pagado'};
+  if(dias===0)     return {cls:'urgent',dcls:'du',txt:'¡Hoy!'};
+  if(dias<=3)      return {cls:'urgent',dcls:'du',txt:'en '+dias+(dias===1?' día':' días')};
+  if(dias<=7)      return {cls:'soon',  dcls:'ds',txt:'en '+dias+' días'};
+  return           {cls:'ok',     dcls:'do',txt:'en '+dias+' días'};
+}
+
+function renderPagosBanner(q1dt,q2dt){
+  const d1=diasHasta(q1dt), d2=diasHasta(q2dt);
+  const s1=diasStatus(d1), s2=diasStatus(d2);
+  const f1=q1dt.toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'});
+  const f2=q2dt.toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'});
+  // Determine pill urgency: use the most urgent one
+  var pillCls='ok';
+  if(s1.cls==='urgent'||s2.cls==='urgent') pillCls='urgent';
+  else if(s1.cls==='soon'||s2.cls==='soon') pillCls='soon';
+
+  const pill='<div class="pcard '+pillCls+' pcard-combo" id="pc-combo" onclick="togglePCal(\'cal-combo\')">'
+    +'<div class="pcard-inner">'
+    // Q1 info
+    +'<div style="flex:1">'
+    +'<div class="ptag">Pago Q1</div>'
+    +'<div style="font-size:12px;font-weight:600;color:var(--txt)">'+f1+'</div>'
+    +'<div class="pdias '+s1.dcls+'" style="font-size:10px">'+s1.txt+'</div>'
+    +'</div>'
+    // Divider
+    +'<div style="width:1px;background:var(--brd);align-self:stretch;margin:0 4px"></div>'
+    // Q2 info
+    +'<div style="flex:1;text-align:right">'
+    +'<div class="ptag">Pago Q2</div>'
+    +'<div style="font-size:12px;font-weight:600;color:var(--txt)">'+f2+'</div>'
+    +'<div class="pdias '+s2.dcls+'" style="font-size:10px">'+s2.txt+'</div>'
+    +'</div>'
+    +'</div>'
+    // Calendar expandable — single month with both pay days marked
+    +'<div class="pcard-cal" id="cal-combo" style="display:none">'+buildMonthCal(q1dt,q2dt)+'</div>'
+    +'</div>';
+  return pill;
+}
+
+function togglePCal(id){
+  const el=document.getElementById(id);
+  const pc=document.getElementById('pc-combo');
+  if(!el||!pc) return;
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  pc.classList.toggle('open',open);
+}
+
+function buildMonthCal(q1dt, q2dt){
+  const año=q1dt.getFullYear(), mes=q1dt.getMonth();
+  const p1=q1dt.getDate(), p2=q2dt.getDate();
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const diasMes=new Date(año,mes+1,0).getDate();
+  let primerDia=new Date(año,mes,1).getDay();
+  primerDia=primerDia===0?6:primerDia-1;
+  const dows=['L','M','X','J','V','S','D'];
+  const mesNombre=q1dt.toLocaleDateString('es-CO',{month:'long',year:'numeric'});
+  let html='<div style="text-align:center;font-size:11px;font-weight:600;color:var(--mut);margin-bottom:4px;text-transform:capitalize">'+mesNombre+'</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:11px">';
+  dows.forEach(function(d){
+    html+='<div style="text-align:center;color:var(--mut);padding:2px 0;font-weight:600;font-size:10px">'+d+'</div>';
+  });
+  for(var i=0;i<primerDia;i++) html+='<div></div>';
+  for(var d=1;d<=diasMes;d++){
+    const isP1=d===p1, isP2=d===p2;
+    const isToday=hoy.getFullYear()===año&&hoy.getMonth()===mes&&hoy.getDate()===d;
+    const isPast=new Date(año,mes,d)<hoy;
+    var bg='transparent', color=isPast?'rgba(148,163,184,.3)':'var(--mut)', fw='400', border='none', br='3px';
+    if(isP1&&isP2){
+      bg='var(--pur)'; color='#fff'; fw='700'; br='50%';
+    } else if(isP1){
+      // Q1 always blue regardless of past
+      bg='var(--acc)'; color='#0F172A'; fw='700'; br='50%';
+    } else if(isP2){
+      bg=isPast?'rgba(52,211,153,.5)':'var(--grn)'; color='#fff'; fw='700'; br='50%';
+    } else if(isToday){
+      border='1px solid var(--acc)'; color='var(--acc)'; fw='600'; br='50%';
+    }
+    html+='<div style="text-align:center;line-height:22px;height:22px;border-radius:'+br+';background:'+bg+';border:'+border+';color:'+color+';font-weight:'+fw+'">'+d+'</div>';
+  }
+  html+='</div>';
+  // Compact legend
+  html+='<div style="display:flex;gap:8px;margin-top:6px;font-size:10px;color:var(--mut);align-items:center">'
+    +'<span style="display:inline-flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:50%;background:var(--acc);display:inline-block"></span>Q1 ('+p1+')</span>'
+    +'<span style="display:inline-flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:50%;background:var(--grn);display:inline-block"></span>Q2 ('+p2+')</span>'
+    +'</div>';
+  return html;
 }
 
 // ── Cálculo nómina — bonos SOLO informativos, NO se incluyen en el cálculo ───
@@ -329,7 +443,7 @@ function render() {
 
   const mi = MESES.indexOf(m.nombre);
   const {q1,q2} = getPago(m.año, mi>=0?mi:0);
-  document.getElementById('pbanner').innerHTML = pcardHTML(q1,'Pago Q1')+pcardHTML(q2,'Pago Q2');
+  document.getElementById('pbanner').innerHTML = renderPagosBanner(q1,q2);
 
   const nom = getNom(m);
   const n1=netoQ1(m), n2=netoQ2(m), tNom=n1+n2;
@@ -381,9 +495,12 @@ function renderGastos(gastos,which) {
     else topGastosAll.push(g);
   }
 
-  // Apply method filter to top-level gastos (groups always shown)
+  // Apply method filter — groups shown only if metodo or any subgasto matches
   const topGastos=activeFiltro==='todos'?topGastosAll:topGastosAll.filter(function(g){
-    return g.esGrupo || g.metodo===activeFiltro;
+    if(!g.esGrupo) return g.metodo===activeFiltro;
+    // For groups: show if group metodo matches OR any subgasto metodo matches
+    if(g.metodo===activeFiltro) return true;
+    return (subMap[g.id]||[]).some(function(s){return s.metodo===activeFiltro;});
   });
 
   const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
@@ -509,6 +626,162 @@ function renderGastos(gastos,which) {
     +'<span class="tval"><span style="color:var(--grn)">'+cop(pagado)+'</span> <span style="color:var(--mut);font-size:12px;font-weight:400">/ '+cop(total)+'</span>'+spNote+'</span></div>'
     +'</div>';
 }
+// ── CALENDARIO ───────────────────────────────────────────────────────────────
+let calSelDay = null;
+
+function renderCal(m) {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const MESES_IDX = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mi = MESES_IDX.indexOf(m.nombre);
+  const año = m.año;
+
+  // Build event list: gastos Q1+Q2 + nomina pago dates
+  const events = []; // {day, nombre, monto, tipo:'gasto'|'nomina', paid, which, id}
+
+  // Gastos Q1
+  (m.q1_gastos||[]).filter(function(g){return !g.esGrupo&&!g.parentId;}).forEach(function(g){
+    // Q1 gastos are due around day 1-15; use day 1 as anchor since no specific date
+    events.push({day:1, nombre:g.nombre, monto:g.presupuesto, tipo:'gasto', paid:g.pagado_flag, sinpagar:g.sinpagar, which:'q1', id:g.id});
+  });
+  // Gastos Q2
+  (m.q2_gastos||[]).filter(function(g){return !g.esGrupo&&!g.parentId;}).forEach(function(g){
+    events.push({day:16, nombre:g.nombre, monto:g.presupuesto, tipo:'gasto', paid:g.pagado_flag, sinpagar:g.sinpagar, which:'q2', id:g.id});
+  });
+
+  // Pago nómina dates
+  var pagoInfo = getPago(año, mi>=0?mi:0);
+  var q1Day = pagoInfo.q1.getDate();
+  var q2Day = pagoInfo.q2.getDate();
+  var netoQ1Val = netoQ1(m), netoQ2Val = netoQ2(m);
+  events.push({day:q1Day, nombre:'Pago Q1', monto:netoQ1Val, tipo:'nomina', paid:hoy>pagoInfo.q1, which:'q1', id:'nom-q1'});
+  events.push({day:q2Day, nombre:'Pago Q2', monto:netoQ2Val, tipo:'nomina', paid:hoy>pagoInfo.q2, which:'q2', id:'nom-q2'});
+
+  // TC movimientos
+  (m.tarjeta||[]).forEach(function(t){
+    if(!t.fecha) return;
+    var d = parseInt(t.fecha.split('-')[2]);
+    events.push({day:d, nombre:t.descripcion, monto:Math.abs(t.valor||0), tipo:t.tipo==='Abono'?'abono':'tc', paid:true, which:'tc', id:t.id, fecha:t.fecha});
+  });
+
+  // Build day map
+  var dayMap = {};
+  events.forEach(function(ev){
+    if(!dayMap[ev.day]) dayMap[ev.day]=[];
+    dayMap[ev.day].push(ev);
+  });
+
+  // Calendar grid
+  var diasMes = new Date(año, mi+1, 0).getDate();
+  var primerDia = new Date(año, mi, 1).getDay(); // 0=Sun
+  primerDia = primerDia===0?6:primerDia-1; // Mon=0
+
+  var dows = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+  var dowHtml = dows.map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join('');
+
+  var cellsHtml = '';
+  for(var i=0;i<primerDia;i++) cellsHtml+='<div class="cal-day empty"></div>';
+
+  for(var d=1;d<=diasMes;d++){
+    var isToday = (hoy.getFullYear()===año&&hoy.getMonth()===mi&&hoy.getDate()===d);
+    var evs = dayMap[d]||[];
+    var hasPago = evs.length>0;
+    var cls = 'cal-day'+(isToday?' today':'')+(hasPago?' has-pago':'');
+    var dots = evs.slice(0,3).map(function(ev){
+      var overdue = !ev.paid && new Date(año,mi,d)<hoy;
+      var dotCls = ev.tipo==='nomina'?'nomina':(ev.paid?'paid':(overdue?'overdue':'pending'));
+      return '<div class="cal-dot '+dotCls+'"></div>';
+    }).join('');
+    cellsHtml+='<div class="'+cls+'" onclick="calSelectDay('+d+')">'
+      +'<div class="cal-day-num">'+d+'</div>'+dots+'</div>';
+  }
+
+  var gridHtml = '<div class="cal-grid">'+dowHtml+cellsHtml+'</div>';
+
+  // Selected day events or all events
+  var selEvs = calSelDay&&dayMap[calSelDay] ? dayMap[calSelDay] : [];
+  var evListHtml = '';
+  if(selEvs.length>0){
+    evListHtml = '<div class="card cal-event-list">'
+      +'<div class="chead"><span class="ctitle">'+calSelDay+' de '+m.nombre+'</span>'
+      +'<button onclick="calSelectDay(null)" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✕ Todo</button></div>'
+      +selEvs.map(function(ev){
+        var overdue = !ev.paid && new Date(año,mi,ev.day)<hoy;
+        var dotCls = ev.tipo==='nomina'?'nomina':(ev.paid?'paid':(overdue?'overdue':'pending'));
+        var statusTxt = ev.tipo==='nomina'?(ev.paid?'Pagado':'Pendiente'):(ev.paid?'Pagado':overdue?'Vencido':'Pendiente');
+        var statusColor = ev.paid?'var(--grn)':(overdue?'var(--red)':'var(--amb)');
+        var amtColor = ev.tipo==='nomina'?'var(--acc)':(ev.tipo==='abono'?'var(--grn)':(ev.paid?'var(--grn)':'var(--txt)'));
+        var clickFn = ev.tipo==='gasto'?'editGasto(\''+ev.id+'\',\''+ev.which+'\')':
+                      ev.tipo==='tc'||ev.tipo==='abono'?'editTC(\''+ev.id+'\')':'';
+        return '<div class="cal-event"'+(clickFn?' onclick="'+clickFn+'"':'')+'>'
+          +'<div class="cal-ev-left">'
+          +'<div class="cal-ev-dot" style="background:var(--'+dotCls+')"></div>'
+          +'<div><div class="cal-ev-name">'+ev.nombre+'</div>'
+          +'<div class="cal-ev-sub">'+ev.tipo.charAt(0).toUpperCase()+ev.tipo.slice(1)+'</div></div>'
+          +'</div>'
+          +'<div class="cal-ev-right">'
+          +'<div class="cal-ev-amt" style="color:'+amtColor+'">'+cop(ev.monto)+'</div>'
+          +'<div class="cal-ev-status" style="color:'+statusColor+'">'+statusTxt+'</div>'
+          +'</div></div>';
+      }).join('')
+      +'</div>';
+  } else {
+    // Show today's or upcoming events
+    var upcomingEvs = [];
+    for(var dd=1;dd<=diasMes;dd++){
+      (dayMap[dd]||[]).forEach(function(ev){
+        upcomingEvs.push(ev);
+      });
+    }
+    // Sort: overdue first, then pending, then paid
+    upcomingEvs.sort(function(a,b){
+      var aOvr=!a.paid&&new Date(año,mi,a.day)<hoy;
+      var bOvr=!b.paid&&new Date(año,mi,b.day)<hoy;
+      if(aOvr&&!bOvr) return -1;
+      if(!aOvr&&bOvr) return 1;
+      return a.day-b.day;
+    });
+    if(upcomingEvs.length>0){
+      evListHtml='<div class="card cal-event-list">'
+        +'<div class="chead"><span class="ctitle">Toca un día para ver detalle</span></div>'
+        +upcomingEvs.slice(0,8).map(function(ev){
+          var overdue=!ev.paid&&new Date(año,mi,ev.day)<hoy;
+          var dotCls=ev.tipo==='nomina'?'nomina':(ev.paid?'paid':(overdue?'overdue':'pending'));
+          var statusTxt=ev.paid?'Pagado':overdue?'Vencido':'Pendiente';
+          var statusColor=ev.paid?'var(--grn)':(overdue?'var(--red)':'var(--amb)');
+          var amtColor=ev.tipo==='nomina'?'var(--acc)':(ev.paid?'var(--grn)':'var(--txt)');
+          var clickFn=ev.tipo==='gasto'?'editGasto(\''+ev.id+'\',\''+ev.which+'\')':
+                      ev.tipo==='tc'||ev.tipo==='abono'?'editTC(\''+ev.id+'\')':'';
+          return '<div class="cal-event"'+(clickFn?' onclick="'+clickFn+'"':'')+'>'
+            +'<div class="cal-ev-left">'
+            +'<div class="cal-ev-dot" style="background:var(--'+dotCls+')"></div>'
+            +'<div><div class="cal-ev-name">'+ev.nombre+'</div>'
+            +'<div class="cal-ev-sub">'+ev.day+' '+m.nombre+'</div></div>'
+            +'</div>'
+            +'<div class="cal-ev-right">'
+            +'<div class="cal-ev-amt" style="color:'+amtColor+'">'+cop(ev.monto)+'</div>'
+            +'<div class="cal-ev-status" style="color:'+statusColor+'">'+statusTxt+'</div>'
+            +'</div></div>';
+        }).join('')
+        +(upcomingEvs.length>8?'<div style="text-align:center;padding:10px;font-size:12px;color:var(--mut)">Toca un día para ver más</div>':'')
+        +'</div>';
+    }
+  }
+
+  var legendHtml='<div class="cal-legend">'
+    +'<div class="cal-leg-item"><div class="cal-dot nomina"></div>Nómina</div>'
+    +'<div class="cal-leg-item"><div class="cal-dot paid"></div>Pagado</div>'
+    +'<div class="cal-leg-item"><div class="cal-dot pending"></div>Pendiente</div>'
+    +'<div class="cal-leg-item"><div class="cal-dot overdue"></div>Vencido</div>'
+    +'</div>';
+
+  return '<div class="cal-wrap">'+gridHtml+legendHtml+'</div>'+evListHtml;
+}
+
+function calSelectDay(d){
+  calSelDay = (d===null||calSelDay===d) ? null : d;
+  document.getElementById('scroll').innerHTML=renderCal(getM());
+}
+
 function toggleGG(wrapId,chevId){
   const w=document.getElementById(wrapId),ch=document.getElementById(chevId);
   const open=w.style.display==='none';
@@ -733,7 +1006,13 @@ function openGasto(g,which,parentId){
   const spChecked=e.sinpagar?' checked':'';
   const pdChecked=e.pagado_flag?' checked':'';
   const metodos=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
-  const opts=metodos.map(function(x){return '<option'+(e.metodo===x?' selected':'')+'>'+x+'</option>';}).join('');
+  // For subgastos, default metodo to parent group's metodo
+  var defaultMetodo=e.metodo||'Nequi';
+  if(!e.id&&pid){
+    var parentG=(getM()[wh==='q1'?'q1_gastos':'q2_gastos']||[]).find(function(x){return x.id===pid;});
+    if(parentG&&parentG.metodo) defaultMetodo=parentG.metodo;
+  }
+  const opts=metodos.map(function(x){return '<option'+(defaultMetodo===x?' selected':'')+'>'+x+'</option>';}).join('');
 
   const delBtn=isE?'<button class="bdel" onclick="delG(\''+eid+'\',\''+wh+'\')">Eliminar gasto</button>':'';
   var grpBtn='';
@@ -770,7 +1049,13 @@ function saveG(id,which,parentId){
     gasto=list.find(x=>x.id===id);
     if(gasto){gasto.nombre=nombre;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;}
   } else {
-    gasto={id:uid(),nombre,presupuesto:presup,metodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null};
+    // If this is a subgasto, inherit parent group's metodo
+    var finalMetodo=metodo;
+    if(parentId){
+      var parentG=list.find(function(x){return x.id===parentId;});
+      if(parentG&&parentG.metodo) finalMetodo=parentG.metodo;
+    }
+    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null};
     list.push(gasto);
   }
   save(); closeModal(); render();
