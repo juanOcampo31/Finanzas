@@ -187,11 +187,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
   <div class="topbar">
     <div class="topbar-left">
       <button class="mnav" onclick="prevM()">&#8249;</button>
-      <div><span class="mlbl" id="lm">-</span><span class="myr" id="ly"> -</span></div>
+      <div onclick="openMonthPicker()" style="cursor:pointer;padding:2px 6px;border-radius:var(--r2)">
+        <span class="mlbl" id="lm">-</span><span class="myr" id="ly"> -</span>
+        <span style="font-size:10px;color:var(--mut);margin-left:2px">▾</span>
+      </div>
       <button class="mnav" onclick="nextM()">&#8250;</button>
     </div>
     <div class="topbar-right">
       <button class="ibtn" onclick="exportCSV()" title="Exportar">&#128196;</button>
+      <button class="ibtn" onclick="openDeleteMonth()" title="Eliminar mes" style="color:var(--red)">&#128465;</button>
       <button class="ibtn" onclick="openNewMonth()" title="Nuevo mes">&#43;</button>
     </div>
   </div>
@@ -261,6 +265,10 @@ save();
 
 let curM   = parseInt(localStorage.getItem('fin26m') || '0');
 let gFiltro = {'q1':'todos','q2':'todos'}; // filtro por método en Q1/Q2
+let gSort      = {'q1':'orden','q2':'orden'};  // orden activo en Q1/Q2
+let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
+let tcInfoOpen  = false;                        // info tarjeta expandida
+let nomDedOpen  = {'q1':false,'q2':false};      // deducciones nómina expandidas
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 let curTab = 0;
 let tcTipo = 'Compra';
@@ -469,6 +477,38 @@ function render() {
 }
 
 // ── Gastos ───────────────────────────────────────────────────────────────────
+function toggleGFilter(which){
+  gFilterOpen[which]=!gFilterOpen[which];
+  var m=getM();
+  document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
+}
+
+function setGSort(which,s){
+  gSort[which]=s;
+  // Re-render
+  var m=getM();
+  document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
+}
+
+function sortGastos(gastos,which){
+  var s=gSort[which]||'orden';
+  var arr=gastos.slice(); // shallow copy to avoid mutating original
+  if(s==='nombre')  arr.sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
+  else if(s==='monto-asc')  arr.sort(function(a,b){return Math.abs(a.presupuesto||0)-Math.abs(b.presupuesto||0);});
+  else if(s==='monto-desc') arr.sort(function(a,b){return Math.abs(b.presupuesto||0)-Math.abs(a.presupuesto||0);});
+  else if(s==='metodo') arr.sort(function(a,b){return (a.metodo||'').localeCompare(b.metodo||'','es');});
+  else if(s==='estado'){
+    // pendientes primero, sin pagar al final
+    arr.sort(function(a,b){
+      var va=a.sinpagar?2:a.pagado_flag?1:0;
+      var vb=b.sinpagar?2:b.pagado_flag?1:0;
+      return va-vb;
+    });
+  }
+  // 'orden' = original order (no sort)
+  return arr;
+}
+
 function setGFiltro(which,f){
   gFiltro[which]=f;
   document.querySelectorAll('.g-pill-'+which).forEach(function(el){
@@ -498,12 +538,13 @@ function renderGastos(gastos,which) {
   }
 
   // Apply method filter — groups shown only if metodo or any subgasto matches
-  const topGastos=activeFiltro==='todos'?topGastosAll:topGastosAll.filter(function(g){
+  var topGastosFiltered=activeFiltro==='todos'?topGastosAll:topGastosAll.filter(function(g){
     if(!g.esGrupo) return g.metodo===activeFiltro;
     // For groups: show if group metodo matches OR any subgasto metodo matches
     if(g.metodo===activeFiltro) return true;
     return (subMap[g.id]||[]).some(function(s){return s.metodo===activeFiltro;});
   });
+  const topGastos=sortGastos(topGastosFiltered,which);
 
   const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
   const total=activos.reduce(function(a,x){
@@ -583,6 +624,19 @@ function renderGastos(gastos,which) {
     var diff=(g.pagado_real!=null&&g.pagado_real!==g.presupuesto)?g.presupuesto-g.pagado_real:null;
     var dh=diff!==null?' · <span style="color:var(--'+(diff>0?'grn':'red')+')\">'+(diff>0?'Sobró':'Faltó')+' '+cop(Math.abs(diff))+'</span>':'';
     var gCls=tras?'grow-nopag':'';
+    var cuotaBadge='';
+    var mensBadge='';
+    if(g.mensualidad){
+      var mp2=g.mensualidad.split('-');
+      var mNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      var mLabel=mNames[parseInt(mp2[1])-1]; // only month, no year
+      mensBadge='<span style="font-size:10px;font-weight:600;background:var(--pur-d);color:var(--pur);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+mLabel+'</span>';
+    }
+    var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px">🧾 '+g.comprobante+'</span>':'';
+    if(g.cuotas_total>0&&g.cuota_actual>0){
+      var cuotaColor=g.pagado_flag?'var(--grn)':'var(--amb)';
+      cuotaBadge='<span style="font-size:10px;font-weight:600;background:var(--surf2);color:'+cuotaColor+';padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+g.cuota_actual+'/'+g.cuotas_total+'</span>';
+    }
     var chkCls=p?'paid':tras?'nopag':'';
     var namCls=p?'pd':tras?'np':'';
     var amtCls=p?'pa':'';
@@ -591,7 +645,7 @@ function renderGastos(gastos,which) {
     var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):g.metodo||'';
     return '<div class="grow '+gCls+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
-      +'<div class="ginfo"><div class="gname '+namCls+'">'+g.nombre+nopag+'</div><div class="gmeta">'+(g.metodo||'')+dh+'</div></div>'
+      +'<div class="ginfo"><div class="gname '+namCls+'">'+g.nombre+cuotaBadge+mensBadge+nopag+'</div><div class="gmeta">'+(g.metodo||'')+dh+compBadge+'</div></div>'
       +'<div style="text-align:right"><div class="gamt '+amtCls+'">'+cop(g.presupuesto)+'</div><div class="gmth">'+realLine+'</div></div>'
       +'</div>';
   }).join('');
@@ -614,6 +668,40 @@ function renderGastos(gastos,which) {
         +label+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
     }).join('')+'</div></div>';
 
+  // Collapsible filter + sort panel
+  var isOpen=gFilterOpen[which]||false;
+  var activeSort=gSort[which]||'orden';
+  var hasBadge=(activeFiltro!=='todos'||activeSort!=='orden');
+
+  var toggleBtn='<div style="display:flex;justify-content:flex-end;padding:6px 14px 0">'
+    +'<button onclick="toggleGFilter(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:5px">'
+    +(hasBadge?'<span style="width:6px;height:6px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
+    +'Filtrar y ordenar '+(isOpen?'▲':'▼')
+    +'</button></div>';
+
+  var panelHtml='';
+  if(isOpen){
+    var sortOpts=[{k:'orden',lbl:'Orden'},{k:'estado',lbl:'Estado'},{k:'nombre',lbl:'Nombre'},
+      {k:'monto-desc',lbl:'Mayor $'},{k:'monto-asc',lbl:'Menor $'},{k:'metodo',lbl:'F. Pago'}];
+    var filterPills=metodos.map(function(m){
+      var active=m===activeFiltro;
+      var lbl=m==='todos'?'Todos':m;
+      var mTotal=m==='todos'?total:topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+      return '<button class="g-pill-'+which+'" data-f="'+m+'" onclick="setGFiltro(\''+which+'\',\''+m+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'+lbl+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
+    }).join('');
+    var sortPills=sortOpts.map(function(opt){
+      var isA=opt.k===activeSort;
+      return '<button onclick="setGSort(\''+which+'\',\''+opt.k+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(isA?'var(--acc)':'var(--surf2)')+';color:'+(isA?'#0F172A':'var(--mut)')+';">'+opt.lbl+'</button>';
+    }).join('');
+    panelHtml='<div style="border-bottom:1px solid var(--brd);background:var(--bg);padding:6px 0">'
+      +'<div style="padding:0 14px 4px"><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Filtrar</div>'
+      +'<div style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none">'+filterPills+'</div></div>'
+      +'<div style="padding:6px 14px 2px"><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Ordenar</div>'
+      +'<div style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none">'+sortPills+'</div></div>'
+      +'</div>';
+  }
+  var sortPillsHtml=toggleBtn+panelHtml;
+
   return '<div class="card">'
     +'<div class="chead">'
     +'<div><div class="ctitle">Quincena '+qLabel+'</div>'
@@ -621,7 +709,7 @@ function renderGastos(gastos,which) {
     +'<div style="text-align:right"><span class="badge br">'+cop(total)+'</span>'
     +'<div style="font-size:11px;margin-top:4px">Disponible: <span style="color:var(--'+dispColor+');font-weight:600">'+dispTxt+'</span></div></div>'
     +'</div>'
-    +pillsHtml
+    +sortPillsHtml
     +'<div class="pw"><div class="pb '+bc+'" style="width:'+pct+'%"></div></div>'
     +rows
     +'<div class="trow"><span class="tlbl">Pagado '+pct+'%</span>'
@@ -841,19 +929,21 @@ function renderTC(m) {
     const d=new Date(s+'T12:00:00');
     return d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
   }
+  const tcOpen=tcInfoOpen;
+  const infoBody=tcOpen?('<div class="nrow"><span class="nlbl">Fecha de corte</span><span class="nval">'+fmtInfoDate(info.fechaCorte)+'</span></div>'
+    +'<div class="nrow"><span class="nlbl">Fecha de pago</span><span class="nval">'+fmtInfoDate(info.fechaPago)+'</span></div>'
+    +'<div class="nrow" style="background:rgba(0,0,0,.15)"><span class="nlbl">Fecha sugerida de pago</span>'
+    +'<span class="nval" style="color:var(--acc)">'+(sugerida?fmtInfoDate(sugerida):'<span style="color:var(--mut);font-style:italic">Define fecha de pago</span>')+'</span></div>'):'';
   const infoCard='<div class="card" style="margin-bottom:10px">'
-    +'<div class="chead">'
+    +'<div class="chead" onclick="toggleTCInfo()" style="cursor:pointer">'
     +'<span class="ctitle">Info de tarjeta</span>'
-    +'<button onclick="editTCInfo()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:14px;padding:2px 6px">✎</button>'
+    +'<div style="display:flex;align-items:center;gap:8px">'
+    +(tcOpen?'':'<span style="font-size:11px;color:var(--mut)">'+(info.fechaPago?fmtInfoDate(info.fechaPago):'Sin definir')+'</span>')
+    +'<button onclick="event.stopPropagation();editTCInfo()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:14px;padding:2px 6px">✎</button>'
+    +'<span style="color:var(--mut);font-size:14px">'+(tcOpen?'▲':'▼')+'</span>'
     +'</div>'
-    +'<div class="nrow"><span class="nlbl">Fecha de corte</span><span class="nval">'
-    +fmtInfoDate(info.fechaCorte)+'</span></div>'
-    +'<div class="nrow"><span class="nlbl">Fecha de pago</span><span class="nval">'
-    +fmtInfoDate(info.fechaPago)+'</span></div>'
-    +'<div class="nrow" style="background:rgba(0,0,0,.15)">'
-    +'<span class="nlbl">Fecha sugerida de pago</span>'
-    +'<span class="nval" style="color:var(--acc)">'+(sugerida?fmtInfoDate(sugerida):'<span style="color:var(--mut);font-style:italic">Define fecha de pago</span>')+'</span>'
     +'</div>'
+    +infoBody
     +'</div>';
 
   if(!tc.length) return infoCard+'<div class="empty"><div class="eic">💳</div><p>Sin movimientos. Toca + para agregar.</p></div>';
@@ -931,9 +1021,12 @@ function renderNom(m) {
 
   function block(lbl, bq, bonq, deds) {
     const neto=calcNeto(bq,deds);
+    const isQ1=lbl.includes('Q1');
+    const dedKey=isQ1?'q1':'q2';
+    const dedOpen=nomDedOpen[dedKey]||false;
     const drows=(deds||[]).map((d,i)=>{
       _dedTipo = d.tipo || 'resta';
-  const isSuma = d.tipo === 'suma';
+      const isSuma = d.tipo === 'suma';
       const val = d.porcentaje ? bq * d.porcentaje : (d.valor_fijo || 0);
       const display = isSuma ? val : -val;
       const cls = isSuma ? 'g' : 'r';
@@ -963,16 +1056,14 @@ function renderNom(m) {
         </div>
       </div>
       <div class="nrow"><span class="nlbl">Base de cálculo</span><span class="nval g">${cop(bq)}</span></div>
-      <div class="sdiv">Deducciones (sobre básico)</div>
-      ${drows}
-      <div class="nrow" style="justify-content:flex-end">
-        <button class="nedit" style="padding:4px 12px;font-size:12px" onclick="addDed('${lbl}')">+ Deducción</button>
+      <div class="sdiv" onclick="toggleNomDed('${dedKey}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <span>Deducciones</span><span style="font-size:11px;margin-right:4px">${dedOpen?'▲':'▼'}</span>
       </div>
+      ${dedOpen?drows:''}
+      ${dedOpen?`<div class="nrow" style="justify-content:flex-end"><button class="nedit" style="padding:4px 12px;font-size:12px" onclick="addDed('${lbl}')">+ Deducción</button></div>`:''}
       <div class="nrow ntot"><span class="nlbl">Neto a recibir</span><span class="nval g">${cop(neto)}</span></div>
     </div>`;
   }
-
-  // Tarjeta resumen mensual
   const resumen = `<div class="card" style="margin-bottom:10px">
     <div class="chead"><span class="ctitle">Resumen mensual</span><span class="badge bb">${cop(nom.basico_total)}</span></div>
     <div class="nom-grid">
@@ -995,15 +1086,14 @@ function renderNom(m) {
       <button class="nedit" style="padding:4px 12px;font-size:12px" onclick="editBasico()">✎ Editar básico y bonos</button>
     </div>
   </div>`;
-
   return resumen
     + block('Nómina Q1', basicoQ1(m), nom.bonos_q1||0, nom.ded_q1||[])
     + block('Nómina Q2', basicoQ2(m), nom.bonos_q2||0, nom.ded_q2||[]);
 }
 
 // ── Navegación ────────────────────────────────────────────────────────────────
-function prevM(){if(curM>0){curM--;gFiltro={q1:'todos',q2:'todos'};curTab=0;render();}}
-function nextM(){const mx=Math.max(...Object.keys(db).map(Number));if(curM<mx){curM++;gFiltro={q1:'todos',q2:'todos'};curTab=0;render();}}
+function prevM(){if(curM>0){curM--;gFiltro={q1:'todos',q2:'todos'};gSort={q1:'orden',q2:'orden'};gFilterOpen={q1:false,q2:false};curTab=0;render();}}
+function nextM(){const mx=Math.max(...Object.keys(db).map(Number));if(curM<mx){curM++;gFiltro={q1:'todos',q2:'todos'};gSort={q1:'orden',q2:'orden'};gFilterOpen={q1:false,q2:false};curTab=0;render();}}
 function sw(i){curTab=i;render();}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -1034,6 +1124,17 @@ function openGasto(g,which,parentId){
   const metodos=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
   // For subgastos, default metodo to parent group's metodo
   var defaultMetodo=e.metodo||'Nequi';
+  // Auto-suggest cuota_actual if gasto has cuotas but no cuota set yet
+  var suggestedCuota=e.cuota_actual||0;
+  if(!e.id&&!suggestedCuota&&e.cuotas_total>0){
+    var prevKey2=curM-1;
+    if(prevKey2>=0&&db[prevKey2]){
+      var pList=wh==='q1'?db[prevKey2].q1_gastos:db[prevKey2].q2_gastos;
+      var pG=pList&&pList.find(function(x){return x.nombre===e.nombre&&x.cuotas_total>0;});
+      if(pG&&pG.pagado_flag&&pG.cuota_actual) suggestedCuota=pG.cuota_actual+1;
+      else suggestedCuota=1;
+    } else { suggestedCuota=1; }
+  }
   if(!e.id&&pid){
     var parentG=(getM()[wh==='q1'?'q1_gastos':'q2_gastos']||[]).find(function(x){return x.id===pid;});
     if(parentG&&parentG.metodo) defaultMetodo=parentG.metodo;
@@ -1053,7 +1154,12 @@ function openGasto(g,which,parentId){
     +'<div class="field"><label>Nombre</label><input id="g-n" value="'+e.nombre+'" placeholder="C. Casa, Luz..."></div>'
     +'<div class="field"><label>Presupuesto</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
     +'<div class="field"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
-    +'<div class="field"><label>Método</label><select id="g-m">'+opts+'</select></div>'
+    +'<div class="field"><label>F. Pago</label><select id="g-m">'+opts+'</select></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+    +'<div class="field" style="margin:0"><label>Total cuotas</label><input id="g-ct" type="number" min="0" value="'+(e.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
+    +'<div class="field" style="margin:0"><label>Cuota actual</label><input id="g-ca" type="number" min="1" value="'+( suggestedCuota||'')+'" placeholder="Auto"></div>'
+    +'</div>'
+    +'<div class="field"><label>Mensualidad de (opcional)</label><input id="g-mens" type="month" value="'+(e.mensualidad||'')+'" ></div>'
     +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Marcado como pagado</label></div>'
     +'<div class="cbx-row"><input type="checkbox" id="g-sp"'+spChecked+'><label for="g-sp" style="font-size:13px;color:var(--amb)">'+spLabel+'</label></div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
@@ -1068,12 +1174,21 @@ function saveG(id,which,parentId){
   const real=parseFloat(document.getElementById('g-r').value)||null;
   const metodo=document.getElementById('g-m').value;
   const paid=document.getElementById('g-pd').checked;
+  const cuotas_total=parseInt(document.getElementById('g-ct').value)||0;
+  const cuota_actual_input=parseInt(document.getElementById('g-ca').value)||0;
+  const mensualidad=document.getElementById('g-mens')?.value||null;
   const sinpagar=document.getElementById('g-sp')?.checked||false;
   if(!nombre){alert('Escribe un nombre');return;}
   let gasto;
   if(id){
     gasto=list.find(x=>x.id===id);
-    if(gasto){gasto.nombre=nombre;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;}
+    if(gasto){gasto.nombre=nombre;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;
+      gasto.cuotas_total=cuotas_total||0;
+      gasto.cuota_actual=cuota_actual_input||gasto.cuota_actual||0;
+      gasto.fecha_pago=document.getElementById('g-fp')?.value||gasto.fecha_pago||null;
+      gasto.comprobante=document.getElementById('g-cmp')?.value.trim()||gasto.comprobante||null;
+      gasto.mensualidad=mensualidad;
+    }
   } else {
     // If this is a subgasto, inherit parent group's metodo
     var finalMetodo=metodo;
@@ -1081,7 +1196,19 @@ function saveG(id,which,parentId){
       var parentG=list.find(function(x){return x.id===parentId;});
       if(parentG&&parentG.metodo) finalMetodo=parentG.metodo;
     }
-    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null};
+    // Auto-suggest cuota_actual: look for same gasto name in previous month
+    var cuota_auto = cuota_actual_input;
+    if(!cuota_auto && cuotas_total>0){
+      // Find prev month
+      var prevKey=curM-1;
+      if(prevKey>=0&&db[prevKey]){
+        var prevList=which==='q1'?db[prevKey].q1_gastos:db[prevKey].q2_gastos;
+        var prevG=prevList&&prevList.find(function(x){return x.nombre===nombre&&x.cuotas_total>0;});
+        if(prevG&&prevG.pagado_flag&&prevG.cuota_actual) cuota_auto=prevG.cuota_actual+1;
+        else cuota_auto=1;
+      } else { cuota_auto=1; }
+    }
+    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0,mensualidad:mensualidad||null};
     list.push(gasto);
   }
   save(); closeModal(); render();
@@ -1130,7 +1257,91 @@ function editGasto(id,which){
 function toggleP(e,id,which){
   e.stopPropagation();
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
-  const g=list.find(x=>x.id===id);if(g){g.pagado_flag=!g.pagado_flag;save();render();}
+  const g=list.find(x=>x.id===id);
+  if(!g) return;
+  if(g.pagado_flag){
+    // Already paid — unmark directly
+    g.pagado_flag=false;
+    save();render();
+  } else if(g.metodo==='PSE' || g.cuotas_total>0 || g.mensualidad){
+    // PSE, or has cuotas, or has mensualidad → open payment modal
+    openPagoModal(g,which);
+  } else {
+    // Other methods without cuotas/mensualidad: mark paid directly
+    g.pagado_flag=true;
+    save();render();
+  }
+}
+
+function openPagoModal(g,which){
+  const hoy=new Date().toISOString().slice(0,10);
+
+  // Cuota info
+  var cuotaInfo='';
+  if(g.cuotas_total>0&&g.cuota_actual>0){
+    cuotaInfo='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:var(--r2)">'
+      +'<span style="font-size:12px;color:var(--mut)">Cuota</span>'
+      +'<span style="font-size:16px;font-weight:700;color:var(--acc)">'+g.cuota_actual+' / '+g.cuotas_total+'</span>'
+      +'</div>';
+  }
+
+  // Mensualidad field — suggest next month by default
+  var mensSugerida=g.mensualidad||'';
+  if(!mensSugerida){
+    // Suggest current month's next month
+    var now=new Date();
+    var y=now.getFullYear(),m=now.getMonth()+2; // next month
+    if(m>12){m=1;y++;}
+    mensSugerida=y+'-'+(m<10?'0':'')+m;
+  } else {
+    // Advance from existing mensualidad
+    var mp=mensSugerida.split('-');
+    var mY=parseInt(mp[0]),mM=parseInt(mp[1])+1;
+    if(mM>12){mM=1;mY++;}
+    mensSugerida=mY+'-'+(mM<10?'0':'')+mM;
+  }
+  var mNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  // Mensualidad field (only if gasto has mensualidad or cuotas)
+  var mensField='';
+  if(g.mensualidad!==undefined||g.cuotas_total>0){
+    mensField='<div class="field"><label>Mensualidad de</label>'
+      +'<div style="display:flex;gap:8px;align-items:center">'
+      +'<input id="pg-mens" type="month" value="'+mensSugerida+'" style="flex:1">'
+      +'</div></div>';
+  }
+
+  openModal('<div class="mtitle">Confirmar pago</div>'
+    +'<p style="font-size:13px;color:var(--mut);margin-bottom:10px">'+g.nombre+' · '+cop(g.presupuesto)+'</p>'
+    +cuotaInfo
+    +'<div class="field"><label>Valor pagado</label>'
+    +'<input id="pg-val" type="number" value="'+(g.pagado_real||g.presupuesto||'')+'" placeholder="'+cop(g.presupuesto)+'"></div>'
+    +mensField
+    +'<div class="field"><label>Fecha de pago</label>'
+    +'<input id="pg-fecha" type="date" value="'+(g.fecha_pago||hoy)+'"></div>'
+    +'<div class="field"><label>Comprobante / referencia (opcional)</label>'
+    +'<input id="pg-comp" type="text" value="'+(g.comprobante||'')+'" placeholder="Ej: REF-12345, captura, número..."></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="confirmarPago(\''+g.id+'\',\''+which+'\')">✓ Marcar pagado</button>'
+    +'</div>');
+}
+
+function confirmarPago(id,which){
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(x=>x.id===id);
+  if(!g) return;
+  const val=parseFloat(document.getElementById('pg-val').value)||null;
+  const fecha=document.getElementById('pg-fecha').value||null;
+  const comp=document.getElementById('pg-comp').value.trim()||null;
+  const mensEl=document.getElementById('pg-mens');
+  const mens=mensEl?mensEl.value||null:null;
+  g.pagado_flag=true;
+  g.pagado_real=val;
+  g.fecha_pago=fecha;
+  g.comprobante=comp;
+  if(mens!==null) g.mensualidad=mens;
+  save();closeModal();render();toast('Pago registrado');
 }
 
 // ── CRUD Tarjeta ──────────────────────────────────────────────────────────────
@@ -1172,6 +1383,11 @@ function calcFechaSugerida(fechaPagoStr){
   // Último día del mes anterior
   const ultimoDiaMesAnterior = new Date(año, mes, 0); // day 0 = last day of prev month
   return ultimoDiaMesAnterior.toISOString().slice(0,10);
+}
+
+function toggleTCInfo(){
+  tcInfoOpen=!tcInfoOpen;
+  document.getElementById('scroll').innerHTML=renderTC(getM());
 }
 
 function editTCInfo(){
@@ -1262,6 +1478,11 @@ function saveBasico(){
 }
 
 // ── CRUD Deducciones ──────────────────────────────────────────────────────────
+function toggleNomDed(key){
+  nomDedOpen[key]=!nomDedOpen[key];
+  document.getElementById('scroll').innerHTML=renderNom(getM());
+}
+
 function editDed(e,lbl,i){
   e.stopPropagation();
   const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2,d=deds[i];
@@ -1318,6 +1539,99 @@ function delDed(lbl,i){
 }
 
 // ── Nuevo mes ─────────────────────────────────────────────────────────────────
+function openMonthPicker(){
+  const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
+  const monthList=keys.map(function(k){
+    const mes=db[k];
+    const isCur=k===curM;
+    const gastos=(mes.q1_gastos||[]).filter(function(g){return !g.sinpagar;}).length
+                +(mes.q2_gastos||[]).filter(function(g){return !g.sinpagar;}).length;
+    const pagados=(mes.q1_gastos||[]).filter(function(g){return g.pagado_flag;}).length
+                 +(mes.q2_gastos||[]).filter(function(g){return g.pagado_flag;}).length;
+    const pct=gastos>0?Math.round(pagados/gastos*100):0;
+    const barColor=pct===100?'var(--grn)':pct>50?'var(--amb)':'var(--red)';
+    return '<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--brd);cursor:pointer'+(isCur?';opacity:1':';opacity:.85')+';">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:13px;font-weight:'+(isCur?'700':'500')+';color:'+(isCur?'var(--acc)':'var(--txt)')+'">'+mes.nombre+' '+mes.año+'</div>'
+      +'<div style="height:3px;background:var(--brd);border-radius:3px;margin-top:5px;overflow:hidden">'
+      +'<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px"></div>'
+      +'</div>'
+      +'</div>'
+      +'<div style="text-align:right;flex-shrink:0">'
+      +'<div style="font-size:12px;font-weight:600;color:'+(isCur?'var(--acc)':'var(--mut)')+'">'+pct+'%</div>'
+      +'<div style="font-size:10px;color:var(--mut)">'+(isCur?'actual':'')+'</div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+  openModal('<div class="mtitle">Seleccionar mes</div>'+monthList);
+}
+
+function goToMonth(k){
+  curM=k;
+  gFiltro={q1:'todos',q2:'todos'};
+  gSort={q1:'orden',q2:'orden'};
+  gFilterOpen={q1:false,q2:false};
+  closeModal();render();
+}
+
+function openDeleteMonth(){
+  const keys=Object.keys(db).map(Number);
+  const m=getM();
+  // Can't delete if only one month left
+  if(keys.length<=1){
+    openModal('<div class="mtitle">No se puede eliminar</div>'
+      +'<p style="font-size:13px;color:var(--mut);margin-bottom:16px">Debe quedar al menos un mes en la app.</p>'
+      +'<div class="macts"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
+    return;
+  }
+  // Build list of all months
+  const monthList=keys.sort(function(a,b){return a-b;}).map(function(k){
+    const mes=db[k];
+    const gastos=(mes.q1_gastos||[]).length+(mes.q2_gastos||[]).length;
+    const tc=(mes.tarjeta||[]).length;
+    const isCur=k===curM;
+    return '<div onclick="confirmDeleteMonth('+k+')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--brd);cursor:pointer'+(isCur?';background:var(--acc-d);margin:0 -18px;padding:10px 18px':'')+';">'
+      +'<div>'
+      +'<div style="font-size:13px;font-weight:600;color:var(--txt)">'+mes.nombre+' '+mes.año+(isCur?' <span style="font-size:10px;color:var(--acc)">actual</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--mut);margin-top:1px">'+gastos+' gastos · '+tc+' mov. tarjeta</div>'
+      +'</div>'
+      +'<span style="color:var(--red);font-size:16px;padding-left:12px">🗑</span>'
+      +'</div>';
+  }).join('');
+  openModal('<div class="mtitle">Eliminar mes</div>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:12px">Selecciona el mes que deseas eliminar. Esta acción no se puede deshacer.</p>'
+    +monthList);
+}
+
+function confirmDeleteMonth(key){
+  const mes=db[key];
+  openModal('<div class="mtitle">¿Eliminar '+mes.nombre+'?</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
+    +'Se eliminarán todos los datos de <b style="color:var(--txt)">'+mes.nombre+' '+mes.año+'</b> incluyendo gastos, tarjeta y nómina. Esta acción <b style="color:var(--red)">no se puede deshacer</b>.</p>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openDeleteMonth()">Cancelar</button>'
+    +'<button class="bpri" style="background:var(--red);color:#fff" onclick="deleteMonth('+key+')">Eliminar</button>'
+    +'</div>');
+}
+
+function deleteMonth(key){
+  const keys=Object.keys(db).map(Number);
+  if(keys.length<=1){closeModal();return;}
+  delete db[key];
+  // Reindex to keep keys sequential
+  const sorted=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
+  const newDb={};
+  sorted.forEach(function(k,i){ newDb[i]=db[k]; });
+  db=newDb;
+  // Adjust curM
+  const newKeys=Object.keys(db).map(Number);
+  curM=Math.min(curM,Math.max(...newKeys));
+  gFiltro={q1:'todos',q2:'todos'};
+  gSort={q1:'orden',q2:'orden'};
+  gFilterOpen={q1:false,q2:false};
+  save();closeModal();render();toast('Mes eliminado');
+}
+
 function openNewMonth(){
   const keys=Object.keys(db).map(Number),last=Math.max(...keys),lm=db[last];
   const sig=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(last+2));
@@ -1333,9 +1647,73 @@ function createMonth(){
   const nm=migrateMonth(JSON.parse(JSON.stringify(lm)));
   nm.nombre=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(nk+1));
   nm.tarjeta=[];
-  nm.q1_gastos=nm.q1_gastos.map(g=>({...g,id:uid(),pagado_flag:false,pagado_real:null}));
-  nm.q2_gastos=nm.q2_gastos.map(g=>({...g,id:uid(),pagado_flag:false,pagado_real:null}));
-  db[nk]=nm;save();curM=nk;curTab=0;gFiltro={q1:'todos',q2:'todos'};closeModal();render();toast(nm.nombre+' creado');
+  nm.tcInfo={fechaCorte:lm.tcInfo?.fechaCorte||null, fechaPago:lm.tcInfo?.fechaPago||null};
+
+  nm.q1_gastos=nm.q1_gastos.filter(function(g){
+    if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
+    return true;
+  }).map(function(g){
+    var nxtCuota=g.cuotas_total>0&&g.pagado_flag&&g.cuota_actual?g.cuota_actual+1:g.cuota_actual||0;
+    // Auto-advance mensualidad by 1 month
+    var nxtMens=null;
+    if(g.mensualidad){
+      var mp=g.mensualidad.split('-');
+      var mY=parseInt(mp[0]),mM=parseInt(mp[1]);
+      mM++;if(mM>12){mM=1;mY++;}
+      nxtMens=mY+'-'+(mM<10?'0':'')+mM;
+    }
+    return Object.assign({},g,{id:uid(),pagado_flag:false,pagado_real:null,cuota_actual:nxtCuota,fecha_pago:null,comprobante:null,mensualidad:nxtMens});
+  });
+
+  nm.q2_gastos=nm.q2_gastos.filter(function(g){
+    if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
+    return true;
+  }).map(function(g){
+    var nxtCuota=g.cuotas_total>0&&g.pagado_flag&&g.cuota_actual?g.cuota_actual+1:g.cuota_actual||0;
+    // Auto-advance mensualidad by 1 month
+    var nxtMens=null;
+    if(g.mensualidad){
+      var mp=g.mensualidad.split('-');
+      var mY=parseInt(mp[0]),mM=parseInt(mp[1]);
+      mM++;if(mM>12){mM=1;mY++;}
+      nxtMens=mY+'-'+(mM<10?'0':'')+mM;
+    }
+    return Object.assign({},g,{id:uid(),pagado_flag:false,pagado_real:null,cuota_actual:nxtCuota,fecha_pago:null,comprobante:null,mensualidad:nxtMens});
+  });
+
+  // Ensure Tarjeta group exists in Q2 and is always tcLinked
+  // 1. If there's already a tcLinked group, keep it (presupuesto will sync via syncTCGrupo)
+  // 2. If no tcLinked group exists, create one automatically
+  var hasTCGroup=nm.q2_gastos.some(function(g){return g.esGrupo&&g.tcLinked;});
+  if(!hasTCGroup){
+    // Check if prev month had one to copy its name/metodo
+    var prevTCGroup=(lm.q2_gastos||[]).find(function(g){return g.esGrupo&&g.tcLinked;});
+    var tcGroupName=prevTCGroup?prevTCGroup.nombre:'Tarjeta';
+    var tcGroupMetodo=prevTCGroup?prevTCGroup.metodo:'BBVA';
+    nm.q2_gastos.push({
+      id:uid(),
+      nombre:tcGroupName,
+      presupuesto:0,
+      metodo:tcGroupMetodo,
+      pagado_real:null,
+      pagado_flag:false,
+      sinpagar:false,
+      parentId:null,
+      esGrupo:true,
+      tcLinked:true,
+      cuotas_total:0,
+      cuota_actual:0
+    });
+  }
+
+  db[nk]=nm;
+  // Sync TC saldo (tarjeta is empty so saldo=0, but structure is ready)
+  syncTCGrupo(nm);
+  save();curM=nk;curTab=0;
+  gFiltro={q1:'todos',q2:'todos'};
+  gSort={q1:'orden',q2:'orden'};
+  gFilterOpen={q1:false,q2:false};
+  closeModal();render();toast(nm.nombre+' creado');
 }
 
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
