@@ -469,6 +469,12 @@ function render() {
     <div class="stat"><div class="slbl">Tarjeta</div><div class="sval sa">${cop(tcSaldo)}</div></div>`;
 
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===curTab));
+  // If month picker modal is open, refresh its content
+  const mbg=document.getElementById('mbg');
+  if(mbg&&mbg.classList.contains('open')){
+    const mtitle=document.getElementById('mc')?.querySelector('.mtitle');
+    if(mtitle&&mtitle.textContent==='Seleccionar mes') openMonthPicker();
+  }
   const el=document.getElementById('scroll');
   if      (curTab===0) el.innerHTML=renderGastos(m.q1_gastos||[],'q1');
   else if (curTab===1) el.innerHTML=renderGastos(m.q2_gastos||[],'q2');
@@ -1544,17 +1550,16 @@ function openMonthPicker(){
   const monthList=keys.map(function(k){
     const mes=db[k];
     const isCur=k===curM;
-    const gastos=(mes.q1_gastos||[]).filter(function(g){return !g.sinpagar;}).length
-                +(mes.q2_gastos||[]).filter(function(g){return !g.sinpagar;}).length;
-    const pagados=(mes.q1_gastos||[]).filter(function(g){return g.pagado_flag;}).length
-                 +(mes.q2_gastos||[]).filter(function(g){return g.pagado_flag;}).length;
-    const pct=gastos>0?Math.round(pagados/gastos*100):0;
-    const barColor=pct===100?'var(--grn)':pct>50?'var(--amb)':'var(--red)';
-    return '<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--brd);cursor:pointer'+(isCur?';opacity:1':';opacity:.85')+';">'
+    const activos=[...(mes.q1_gastos||[]),...(mes.q2_gastos||[])].filter(function(g){return !g.sinpagar&&!g.esGrupo;});
+    const total=activos.reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+    const pagado=activos.filter(function(g){return g.pagado_flag;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+    const pct=total>0?Math.round(pagado/total*100):0;
+    const barColor=pct===100?'var(--grn)':pct>50?'var(--amb)':'var(--surf2)';
+    return '<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--brd);cursor:pointer'+(isCur?'':';opacity:.85')+';">'
       +'<div style="flex:1">'
       +'<div style="font-size:13px;font-weight:'+(isCur?'700':'500')+';color:'+(isCur?'var(--acc)':'var(--txt)')+'">'+mes.nombre+' '+mes.año+'</div>'
-      +'<div style="height:3px;background:var(--brd);border-radius:3px;margin-top:5px;overflow:hidden">'
-      +'<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px"></div>'
+      +'<div style="height:4px;background:var(--brd);border-radius:4px;margin-top:5px;overflow:hidden">'
+      +'<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:4px;transition:width .3s"></div>'
       +'</div>'
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0">'
@@ -1565,6 +1570,7 @@ function openMonthPicker(){
   }).join('');
   openModal('<div class="mtitle">Seleccionar mes</div>'+monthList);
 }
+
 
 function goToMonth(k){
   curM=k;
