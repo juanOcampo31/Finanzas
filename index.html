@@ -247,7 +247,8 @@ function migrateMonth(m) {
   if (!Array.isArray(m.q1_gastos)) m.q1_gastos = [];
   if (!Array.isArray(m.q2_gastos)) m.q2_gastos = [];
   if (!Array.isArray(m.tarjeta))   m.tarjeta   = [];
-  if (!m.tcInfo) m.tcInfo = {fechaCorte: null, fechaPago: null};
+  if (!m.tcInfo) m.tcInfo = {fechaCorte: null, fechaPago: null, cupo: null};
+  if (m.tcInfo && m.tcInfo.cupo === undefined) m.tcInfo.cupo = null;
   return m;
 }
 
@@ -267,6 +268,7 @@ let curM   = parseInt(localStorage.getItem('fin26m') || '0');
 let gFiltro = {'q1':'todos','q2':'todos'}; // filtro por método en Q1/Q2
 let gSort      = {'q1':'orden','q2':'orden'};  // orden activo en Q1/Q2
 let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
+let gGroupOpen  = {};  // group open state: {groupId: bool}
 let tcInfoOpen  = false;                        // info tarjeta expandida
 let nomDedOpen  = {'q1':false,'q2':false};      // deducciones nómina expandidas
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -598,32 +600,32 @@ function renderGastos(gastos,which) {
     if(g.esGrupo){
       var subs=subMap[g.id]||[];
       // Base del grupo: si tiene presupuesto propio (ej. saldo tarjeta), usarlo; si no, sumar subgastos
-      var base=g.presupuesto&&g.presupuesto>0?g.presupuesto:0;
+      var base=(g.presupuesto!==null&&g.presupuesto!==undefined&&g.tcLinked)?g.presupuesto:(g.presupuesto>0?g.presupuesto:0);
       var subsPagados=subs.filter(function(s){return s.pagado_flag&&!s.sinpagar;}).reduce(function(a,s){return a+Math.abs(s.presupuesto||0);},0);
       var subsPendientes=subs.filter(function(s){return !s.pagado_flag&&!s.sinpagar;}).reduce(function(a,s){return a+Math.abs(s.presupuesto||0);},0);
       // Si tiene base propia: pendiente = base - pagado; si no: pendiente = suma subgastos no pagados
-      var totalGrupo=base>0?base:subsPendientes+subsPagados;
+      var totalGrupo=g.tcLinked?base:(base>0?base:subsPendientes+subsPagados);
       var pendiente=base>0?base-subsPagados:subsPendientes;
-      var allPaid=base>0?(pendiente<=0):subs.length>0&&subs.filter(function(s){return !s.sinpagar;}).every(function(s){return s.pagado_flag;});
+      var allPaid=subs.length>0&&subs.filter(function(s){return !s.sinpagar;}).every(function(s){return s.pagado_flag;});
       var countBadge=subs.length>0?'<span class="tc-count">'+subs.length+'</span>':'';
       var subRowsHtml=subs.map(function(s){return buildSubRow(s,which);}).join('');
       var addBtn='<div class="g-sub-add" onclick="openGasto(null,\''+which+'\',\''+g.id+'\')">＋ Agregar al grupo</div>';
       var grpChk=allPaid?'paid':'';
       var grpTxt=allPaid?'✓':'';
-      // Línea de detalle: total y pendiente
-      var pendienteHtml=base>0&&subsPagados>0
-        ?'<div style="font-size:10px;color:var(--amb);margin-top:1px">Pend: '+cop(pendiente)+'</div>'
+      // Mostrar lo pagado si hay subgastos pagados
+      var pendienteHtml=subsPagados>0
+        ?'<div style="font-size:10px;color:var(--grn);margin-top:1px">Pag: '+cop(subsPagados)+'</div>'
         :'';
       return '<div class="g-group">'
-        +'<div class="g-group-head" onclick="toggleGG(\'gg-'+gi+'\',\'gc-'+gi+'\')">'
+        +'<div class="g-group-head" onclick="toggleGG(\''+g.id+'\',\'gg-'+gi+'\',\'gc-'+gi+'\')">'
         +'<div class="gchk '+grpChk+'">'+grpTxt+'</div>'
         +'<div class="ginfo"><div class="gname">'+g.nombre+countBadge+(g.tcLinked?'<span style="font-size:10px;color:var(--acc);margin-left:5px">⟳</span>':'')+' </div><div class="gmeta">'+(g.metodo||'')+'</div></div>'
         +'<div style="text-align:right;display:flex;align-items:center;gap:6px">'
-        +'<div><div class="gamt">'+cop(totalGrupo)+'</div>'+pendienteHtml+'</div>'
+        +'<div><div class="gamt '+(g.tcLinked&&totalGrupo<0?'a':'')+'">'+(g.tcLinked&&totalGrupo<0?'-':'')+cop(Math.abs(totalGrupo))+'</div>'+pendienteHtml+'</div>'
         +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);font-size:15px;padding:4px 6px;cursor:pointer;flex-shrink:0">✎</button>'
         +'<div class="g-chevron" id="gc-'+gi+'">›</div></div>'
         +'</div>'
-        +'<div id="gg-'+gi+'" style="display:none"><div class="g-sub-wrap">'+subRowsHtml+addBtn+'</div></div>'
+        +'<div id="gg-'+gi+'" style="display:'+(gGroupOpen[g.id]?'block':'none')+'"><div class="g-sub-wrap">'+subRowsHtml+addBtn+'</div></div>'
         +'</div>';
     }
     var p=g.pagado_flag,tras=g.sinpagar;
@@ -712,8 +714,10 @@ function renderGastos(gastos,which) {
     +'<div class="chead">'
     +'<div><div class="ctitle">Quincena '+qLabel+'</div>'
     +'<div style="font-size:11px;color:var(--mut);margin-top:2px">Neto: <span style="color:var(--grn);font-weight:600">'+cop(netoQ)+'</span></div></div>'
-    +'<div style="text-align:right"><span class="badge br">'+cop(total)+'</span>'
-    +'<div style="font-size:11px;margin-top:4px">Disponible: <span style="color:var(--'+dispColor+');font-weight:600">'+dispTxt+'</span></div></div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<span class="badge br">'+cop(total)+'</span>'
+    +'<span class="badge bg">Disp: '+(disp<0?'-':'')+cop(disp)+'</span>'
+    +'</div>'
     +'</div>'
     +sortPillsHtml
     +'<div class="pw"><div class="pb '+bc+'" style="width:'+pct+'%"></div></div>'
@@ -878,9 +882,11 @@ function calSelectDay(d){
   document.getElementById('scroll').innerHTML=renderCal(getM());
 }
 
-function toggleGG(wrapId,chevId){
+function toggleGG(groupId,wrapId,chevId){
+  gGroupOpen[groupId]=!gGroupOpen[groupId];
   const w=document.getElementById(wrapId),ch=document.getElementById(chevId);
-  const open=w.style.display==='none';
+  if(!w||!ch) return;
+  const open=gGroupOpen[groupId];
   w.style.display=open?'block':'none';
   ch.style.transform=open?'rotate(90deg)':'rotate(0)';
   ch.style.color=open?'var(--acc)':'var(--mut)';
@@ -928,18 +934,35 @@ function renderTC(m) {
   const tc=m.tarjeta||[];
   const info=m.tcInfo||{fechaCorte:null,fechaPago:null};
   const sugerida=calcFechaSugerida(info.fechaPago);
+  const tcOpen=tcInfoOpen;
 
-  // TC Info card
+  // Helper
   function fmtInfoDate(s){
     if(!s) return '<span style="color:var(--mut);font-style:italic">No definida</span>';
     const d=new Date(s+'T12:00:00');
     return d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
   }
-  const tcOpen=tcInfoOpen;
-  const infoBody=tcOpen?('<div class="nrow"><span class="nlbl">Fecha de corte</span><span class="nval">'+fmtInfoDate(info.fechaCorte)+'</span></div>'
+
+  // Calculate saldo first (needed for cupo)
+  const compras=tc.filter(function(x){return x.tipo==='Compra';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  const abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  const saldo=compras-abonos;
+
+  // Build info card body (uses saldo for cupo disponible)
+  const cupoDisp=info.cupo?info.cupo-saldo:null;
+  const cupoRows=info.cupo
+    ?'<div class="nrow"><span class="nlbl">Cupo total</span><span class="nval g">'+cop(info.cupo)+'</span></div>'
+     +'<div class="nrow" style="background:rgba(0,0,0,.15)"><span class="nlbl">Cupo disponible</span>'
+     +'<span class="nval" style="color:var(--'+(cupoDisp>=0?'grn':'red')+')">'+cop(cupoDisp)+'</span></div>'
+    :'';
+  const fechaRows=''
+    +'<div class="nrow"><span class="nlbl">Fecha de corte</span><span class="nval">'+fmtInfoDate(info.fechaCorte)+'</span></div>'
     +'<div class="nrow"><span class="nlbl">Fecha de pago</span><span class="nval">'+fmtInfoDate(info.fechaPago)+'</span></div>'
     +'<div class="nrow" style="background:rgba(0,0,0,.15)"><span class="nlbl">Fecha sugerida de pago</span>'
-    +'<span class="nval" style="color:var(--acc)">'+(sugerida?fmtInfoDate(sugerida):'<span style="color:var(--mut);font-style:italic">Define fecha de pago</span>')+'</span></div>'):'';
+    +'<span class="nval" style="color:var(--acc)">'+(sugerida?fmtInfoDate(sugerida):'<span style="color:var(--mut);font-style:italic">Define fecha de pago</span>')+'</span></div>';
+  const infoBody=tcOpen?(cupoRows+fechaRows):'';
+
+  // Info card
   const infoCard='<div class="card" style="margin-bottom:10px">'
     +'<div class="chead" onclick="toggleTCInfo()" style="cursor:pointer">'
     +'<span class="ctitle">Info de tarjeta</span>'
@@ -954,13 +977,9 @@ function renderTC(m) {
 
   if(!tc.length) return infoCard+'<div class="empty"><div class="eic">💳</div><p>Sin movimientos. Toca + para agregar.</p></div>';
 
-  const compras=tc.filter(function(x){return x.tipo==='Compra';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
-  const abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
-  const saldo=compras-abonos;
-
-  // Group by description, sorted by first date
+  // Group by description, sorted descending by first date
   var grupos={};
-  var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?1:a.fecha<b.fecha?-1:0;});
+  var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
   sorted.forEach(function(x){
     var key=x.descripcion||'Sin descripción';
     if(!grupos[key]) grupos[key]=[];
@@ -972,8 +991,7 @@ function renderTC(m) {
     var tipo=items[0].tipo;
     var firstFecha=items[0]?items[0].fecha:'';
     return {nombre:nombre,items:items,total:total,tipo:tipo,firstFecha:firstFecha};
-  }).sort(function(a,b){return a.firstFecha>b.firstFecha?1:a.firstFecha<b.firstFecha?-1:0;});
-
+  }).sort(function(a,b){return a.firstFecha>b.firstFecha?-1:a.firstFecha<b.firstFecha?1:0;});
 
   // Group rows
   var grupoRows=gruposArr.map(function(g,gi){
@@ -1002,10 +1020,14 @@ function renderTC(m) {
       +'</div>';
   }).join('');
 
-
-
   return infoCard+'<div class="card">'
-    +'<div class="chead"><span class="ctitle">Tarjeta de crédito</span><span class="badge ba">Saldo '+cop(saldo)+'</span></div>'
+    +'<div class="chead">'
+    +'<span class="ctitle">Tarjeta de crédito</span>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<span class="badge '+(saldo<0?'br':'ba')+'">Saldo '+(saldo<0?'-':'')+cop(Math.abs(saldo))+'</span>'
+    +(info.cupo?'<span class="badge '+(cupoDisp>=0?'bg':'br')+'">Disp: '+(cupoDisp<0?'-':'')+cop(Math.abs(cupoDisp))+'</span>':'')
+    +'</div>'
+    +'</div>'
     +grupoRows
     +'<div class="trow"><span class="tlbl">Compras · Abonos</span>'
     +'<span class="tval"><span style="color:var(--red)">'+cop(compras)+'</span> · <span style="color:var(--grn)">'+cop(abonos)+'</span></span></div>'
@@ -1266,15 +1288,45 @@ function toggleP(e,id,which){
   const g=list.find(x=>x.id===id);
   if(!g) return;
   if(g.pagado_flag){
-    // Already paid — unmark directly
+    // Already paid — unmark directly, remove auto-abono if it exists
     g.pagado_flag=false;
+    // Remove auto-generated abono for this subgasto if any
+    if(g.parentId){
+      const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
+      const parent=allGastos.find(x=>x.id===g.parentId);
+      if(parent&&parent.tcLinked&&m.tarjeta){
+        // Remove the last abono matching this gasto name
+        const abonos=m.tarjeta.filter(x=>x.tipo==='Abono'&&x.descripcion.startsWith(g.nombre));
+        if(abonos.length>0){
+          const last=abonos[abonos.length-1];
+          m.tarjeta=m.tarjeta.filter(x=>x.id!==last.id);
+          syncTCGrupo(m);
+        }
+      }
+    }
     save();render();
   } else if(g.metodo==='PSE' || g.cuotas_total>0 || g.mensualidad){
-    // PSE, or has cuotas, or has mensualidad → open payment modal
     openPagoModal(g,which);
   } else {
-    // Other methods without cuotas/mensualidad: mark paid directly
+    // Mark paid directly
     g.pagado_flag=true;
+    // Auto-abono for tcLinked subgastos
+    if(g.parentId){
+      const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
+      const parent=allGastos.find(x=>x.id===g.parentId);
+      if(parent&&parent.tcLinked){
+        if(!m.tarjeta) m.tarjeta=[];
+        m.tarjeta.push({
+          id:uid(),
+          descripcion:g.nombre,
+          tipo:'Abono',
+          valor:-Math.abs(g.presupuesto||0),
+          fecha:new Date().toISOString().slice(0,10),
+          saldo:null
+        });
+        syncTCGrupo(m);
+      }
+    }
     save();render();
   }
 }
@@ -1291,21 +1343,16 @@ function openPagoModal(g,which){
       +'</div>';
   }
 
-  // Mensualidad field — suggest next month by default
+  // Mensualidad field — keep existing month, only suggest next if not set
   var mensSugerida=g.mensualidad||'';
   if(!mensSugerida){
-    // Suggest current month's next month
+    // No mensualidad set — suggest next month
     var now=new Date();
-    var y=now.getFullYear(),m=now.getMonth()+2; // next month
+    var y=now.getFullYear(),m=now.getMonth()+2;
     if(m>12){m=1;y++;}
     mensSugerida=y+'-'+(m<10?'0':'')+m;
-  } else {
-    // Advance from existing mensualidad
-    var mp=mensSugerida.split('-');
-    var mY=parseInt(mp[0]),mM=parseInt(mp[1])+1;
-    if(mM>12){mM=1;mY++;}
-    mensSugerida=mY+'-'+(mM<10?'0':'')+mM;
   }
+  // If mensualidad exists, keep it as-is (user can edit if needed)
   var mNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
   // Mensualidad field (only if gasto has mensualidad or cuotas)
@@ -1347,6 +1394,26 @@ function confirmarPago(id,which){
   g.fecha_pago=fecha;
   g.comprobante=comp;
   if(mens!==null) g.mensualidad=mens;
+
+  // Si es subgasto de un grupo tcLinked → registrar abono automático en tarjeta
+  if(g.parentId){
+    const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
+    const parent=allGastos.find(x=>x.id===g.parentId);
+    if(parent&&parent.tcLinked){
+      if(!m.tarjeta) m.tarjeta=[];
+      const montoAbono=val||Math.abs(g.presupuesto||0);
+      m.tarjeta.push({
+        id:uid(),
+        descripcion:g.nombre+(comp?' ('+comp+')':''),
+        tipo:'Abono',
+        valor:-montoAbono,
+        fecha:fecha||new Date().toISOString().slice(0,10),
+        saldo:null
+      });
+      syncTCGrupo(m);
+    }
+  }
+
   save();closeModal();render();toast('Pago registrado');
 }
 
@@ -1379,16 +1446,30 @@ function setTC(tipo){
   document.getElementById('oa').className='topt'+(tipo==='Abono'?' sa':'');
 }
 function calcFechaSugerida(fechaPagoStr){
-  // Fecha sugerida = último día hábil del mes ANTERIOR a la fecha de pago (= Q2 del mes anterior)
-  // Ej: pago el 15 de julio → sugerida = 30 de junio
-  // Ej: pago el 5 de agosto → sugerida = 31 de julio
+  // La fecha de pago se guarda con un día fijo (ej. día 15).
+  // La fecha sugerida = último día del mes en que cae la Q2 del mes actual del gasto.
+  // Ej: mes actual = Junio, pago el día 15 → sugerida = último día de Junio (30 jun)
+  // porque el pago del siguiente mes (15 Jul) se debe hacer con Q2 de Junio.
   if(!fechaPagoStr) return null;
   const fp = new Date(fechaPagoStr+'T12:00:00');
-  const mes = fp.getMonth();   // mes del pago
-  const año = fp.getFullYear();
-  // Último día del mes anterior
-  const ultimoDiaMesAnterior = new Date(año, mes, 0); // day 0 = last day of prev month
-  return ultimoDiaMesAnterior.toISOString().slice(0,10);
+  const diaFP = fp.getDate(); // día del mes en que se paga (ej. 15)
+
+  // Get current month from the active month in the app
+  const MESES_IDX = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mesActual = db && db[curM] ? MESES_IDX.indexOf(db[curM].nombre) : new Date().getMonth();
+  const añoActual = db && db[curM] ? db[curM].año : new Date().getFullYear();
+
+  // Payment date this cycle: same day, but in the NEXT month relative to current month
+  // because Q2 of current month pays for next month's bill
+  var mesPago = mesActual + 1; // next month (0-indexed)
+  var añoPago = añoActual;
+  if(mesPago > 11){ mesPago = 0; añoPago++; }
+
+  // Fecha sugerida = último día de MES ACTUAL (= Q2 del mes actual)
+  const ultimoDiaMesActual = new Date(añoActual, mesActual + 1, 0).getDate();
+  const sug = new Date(añoActual, mesActual, ultimoDiaMesActual);
+  return sug.toISOString().slice(0,10);
 }
 
 function toggleTCInfo(){
@@ -1399,6 +1480,8 @@ function toggleTCInfo(){
 function editTCInfo(){
   const m=getM(), info=m.tcInfo||{fechaCorte:null,fechaPago:null};
   openModal('<div class="mtitle">Info de tarjeta</div>'
+    +'<div class="field"><label>Cupo total</label>'
+    +'<input id="tci-cupo" type="number" value="'+(info.cupo||'')+'" placeholder="Ej: 5000000"></div>'
     +'<div class="field"><label>Fecha de corte</label>'
     +'<input id="tci-corte" type="date" value="'+(info.fechaCorte||'')+'"></div>'
     +'<div class="field"><label>Fecha de pago</label>'
@@ -1414,6 +1497,7 @@ function editTCInfo(){
 function saveTCInfo(){
   const m=getM();
   if(!m.tcInfo) m.tcInfo={};
+  m.tcInfo.cupo=parseFloat(document.getElementById('tci-cupo').value)||null;
   m.tcInfo.fechaCorte=document.getElementById('tci-corte').value||null;
   m.tcInfo.fechaPago=document.getElementById('tci-pago').value||null;
   save();closeModal();render();toast('Info de tarjeta actualizada');
@@ -1653,39 +1737,65 @@ function createMonth(){
   const nm=migrateMonth(JSON.parse(JSON.stringify(lm)));
   nm.nombre=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(nk+1));
   nm.tarjeta=[];
-  nm.tcInfo={fechaCorte:lm.tcInfo?.fechaCorte||null, fechaPago:lm.tcInfo?.fechaPago||null};
+  // Advance tcInfo dates by 1 month
+  function advanceDate(dateStr){
+    if(!dateStr) return null;
+    const d = new Date(dateStr+'T12:00:00');
+    d.setMonth(d.getMonth()+1);
+    return d.toISOString().slice(0,10);
+  }
+  nm.tcInfo={
+    fechaCorte: advanceDate(lm.tcInfo?.fechaCorte),
+    fechaPago:  advanceDate(lm.tcInfo?.fechaPago),
+    cupo:       lm.tcInfo?.cupo||null
+  };
 
-  nm.q1_gastos=nm.q1_gastos.filter(function(g){
-    if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
-    return true;
-  }).map(function(g){
-    var nxtCuota=g.cuotas_total>0&&g.pagado_flag&&g.cuota_actual?g.cuota_actual+1:g.cuota_actual||0;
-    // Auto-advance mensualidad by 1 month
-    var nxtMens=null;
-    if(g.mensualidad){
-      var mp=g.mensualidad.split('-');
-      var mY=parseInt(mp[0]),mM=parseInt(mp[1]);
-      mM++;if(mM>12){mM=1;mY++;}
-      nxtMens=mY+'-'+(mM<10?'0':'')+mM;
-    }
-    return Object.assign({},g,{id:uid(),pagado_flag:false,pagado_real:null,cuota_actual:nxtCuota,fecha_pago:null,comprobante:null,mensualidad:nxtMens});
-  });
+  function copyGastos(gastos) {
+    // First pass: assign new IDs and build old→new map for groups
+    const idMap = {};
+    const mapped = gastos
+      .filter(function(g){
+        if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
+        return true;
+      })
+      .map(function(g){
+        const newId = uid();
+        if(g.esGrupo) idMap[g.id] = newId;
+        var nxtCuota = g.cuotas_total>0&&g.pagado_flag&&g.cuota_actual ? g.cuota_actual+1 : g.cuota_actual||0;
+        var nxtMens = null;
+        if(g.mensualidad){
+          if(g.pagado_flag){
+            // Was paid — advance to next month
+            var mp=g.mensualidad.split('-');
+            var mY=parseInt(mp[0]),mM=parseInt(mp[1]);
+            mM++; if(mM>12){mM=1;mY++;}
+            nxtMens=mY+'-'+(mM<10?'0':'')+mM;
+          } else {
+            // Not paid — keep same month
+            nxtMens=g.mensualidad;
+          }
+        }
+        return Object.assign({},g,{
+          id: newId,
+          pagado_flag: false,
+          pagado_real: null,
+          cuota_actual: nxtCuota,
+          fecha_pago: null,
+          comprobante: null,
+          mensualidad: nxtMens
+        });
+      });
+    // Second pass: update parentIds to new group IDs
+    return mapped.map(function(g){
+      if(g.parentId && idMap[g.parentId]){
+        return Object.assign({},g,{parentId: idMap[g.parentId]});
+      }
+      return g;
+    });
+  }
 
-  nm.q2_gastos=nm.q2_gastos.filter(function(g){
-    if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
-    return true;
-  }).map(function(g){
-    var nxtCuota=g.cuotas_total>0&&g.pagado_flag&&g.cuota_actual?g.cuota_actual+1:g.cuota_actual||0;
-    // Auto-advance mensualidad by 1 month
-    var nxtMens=null;
-    if(g.mensualidad){
-      var mp=g.mensualidad.split('-');
-      var mY=parseInt(mp[0]),mM=parseInt(mp[1]);
-      mM++;if(mM>12){mM=1;mY++;}
-      nxtMens=mY+'-'+(mM<10?'0':'')+mM;
-    }
-    return Object.assign({},g,{id:uid(),pagado_flag:false,pagado_real:null,cuota_actual:nxtCuota,fecha_pago:null,comprobante:null,mensualidad:nxtMens});
-  });
+  nm.q1_gastos = copyGastos(nm.q1_gastos);
+  nm.q2_gastos = copyGastos(nm.q2_gastos);
 
   // Ensure Tarjeta group exists in Q2 and is always tcLinked
   // 1. If there's already a tcLinked group, keep it (presupuesto will sync via syncTCGrupo)
