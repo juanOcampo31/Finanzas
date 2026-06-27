@@ -194,7 +194,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
       <button class="mnav" onclick="nextM()">&#8250;</button>
     </div>
     <div class="topbar-right">
-      <button class="ibtn" onclick="exportCSV()" title="Exportar">&#128196;</button>
+      <button class="ibtn" onclick="openBackupMenu()" title="Respaldo" style="font-size:13px">&#128279;</button>
+      <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(this)">
       <button class="ibtn" onclick="openDeleteMonth()" title="Eliminar mes" style="color:var(--red)">&#128465;</button>
       <button class="ibtn" onclick="openNewMonth()" title="Nuevo mes">&#43;</button>
     </div>
@@ -589,11 +590,12 @@ function renderGastos(gastos,which) {
     var nopagBadge=st?'<span class="nopag-badge">Sin pagar</span>':'';
     var chkTxt=sp?'✓':st?'→':'';
     return '<div class="g-sub-row">'
-      +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+ chkTxt +'</div>'
-      +'<div class="ginfo"><div class="gname '+nameCls+'">'+s.nombre+nopagBadge+'</div>'
+      +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+chkTxt+'</div>'
+      +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
+      +'<div class="gname '+nameCls+'">'+s.nombre+nopagBadge+'</div>'
       +'<div class="gmeta">'+(s.metodo||'')+sdh+'</div></div>'
-      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')">'+ cop(s.presupuesto) +'</div></div>'
-      +'</div>';
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'+cop(s.presupuesto)+'</div></div>'
+      +'</div>'
   }
 
   var rows=topGastos.map(function(g,gi){
@@ -610,6 +612,8 @@ function renderGastos(gastos,which) {
       var countBadge=subs.length>0?'<span class="tc-count">'+subs.length+'</span>':'';
       var subRowsHtml=subs.map(function(s){return buildSubRow(s,which);}).join('');
       var addBtn='<div class="g-sub-add" onclick="openGasto(null,\''+which+'\',\''+g.id+'\')">＋ Agregar al grupo</div>';
+
+      var deudaRow='';
       var grpChk=allPaid?'paid':'';
       var grpTxt=allPaid?'✓':'';
       // Mostrar lo pagado si hay subgastos pagados
@@ -625,7 +629,7 @@ function renderGastos(gastos,which) {
         +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);font-size:15px;padding:4px 6px;cursor:pointer;flex-shrink:0">✎</button>'
         +'<div class="g-chevron" id="gc-'+gi+'">›</div></div>'
         +'</div>'
-        +'<div id="gg-'+gi+'" style="display:'+(gGroupOpen[g.id]?'block':'none')+'"><div class="g-sub-wrap">'+subRowsHtml+addBtn+'</div></div>'
+        +'<div id="gg-'+gi+'" style="display:'+(gGroupOpen[g.id]?'block':'none')+'"><div class="g-sub-wrap">'+subRowsHtml+deudaRow+addBtn+'</div></div>'
         +'</div>';
     }
     var p=g.pagado_flag,tras=g.sinpagar;
@@ -1512,7 +1516,25 @@ function calcTCSaldo(m){
 function syncTCGrupo(m){
   var saldo=calcTCSaldo(m);
   [m.q1_gastos||[],m.q2_gastos||[]].forEach(function(list){
-    list.forEach(function(g){ if(g.esGrupo&&g.tcLinked) g.presupuesto=saldo; });
+    list.forEach(function(g){
+      if(g.esGrupo&&g.tcLinked){
+        g.presupuesto=saldo;
+        // Sync Abono TC: always = TC saldo (full balance to pay)
+        var abonoGasto=list.find(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
+        if(abonoGasto){
+          // Only update if not already paid
+          if(!abonoGasto.pagado_flag) abonoGasto.presupuesto=saldo;
+        } else if(saldo>0){
+          // Create Abono TC if doesn't exist
+          list.push({
+            id:uid(),nombre:'Abono TC',presupuesto:saldo,
+            metodo:g.metodo||'BBVA',pagado_real:null,pagado_flag:false,
+            sinpagar:false,parentId:g.id,esGrupo:false,tcLinked:false,
+            cuotas_total:0,cuota_actual:0
+          });
+        }
+      }
+    });
   });
 }
 function saveTC(id){
@@ -1802,7 +1824,6 @@ function createMonth(){
   // 2. If no tcLinked group exists, create one automatically
   var hasTCGroup=nm.q2_gastos.some(function(g){return g.esGrupo&&g.tcLinked;});
   if(!hasTCGroup){
-    // Check if prev month had one to copy its name/metodo
     var prevTCGroup=(lm.q2_gastos||[]).find(function(g){return g.esGrupo&&g.tcLinked;});
     var tcGroupName=prevTCGroup?prevTCGroup.nombre:'Tarjeta';
     var tcGroupMetodo=prevTCGroup?prevTCGroup.metodo:'BBVA';
@@ -1822,8 +1843,9 @@ function createMonth(){
     });
   }
 
+  // Abono TC is created/updated automatically by syncTCGrupo
+
   db[nk]=nm;
-  // Sync TC saldo (tarjeta is empty so saldo=0, but structure is ready)
   syncTCGrupo(nm);
   save();curM=nk;curTab=0;
   gFiltro={q1:'todos',q2:'todos'};
@@ -1833,6 +1855,77 @@ function createMonth(){
 }
 
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
+function openBackupMenu(){
+  openModal('<div class="mtitle">Respaldo de datos</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
+    +'Exporta tus datos para guardarlos en Drive, WhatsApp o email.<br>'
+    +'Importa un backup para restaurar tus datos.</p>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<button class="bpri" onclick="exportJSON()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
+    +'<span style="font-size:16px">📤</span> Exportar backup JSON</button>'
+    +'<button class="bcnl" onclick="document.getElementById(\'imp-file\').click();closeModal()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
+    +'<span style="font-size:16px">📥</span> Importar backup JSON</button>'
+    +'</div>');
+}
+
+function exportJSON(){
+  const hoy=new Date().toISOString().slice(0,10);
+  const blob=new Blob([JSON.stringify({version:1,fecha:hoy,data:db},null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='finanzas_backup_'+hoy+'.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Backup exportado ✓');
+}
+
+function importJSON(input){
+  const file=input.files[0];
+  if(!file){return;}
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const parsed=JSON.parse(e.target.result);
+      const importedDb=parsed.data||parsed; // support both {version,data} and raw db
+      if(typeof importedDb!=='object'||Array.isArray(importedDb)){
+        alert('Archivo no válido. Debe ser un backup exportado desde esta app.');
+        return;
+      }
+      openModal('<div class="mtitle">Importar backup</div>'
+        +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
+        +'Archivo: <b style="color:var(--txt)">'+file.name+'</b><br>'
+        +'Meses encontrados: <b style="color:var(--txt)">'+Object.keys(importedDb).length+'</b><br><br>'
+        +'<b style="color:var(--red)">¿Reemplazar todos los datos actuales?</b> Esta acción no se puede deshacer.</p>'
+        +'<div class="macts">'
+        +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+        +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmImport()">Reemplazar todo</button>'
+        +'</div>');
+      window._importedDb=importedDb;
+    } catch(err){
+      alert('Error al leer el archivo: '+err.message);
+    }
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+
+function confirmImport(){
+  if(!window._importedDb){closeModal();return;}
+  db=window._importedDb;
+  // Migrate all months
+  Object.keys(db).forEach(function(k){ db[k]=migrateMonth(db[k]); });
+  // Reset navigation
+  const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
+  curM=keys[keys.length-1]; // go to last month
+  curTab=0;
+  gFiltro={q1:'todos',q2:'todos'};
+  gSort={q1:'orden',q2:'orden'};
+  gFilterOpen={q1:false,q2:false};
+  save();closeModal();render();
+  toast('Datos importados correctamente ✓');
+  window._importedDb=null;
+}
+
 function exportCSV(){
   const m=getM(),nom=getNom(m);
   const rows=[['Sección','Nombre','Presupuesto','Método','Pagado Real','Estado','Fecha']];
