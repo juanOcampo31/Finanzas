@@ -594,7 +594,7 @@ function renderGastos(gastos,which) {
       +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
       +'<div class="gname '+nameCls+'">'+s.nombre+nopagBadge+'</div>'
       +'<div class="gmeta">'+(s.metodo||'')+sdh+'</div></div>'
-      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'+cop(s.presupuesto)+'</div></div>'
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+cop(s.presupuesto)+'</div></div>'
       +'</div>'
   }
 
@@ -928,6 +928,7 @@ function saveConvertir(){
   g.tcLinked=linked;
   if(linked){
     g.presupuesto=calcTCSaldo(m);
+    syncTCGrupo(m); // creates Abono TC automatically
   } else {
     g.presupuesto=parseFloat(document.getElementById('grp-base').value)||0;
   }
@@ -1291,6 +1292,11 @@ function toggleP(e,id,which){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
   const g=list.find(x=>x.id===id);
   if(!g) return;
+  // Block payment if presupuesto is negative (saldo a favor)
+  if(!g.pagado_flag && g.presupuesto<0){
+    toast('Saldo a favor — no hay deuda que pagar');
+    return;
+  }
   if(g.pagado_flag){
     // Already paid — unmark directly, remove auto-abono if it exists
     g.pagado_flag=false;
@@ -1524,8 +1530,8 @@ function syncTCGrupo(m){
         if(abonoGasto){
           // Only update if not already paid
           if(!abonoGasto.pagado_flag) abonoGasto.presupuesto=saldo;
-        } else if(saldo>0){
-          // Create Abono TC if doesn't exist
+        } else {
+          // Create Abono TC — always create when group is tcLinked
           list.push({
             id:uid(),nombre:'Abono TC',presupuesto:saldo,
             metodo:g.metodo||'BBVA',pagado_real:null,pagado_flag:false,
