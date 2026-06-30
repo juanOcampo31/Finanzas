@@ -1444,6 +1444,32 @@ function onFab(){
 }
 
 // ── CRUD Gastos ───────────────────────────────────────────────────────────────
+function sugerirCuotaCredito(){
+  const sel=document.getElementById('g-credito');
+  if(!sel) return;
+  const crId=sel.value;
+  if(!crId){
+    // "Ninguno" seleccionado: limpiar marcas pero dejar lo que el usuario ya escribió
+    return;
+  }
+  const cr=creditos[crId]; if(!cr) return;
+  const amort=calcAmortizacion(cr);
+  const pagos=cr.pagos||[];
+  // Buscar la primera cuota NO pagada
+  var idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
+  if(idx===-1) idx=amort.rows.length-1; // todas pagadas: sugerir la última
+  const row=amort.rows[idx];
+
+  const nEl=document.getElementById('g-n');
+  const pEl=document.getElementById('g-p');
+  const ctEl=document.getElementById('g-ct');
+  const caEl=document.getElementById('g-ca');
+  if(nEl) nEl.value='Crédito '+cr.nombre;
+  if(pEl) pEl.value=row.valorCuota;
+  if(ctEl) ctEl.value=cr.cuotas;
+  if(caEl) caEl.value=row.numero;
+}
+
 function openGasto(g,which,parentId){
   const e=g||{nombre:'',presupuesto:0,metodo:'Nequi',pagado_real:null,pagado_flag:false};
   const isE=!!g;
@@ -1475,6 +1501,18 @@ function openGasto(g,which,parentId){
   }
   const opts=metodos.map(function(x){return '<option'+(defaultMetodo===x?' selected':'')+'>'+x+'</option>';}).join('');
 
+  // Selector de crédito vinculado (solo gastos nuevos, no subgastos ni grupos)
+  var creditoField='';
+  const creditoIds=Object.keys(creditos);
+  if(!isE && !pid && creditoIds.length>0){
+    var creditoOpts='<option value="">— Ninguno —</option>'+creditoIds.map(function(cid){
+      var cr=creditos[cid];
+      return '<option value="'+cid+'">'+cr.nombre+'</option>';
+    }).join('');
+    creditoField='<div class="field"><label>¿Es cuota de un crédito?</label>'
+      +'<select id="g-credito" onchange="sugerirCuotaCredito()">'+creditoOpts+'</select></div>';
+  }
+
   const delBtn=isE?'<button class="bdel" onclick="delG(\''+eid+'\',\''+wh+'\')">Eliminar gasto</button>':'';
   var grpBtn='';
   if(isE&&!e.parentId&&!e.esGrupo){
@@ -1485,6 +1523,7 @@ function openGasto(g,which,parentId){
   }
 
   const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
+    +creditoField
     +'<div class="field"><label>Nombre</label><input id="g-n" value="'+e.nombre+'" placeholder="C. Casa, Luz..."></div>'
     +'<div class="field"><label>Presupuesto</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
     +'<div class="field"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
@@ -1512,6 +1551,8 @@ function saveG(id,which,parentId){
   const cuota_actual_input=parseInt(document.getElementById('g-ca').value)||0;
   const mensualidad=document.getElementById('g-mens')?.value||null;
   const sinpagar=document.getElementById('g-sp')?.checked||false;
+  const creditoSel=document.getElementById('g-credito');
+  const creditoIdSel=creditoSel?creditoSel.value||null:null;
   if(!nombre){alert('Escribe un nombre');return;}
   let gasto;
   if(id){
@@ -1543,6 +1584,10 @@ function saveG(id,which,parentId){
       } else { cuota_auto=1; }
     }
     gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0,mensualidad:mensualidad||null};
+    if(creditoIdSel){
+      gasto.creditoId=creditoIdSel;
+      gasto.numCuota=cuota_auto||cuotas_total;
+    }
     list.push(gasto);
   }
   save(); closeModal(); render();
