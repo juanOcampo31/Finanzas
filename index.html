@@ -537,6 +537,9 @@ function openCreditoDetalle(id){
   }
 
   openModal('<div class="mtitle">'+cr.nombre+'</div>'
+    +'<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
+    +'<button onclick="editNombreCredito(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">✎ Editar nombre</button>'
+    +'</div>'
     +'<div style="display:flex;gap:8px;margin-bottom:10px">'
     +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Cuota</div><div style="font-size:14px;font-weight:700;color:var(--acc)">'+cop(amort.valorCuota)+'</div></div>'
     +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div></div>'
@@ -556,6 +559,35 @@ function openCreditoDetalle(id){
     var el=document.getElementById('cr-row-'+proximaIdx);
     if(el) el.scrollIntoView({block:'center'});
   },50);
+}
+
+function editNombreCredito(id){
+  const cr=creditos[id]; if(!cr) return;
+  openModal('<div class="mtitle">Editar nombre</div>'
+    +'<div class="field"><label>Nombre del crédito</label><input id="cr-edit-nombre" value="'+cr.nombre+'"></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="saveNombreCredito(\''+id+'\')">Guardar</button>'
+    +'</div>');
+}
+function saveNombreCredito(id){
+  const cr=creditos[id]; if(!cr) return;
+  const nuevoNombre=document.getElementById('cr-edit-nombre').value.trim();
+  if(!nuevoNombre){alert('Escribe un nombre');return;}
+  const nombreViejo=cr.nombre;
+  cr.nombre=nuevoNombre;
+  // Actualizar el nombre en los gastos ya generados que referencian este crédito
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+      list.forEach(function(g){
+        if(g.creditoId===id && g.nombre==='Crédito '+nombreViejo){
+          g.nombre='Crédito '+nuevoNombre;
+        }
+      });
+    });
+  });
+  save();render();openCreditoDetalle(id);toast('Nombre actualizado');
 }
 
 function toggleOcultarPagadas(id){
@@ -2291,6 +2323,8 @@ function generarGastosCredito(nm){
   // Para cada crédito activo, revisar si alguna cuota cae en el mes nm
   const mi=MESES.indexOf(nm.nombre);
   const año=nm.año;
+  if(!Array.isArray(nm.q1_gastos)) nm.q1_gastos=[];
+  if(!Array.isArray(nm.q2_gastos)) nm.q2_gastos=[];
   Object.keys(creditos).forEach(function(crId){
     var cr=creditos[crId];
     var amort=calcAmortizacion(cr);
@@ -2300,8 +2334,9 @@ function generarGastosCredito(nm){
         var dia=fecha.getDate();
         var which=dia<=15?'q1':'q2';
         var list=which==='q1'?nm.q1_gastos:nm.q2_gastos;
-        // Evitar duplicar si ya existe un gasto para este crédito+cuota
-        var yaExiste=list.some(function(g){return g.creditoId===crId&&g.numCuota===row.numero;});
+        // Evitar duplicar: revisar en AMBAS listas (q1 y q2) del mes
+        var yaExiste=nm.q1_gastos.some(function(g){return g.creditoId===crId&&g.numCuota===row.numero;})
+                  || nm.q2_gastos.some(function(g){return g.creditoId===crId&&g.numCuota===row.numero;});
         if(!yaExiste){
           list.push({
             id:uid(),
@@ -2353,6 +2388,8 @@ function createMonth(){
     const idMap = {};
     const mapped = gastos
       .filter(function(g){
+        // Excluir gastos de crédito: se regeneran por fecha real en generarGastosCredito
+        if(g.creditoId) return false;
         if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
         return true;
       })
