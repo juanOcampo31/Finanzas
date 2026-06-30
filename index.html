@@ -299,6 +299,8 @@ function migrateMonth(m) {
 }
 
 let creditos={}; // {id: {nombre, valorPrestamo, pctAval, cuotas, tasa, fechaInicio, frecuencia}}
+let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
+let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
 let db;
 try {
   const raw = localStorage.getItem('fin26');
@@ -313,6 +315,23 @@ try {
   const rawC = localStorage.getItem('fin26_creditos');
   creditos = rawC ? JSON.parse(rawC) : {};
 } catch(e) { creditos = {}; }
+
+try {
+  const rawCM = localStorage.getItem('fin26_cat_metodos');
+  if(rawCM){
+    catMetodos = JSON.parse(rawCM);
+  } else {
+    // Migrar valores por defecto la primera vez
+    const defaults=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
+    catMetodos = defaults.map(function(n){ return {id:uid(), nombre:n}; });
+  }
+} catch(e) { catMetodos = []; }
+
+try {
+  const rawCT = localStorage.getItem('fin26_cat_tipos');
+  catTipos = rawCT ? JSON.parse(rawCT) : [];
+} catch(e) { catTipos = []; }
+
 save();
 
 let curM   = parseInt(localStorage.getItem('fin26m') || '0');
@@ -329,7 +348,12 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 let curTab = 0;
 let tcTipo = 'Compra';
 
-function save()  { localStorage.setItem('fin26', JSON.stringify(db)); localStorage.setItem('fin26_creditos', JSON.stringify(creditos)); }
+function save()  {
+  localStorage.setItem('fin26', JSON.stringify(db));
+  localStorage.setItem('fin26_creditos', JSON.stringify(creditos));
+  localStorage.setItem('fin26_cat_metodos', JSON.stringify(catMetodos));
+  localStorage.setItem('fin26_cat_tipos', JSON.stringify(catTipos));
+}
 function getM()  { return db[curM]; }
 function getNom(m) { return m.nomina || {}; }
 
@@ -471,6 +495,8 @@ function openNewCredito(){
     +'<input id="cr-cuota-manual" type="number" placeholder="Se sugiere automáticamente">'
     +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
     +'</div>'
+    +'<div class="cbx-row"><input type="checkbox" id="cr-wa" checked>'
+    +'<label for="cr-wa" style="font-size:13px;color:var(--txt)">Enviar comprobante por WhatsApp al pagar una cuota</label></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCredito()">Crear</button>'
@@ -508,12 +534,13 @@ function saveNewCredito(){
   const fechaInicio=document.getElementById('cr-fecha').value;
   const frecuencia=document.getElementById('cr-frec').value;
   const cuotaManual=parseFloat(document.getElementById('cr-cuota-manual').value)||null;
+  const whatsappAuto=document.getElementById('cr-wa').checked;
   if(!nombre||!valorPrestamo||!cuotas||!fechaInicio){alert('Completa nombre, valor, cuotas y fecha de inicio');return;}
   const id='cr_'+Date.now();
   creditos[id]={
     id:id, nombre:nombre, valorPrestamo:valorPrestamo, pctAval:pctAval,
     cuotas:cuotas, tasa:tasa, fechaInicio:fechaInicio, frecuencia:frecuencia,
-    valorCuotaManual:cuotaManual, pagos:[]
+    valorCuotaManual:cuotaManual, whatsappAuto:whatsappAuto, pagos:[]
   };
   save();closeModal();openCreditosMenu();toast('Crédito creado');
 }
@@ -543,7 +570,10 @@ function openCreditoDetalle(id){
       +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+fechaFmt+' · saldo '+cop(r.saldo)+'</div>'
       +'<div style="font-size:10px;margin-top:1px"><span style="color:var(--grn)">Capital '+cop(r.capital)+'</span> · <span style="color:var(--red)">Interés '+cop(r.intereses)+'</span></div>'
       +'</div>'
-      +'<div style="text-align:right;flex-shrink:0">'
+      +'<div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:6px">'
+      +'<button onclick="event.stopPropagation();shareCuotaWhatsApp(\''+id+'\','+i+')" style="background:none;border:none;cursor:pointer;color:var(--mut);padding:4px" title="Compartir por WhatsApp">'
+      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A8.86 8.86 0 0 0 12.05 4a8.94 8.94 0 0 0-7.74 13.4L3 21l3.71-1.27A8.93 8.93 0 0 0 12.05 21a8.94 8.94 0 0 0 8.92-8.95 8.88 8.88 0 0 0-3.37-5.73Zm-5.55 13.7a7.42 7.42 0 0 1-3.78-1.04l-.27-.16-2.8.96.94-2.73-.18-.28a7.4 7.4 0 0 1-1.13-3.95 7.43 7.43 0 1 1 7.42 7.4Zm4.07-5.56c-.22-.11-1.3-.64-1.5-.72-.2-.07-.35-.11-.5.11-.15.22-.57.72-.7.87-.13.15-.26.16-.48.05-.22-.11-1.32-.49-2.16-1.34a8.13 8.13 0 0 1-1.51-1.88c-.16-.27-.02-.42.12-.57.13-.13.3-.34.45-.5.15-.17.2-.29.3-.49.1-.2.05-.36-.02-.5-.07-.13-.62-1.5-.85-2.06-.22-.55-.45-.47-.62-.48h-.53c-.18 0-.46.07-.7.34-.24.27-.94.92-.94 2.23 0 1.32.97 2.59 1.1 2.77.13.18 1.86 2.85 4.5 3.88 2.64 1.04 2.64.7 3.12.66.47-.05 1.51-.62 1.72-1.21.21-.6.21-1.11.15-1.21-.06-.1-.21-.16-.43-.27Z"/></svg>'
+      +'</button>'
       +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(r.valorCuota)+'</div>'
       +'</div>'
       +'</div>';
@@ -578,10 +608,51 @@ function openCreditoDetalle(id){
   },50);
 }
 
+function buildCuotaMsg(cr,r,pagado){
+  const fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+  const lineas=[
+    '*Pago de crédito — '+cr.nombre+'*',
+    '--------------------------------',
+    'Cuota: '+r.numero+' de '+cr.cuotas,
+    'Fecha: '+fechaFmt,
+    'Estado: '+(pagado?'Pagada':'Pendiente'),
+    '--------------------------------',
+    'Valor de la cuota: '+cop(r.valorCuota),
+    'Abono a capital: '+cop(r.capital),
+    'Intereses: '+cop(r.intereses),
+    'Saldo pendiente: '+cop(r.saldo)
+  ];
+  return lineas.join('\n');
+}
+
+function sendCuotaWhatsApp(creditoId,numCuota){
+  const cr=creditos[creditoId]; if(!cr) return;
+  if(cr.whatsappAuto===false) return; // desactivado para este crédito
+  const amort=calcAmortizacion(cr);
+  const r=amort.rows[numCuota-1]; if(!r) return;
+  const pagado=!!(cr.pagos&&cr.pagos[numCuota-1]);
+  const msg=buildCuotaMsg(cr,r,pagado);
+  const url='https://wa.me/?text='+encodeURIComponent(msg);
+  window.open(url,'_blank');
+}
+
+function shareCuotaWhatsApp(id,idx){
+  const cr=creditos[id]; if(!cr) return;
+  const amort=calcAmortizacion(cr);
+  const r=amort.rows[idx]; if(!r) return;
+  const pagado=!!(cr.pagos&&cr.pagos[idx]);
+  const msg=buildCuotaMsg(cr,r,pagado);
+  const url='https://wa.me/?text='+encodeURIComponent(msg);
+  window.open(url,'_blank');
+}
+
 function editNombreCredito(id){
   const cr=creditos[id]; if(!cr) return;
-  openModal('<div class="mtitle">Editar nombre</div>'
+  const waEnabled=cr.whatsappAuto!==false; // por defecto activado si no existe el campo
+  openModal('<div class="mtitle">Editar crédito</div>'
     +'<div class="field"><label>Nombre del crédito</label><input id="cr-edit-nombre" value="'+cr.nombre+'"></div>'
+    +'<div class="cbx-row"><input type="checkbox" id="cr-edit-wa"'+(waEnabled?' checked':'')+'>'
+    +'<label for="cr-edit-wa" style="font-size:13px;color:var(--txt)">Enviar comprobante por WhatsApp al pagar una cuota</label></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveNombreCredito(\''+id+'\')">Guardar</button>'
@@ -593,6 +664,7 @@ function saveNombreCredito(id){
   if(!nuevoNombre){alert('Escribe un nombre');return;}
   const nombreViejo=cr.nombre;
   cr.nombre=nuevoNombre;
+  cr.whatsappAuto=document.getElementById('cr-edit-wa').checked;
   // Actualizar el nombre en los gastos ya generados que referencian este crédito
   Object.keys(db).forEach(function(k){
     var mes=db[k];
@@ -604,7 +676,7 @@ function saveNombreCredito(id){
       });
     });
   });
-  save();render();openCreditoDetalle(id);toast('Nombre actualizado');
+  save();render();openCreditoDetalle(id);toast('Crédito actualizado');
 }
 
 function toggleOcultarPagadas(id){
@@ -616,7 +688,9 @@ function toggleOcultarPagadas(id){
 function toggleCuotaPago(id,idx){
   const cr=creditos[id]; if(!cr) return;
   if(!cr.pagos) cr.pagos=[];
+  const yaEstabaPagada=!!cr.pagos[idx];
   cr.pagos[idx]=!cr.pagos[idx];
+  const ahoraPagada=cr.pagos[idx];
   // Sincronizar el gasto correspondiente en Q1/Q2 si existe en algún mes
   const numCuota=idx+1;
   let encontrado=false;
@@ -630,6 +704,10 @@ function toggleCuotaPago(id,idx){
   save();
   render(); // actualizar Q1/Q2 de fondo si el gasto cambió
   openCreditoDetalle(id);
+  // Si se marcó como pagada (no al desmarcar), enviar comprobante por WhatsApp
+  if(!yaEstabaPagada && ahoraPagada){
+    sendCuotaWhatsApp(id,numCuota);
+  }
 }
 
 function confirmDeleteCredito(id){
@@ -1573,20 +1651,16 @@ function sugerirCuotaCredito(){
 }
 
 function openGasto(g,which,parentId){
-  const e=g||{nombre:'',presupuesto:0,metodo:'Nequi',pagado_real:null,pagado_flag:false};
+  const e=g||{nombre:'',presupuesto:0,metodo:'',pagado_real:null,pagado_flag:false};
   const isE=!!g;
   const pid=parentId||'';
   const eid=isE?e.id:'';
   const wh=which||'q1';
 
-  // Build all variable parts with simple concatenation — no nested backticks
   const spLabel=wh==='q1'?'Sin pagar (mover a Q2)':'Sin pagar (solo recordatorio)';
   const spChecked=e.sinpagar?' checked':'';
   const pdChecked=e.pagado_flag?' checked':'';
-  const metodos=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
-  // For subgastos, default metodo to parent group's metodo
-  var defaultMetodo=e.metodo||'Nequi';
-  // Auto-suggest cuota_actual if gasto has cuotas but no cuota set yet
+  var defaultMetodo=e.metodo||(catMetodos[0]?catMetodos[0].nombre:'');
   var suggestedCuota=e.cuota_actual||0;
   if(!e.id&&!suggestedCuota&&e.cuotas_total>0){
     var prevKey2=curM-1;
@@ -1601,9 +1675,19 @@ function openGasto(g,which,parentId){
     var parentG=(getM()[wh==='q1'?'q1_gastos':'q2_gastos']||[]).find(function(x){return x.id===pid;});
     if(parentG&&parentG.metodo) defaultMetodo=parentG.metodo;
   }
-  const opts=metodos.map(function(x){return '<option'+(defaultMetodo===x?' selected':'')+'>'+x+'</option>';}).join('');
 
-  // Selector de crédito vinculado (solo gastos nuevos, no subgastos ni grupos)
+  const opts=catMetodos.map(function(x){return '<option'+(defaultMetodo===x.nombre?' selected':'')+'>'+x.nombre+'</option>';}).join('');
+
+  // Selector opcional de plantilla de gasto (catálogo de Gastos) — solo en creación, no edición ni subgastos
+  var templateField='';
+  if(!isE && !pid && catTipos.length>0){
+    var tplOpts='<option value="">— Escribir libremente —</option>'+catTipos.map(function(t){
+      return '<option value="'+t.id+'">'+t.nombre+'</option>';
+    }).join('');
+    templateField='<div class="field"><label>Usar gasto guardado (opcional)</label>'
+      +'<select id="g-template" onchange="aplicarPlantillaGasto()">'+tplOpts+'</select></div>';
+  }
+
   var creditoField='';
   const creditoIds=Object.keys(creditos);
   if(!isE && !pid && creditoIds.length>0){
@@ -1626,15 +1710,19 @@ function openGasto(g,which,parentId){
 
   const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
     +creditoField
-    +'<div class="field"><label>Nombre</label><input id="g-n" value="'+e.nombre+'" placeholder="C. Casa, Luz..."></div>'
+    +templateField
+    +'<div class="field"><label>Nombre</label><input id="g-n" value="'+e.nombre+'" placeholder="Arriendo, Mercado, Luz..."></div>'
     +'<div class="field"><label>Presupuesto</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
     +'<div class="field"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
-    +'<div class="field"><label>F. Pago</label><select id="g-m">'+opts+'</select></div>'
+    +'<div class="field"><label>F. Pago</label><select id="g-m">'+opts+'</select>'
+    +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Crear nueva forma de pago</button></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +'<div class="field" style="margin:0"><label>Total cuotas</label><input id="g-ct" type="number" min="0" value="'+(e.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
     +'<div class="field" style="margin:0"><label>Cuota actual</label><input id="g-ca" type="number" min="1" value="'+( suggestedCuota||'')+'" placeholder="Auto"></div>'
     +'</div>'
-    +'<div class="field"><label>Mensualidad de (opcional)</label><input id="g-mens" type="month" value="'+(e.mensualidad||'')+'" ></div>'
+    +'<div class="cbx-row"><input type="checkbox" id="g-esmens"'+(e.mensualidad?' checked':'')+' onchange="toggleMensField()">'
+    +'<label for="g-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad</label></div>'
+    +'<div class="field" id="g-mens-field" style="'+(e.mensualidad?'':'display:none')+'"><label>Mensualidad de</label><input id="g-mens" type="month" value="'+(e.mensualidad||'')+'"></div>'
     +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Marcado como pagado</label></div>'
     +'<div class="cbx-row"><input type="checkbox" id="g-sp"'+spChecked+'><label for="g-sp" style="font-size:13px;color:var(--amb)">'+spLabel+'</label></div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
@@ -1642,6 +1730,62 @@ function openGasto(g,which,parentId){
     +delBtn+grpBtn;
   openModal(html);
 }
+
+function toggleMensField(){
+  const chk=document.getElementById('g-esmens');
+  const field=document.getElementById('g-mens-field');
+  if(!chk||!field) return;
+  field.style.display=chk.checked?'block':'none';
+  if(chk.checked && !document.getElementById('g-mens').value){
+    var now=new Date();
+    var y=now.getFullYear(), m=now.getMonth()+2;
+    if(m>12){m=1;y++;}
+    document.getElementById('g-mens').value=y+'-'+(m<10?'0':'')+m;
+  }
+}
+
+function aplicarPlantillaGasto(){
+  const sel=document.getElementById('g-template');
+  if(!sel||!sel.value) return;
+  const item=catTipos.find(function(i){return i.id===sel.value;});
+  if(!item) return;
+  const nEl=document.getElementById('g-n');
+  const pEl=document.getElementById('g-p');
+  const mEl=document.getElementById('g-m');
+  const ctEl=document.getElementById('g-ct');
+  if(nEl) nEl.value=item.nombre;
+  if(pEl&&item.presupuesto) pEl.value=item.presupuesto;
+  if(mEl&&item.metodo) mEl.value=item.metodo;
+  if(ctEl&&item.cuotas_total) ctEl.value=item.cuotas_total;
+  if(item.esMensualidad){
+    document.getElementById('g-esmens').checked=true;
+    toggleMensField();
+  }
+}
+
+function openNewMetodoInline(){
+  openModal('<div class="mtitle">Nueva forma de pago</div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Daviplata, Efectivo..."></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveNewMetodoInline()">Guardar</button>'
+    +'</div>');
+}
+
+function saveNewMetodoInline(){
+  const nombre=document.getElementById('cat-nombre').value.trim();
+  if(!nombre){alert('Escribe un nombre');return;}
+  if(catMetodos.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
+    alert('Ya existe esa forma de pago');return;
+  }
+  catMetodos.push({id:uid(),nombre:nombre});
+  save();
+  closeModal();
+  toast('Agregado. Vuelve a abrir el formulario para usarlo.');
+}
+
+
+
 function saveG(id,which,parentId){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
   const nombre=document.getElementById('g-n').value.trim();
@@ -1766,7 +1910,7 @@ function toggleP(e,id,which){
       }
     }
     save();render();
-  } else if(g.metodo==='PSE' || g.cuotas_total>0 || g.mensualidad){
+  } else if(g.metodo==='PSE' || g.mensualidad){
     openPagoModal(g,which);
   } else {
     g.pagado_flag=true;
@@ -1786,7 +1930,15 @@ function toggleP(e,id,which){
         syncTCGrupo(m);
       }
     }
+    if(g.creditoId && creditos[g.creditoId]){
+      var cr2=creditos[g.creditoId];
+      if(!cr2.pagos) cr2.pagos=[];
+      cr2.pagos[g.numCuota-1]=true;
+    }
     save();render();
+    if(g.creditoId && g.numCuota){
+      sendCuotaWhatsApp(g.creditoId,g.numCuota);
+    }
   }
 }
 
@@ -1814,9 +1966,9 @@ function openPagoModal(g,which){
   // If mensualidad exists, keep it as-is (user can edit if needed)
   var mNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-  // Mensualidad field (only if gasto has mensualidad or cuotas)
+  // Mensualidad field (solo si el gasto realmente tiene mensualidad activada)
   var mensField='';
-  if(g.mensualidad!==undefined||g.cuotas_total>0){
+  if(g.mensualidad){
     mensField='<div class="field"><label>Mensualidad de</label>'
       +'<div style="display:flex;gap:8px;align-items:center">'
       +'<input id="pg-mens" type="month" value="'+mensSugerida+'" style="flex:1">'
@@ -1879,6 +2031,11 @@ function confirmarPago(id,which){
   }
 
   save();closeModal();render();toast('Pago registrado');
+
+  // Si el gasto pagado pertenece a un crédito, enviar comprobante por WhatsApp
+  if(g.creditoId && g.numCuota){
+    sendCuotaWhatsApp(g.creditoId,g.numCuota);
+  }
 }
 
 // ── CRUD Tarjeta ──────────────────────────────────────────────────────────────
@@ -2129,11 +2286,245 @@ function delDed(lbl,i){
 }
 
 // ── Nuevo mes ─────────────────────────────────────────────────────────────────
+// ── CATÁLOGOS: Tipos de gasto y Formas de pago ────────────────────────────────
+function openCatalogosMenu(){
+  openModal('<div class="mtitle">Catálogos</div>'
+    +'<div style="display:flex;flex-direction:column">'
+    +'<div onclick="openGastoTemplates()" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer">'
+    +'<span style="font-size:14px;color:var(--txt)">Gastos</span>'
+    +'<span style="font-size:11px;color:var(--mut)">'+catTipos.length+' ítem(s) ›</span></div>'
+    +'<div onclick="openCatList(\'metodos\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer">'
+    +'<span style="font-size:14px;color:var(--txt)">Formas de pago</span>'
+    +'<span style="font-size:11px;color:var(--mut)">'+catMetodos.length+' ítem(s) ›</span></div>'
+    +'</div>'
+    +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
+}
+
+function getCat(tipo){ return tipo==='tipos'?catTipos:catMetodos; }
+function setCat(tipo,arr){ if(tipo==='tipos') catTipos=arr; else catMetodos=arr; }
+function catLabel(tipo){ return tipo==='tipos'?'Gasto':'Forma de pago'; }
+
+// ── Catálogo de Formas de pago (simple: solo nombre) ──────────────────────────
+function openCatList(tipo){
+  const arr=getCat(tipo);
+  const rowsHtml=arr.length?arr.map(function(item){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
+      +'<span style="font-size:13px;color:var(--txt)">'+item.nombre+'</span>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button onclick="editCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✎</button>'
+      +'<button onclick="deleteCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑</button>'
+      +'</div></div>';
+  }).join(''):'<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Sin elementos. Agrega el primero.</div>';
+
+  openModal('<div class="mtitle">'+catLabel(tipo)+'s</div>'
+    +'<div style="max-height:320px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:14px">'+rowsHtml+'</div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCatalogosMenu()">Volver</button>'
+    +'<button class="bpri" onclick="openNewCatItem(\''+tipo+'\')">＋ Agregar</button>'
+    +'</div>');
+}
+
+function openNewCatItem(tipo){
+  openModal('<div class="mtitle">Nueva: '+catLabel(tipo)+'</div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Daviplata, Efectivo..."></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCatList(\''+tipo+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="saveNewCatItem(\''+tipo+'\')">Guardar</button>'
+    +'</div>');
+}
+
+function saveNewCatItem(tipo){
+  const nombre=document.getElementById('cat-nombre').value.trim();
+  if(!nombre){alert('Escribe un nombre');return;}
+  const arr=getCat(tipo);
+  if(arr.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
+    alert('Ya existe ese ítem');return;
+  }
+  arr.push({id:uid(),nombre:nombre});
+  setCat(tipo,arr);
+  save();openCatList(tipo);toast('Agregado');
+}
+
+function editCatItem(tipo,id){
+  const arr=getCat(tipo);
+  const item=arr.find(function(i){return i.id===id;});
+  if(!item) return;
+  openModal('<div class="mtitle">Editar: '+catLabel(tipo)+'</div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-edit-nombre" value="'+item.nombre+'"></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCatList(\''+tipo+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="saveEditCatItem(\''+tipo+'\',\''+id+'\')">Guardar</button>'
+    +'</div>');
+}
+
+function saveEditCatItem(tipo,id){
+  const nuevoNombre=document.getElementById('cat-edit-nombre').value.trim();
+  if(!nuevoNombre){alert('Escribe un nombre');return;}
+  const arr=getCat(tipo);
+  const item=arr.find(function(i){return i.id===id;});
+  if(!item) return;
+  const nombreViejo=item.nombre;
+  item.nombre=nuevoNombre;
+  setCat(tipo,arr);
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+      list.forEach(function(g){ if(g.metodo===nombreViejo) g.metodo=nuevoNombre; });
+    });
+  });
+  save();render();openCatList(tipo);toast('Actualizado');
+}
+
+function deleteCatItem(tipo,id){
+  if(!confirm('¿Eliminar este ítem del catálogo? Los gastos existentes que lo usan no se modifican.')) return;
+  const arr=getCat(tipo).filter(function(i){return i.id!==id;});
+  setCat(tipo,arr);
+  save();openCatList(tipo);toast('Eliminado');
+}
+
+// ── Catálogo de Gastos (plantillas completas: presupuesto, método, cuotas, mensualidad) ──
+function seedGastosDesdeUltimoMes(){
+  const keys=Object.keys(db).map(Number);
+  if(!keys.length){ toast('No hay meses creados aún'); return; }
+  const lastKey=Math.max(...keys);
+  const lm=db[lastKey];
+  const todos=[...(lm.q1_gastos||[]),...(lm.q2_gastos||[])].filter(function(g){
+    return !g.parentId && !g.esGrupo && !g.creditoId; // excluir subgastos, grupos y cuotas de crédito
+  });
+
+  var agregados=0, omitidos=0, metodosNuevos=0;
+  todos.forEach(function(g){
+    // Asegurar que la forma de pago usada exista en su catálogo
+    if(g.metodo){
+      var metodoExiste=catMetodos.some(function(m){return m.nombre.toLowerCase()===g.metodo.toLowerCase();});
+      if(!metodoExiste){
+        catMetodos.push({id:uid(),nombre:g.metodo});
+        metodosNuevos++;
+      }
+    }
+    var yaExiste=catTipos.some(function(t){return t.nombre.toLowerCase()===g.nombre.toLowerCase();});
+    if(yaExiste){ omitidos++; return; }
+    catTipos.push({
+      id:uid(),
+      nombre:g.nombre,
+      presupuesto:g.presupuesto||null,
+      metodo:g.metodo||null,
+      cuotas_total:0, // no copiamos cuotas: cada plantilla es genérica, no atada a un avance específico
+      esMensualidad:!!g.mensualidad
+    });
+    agregados++;
+  });
+
+  save();
+  openGastoTemplates();
+  var msg=agregados+' gasto(s) agregado(s)';
+  if(omitidos) msg+=' · '+omitidos+' ya existían';
+  if(metodosNuevos) msg+=' · '+metodosNuevos+' forma(s) de pago nuevas';
+  toast(msg);
+}
+
+function openGastoTemplates(){
+  const rowsHtml=catTipos.length?catTipos.map(function(item){
+    var detalle=[];
+    if(item.presupuesto) detalle.push(cop(item.presupuesto));
+    if(item.metodo) detalle.push(item.metodo);
+    if(item.cuotas_total>0) detalle.push(item.cuotas_total+' cuotas');
+    if(item.esMensualidad) detalle.push('mensualidad');
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
+      +'<div style="min-width:0">'
+      +'<div style="font-size:13px;color:var(--txt)">'+item.nombre+'</div>'
+      +(detalle.length?'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+detalle.join(' · ')+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;gap:8px;flex-shrink:0">'
+      +'<button onclick="editGastoTemplate(\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✎</button>'
+      +'<button onclick="deleteCatItem(\'tipos\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑</button>'
+      +'</div></div>';
+  }).join(''):'<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Sin gastos guardados. Crea plantillas para reutilizar al registrar gastos.</div>';
+
+  openModal('<div class="mtitle">Gastos (plantillas)</div>'
+    +'<p style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px">Guarda gastos frecuentes con su valor, forma de pago y cuotas para no escribirlos cada vez. Son opcionales: en el formulario siempre puedes escribir un nombre libre.</p>'
+    +'<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
+    +'<button onclick="seedGastosDesdeUltimoMes()" style="background:var(--surf2);border:1px solid var(--brd2);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--acc);cursor:pointer">↻ Crear desde el último mes</button>'
+    +'</div>'
+    +'<div style="max-height:320px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:14px">'+rowsHtml+'</div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCatalogosMenu()">Volver</button>'
+    +'<button class="bpri" onclick="openNewGastoTemplate()">＋ Agregar</button>'
+    +'</div>');
+}
+
+function gastoTemplateForm(item){
+  item = item || {nombre:'',presupuesto:'',metodo:'',cuotas_total:'',esMensualidad:false};
+  const metodoOpts='<option value="">— Ninguna —</option>'+catMetodos.map(function(m){
+    return '<option'+(item.metodo===m.nombre?' selected':'')+'>'+m.nombre+'</option>';
+  }).join('');
+  return '<div class="field"><label>Nombre</label><input id="gt-nombre" value="'+item.nombre+'" placeholder="Ej: Arriendo, Mercado..."></div>'
+    +'<div class="field"><label>Presupuesto (opcional)</label><input id="gt-presupuesto" type="number" value="'+(item.presupuesto||'')+'" placeholder="Ej: 950000"></div>'
+    +'<div class="field"><label>Forma de pago asociada (opcional)</label><select id="gt-metodo">'+metodoOpts+'</select></div>'
+    +'<div class="field"><label>Cuotas (opcional)</label><input id="gt-cuotas" type="number" min="0" value="'+(item.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
+    +'<div class="cbx-row"><input type="checkbox" id="gt-mens"'+(item.esMensualidad?' checked':'')+'>'
+    +'<label for="gt-mens" style="font-size:13px;color:var(--txt)">Es una mensualidad (pago adelantado al mes siguiente)</label></div>';
+}
+
+function openNewGastoTemplate(){
+  openModal('<div class="mtitle">Nuevo gasto</div>'
+    +gastoTemplateForm()
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openGastoTemplates()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveNewGastoTemplate()">Guardar</button>'
+    +'</div>');
+}
+
+function saveNewGastoTemplate(){
+  const nombre=document.getElementById('gt-nombre').value.trim();
+  if(!nombre){alert('Escribe un nombre');return;}
+  if(catTipos.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
+    alert('Ya existe un gasto con ese nombre');return;
+  }
+  catTipos.push({
+    id:uid(),
+    nombre:nombre,
+    presupuesto:parseFloat(document.getElementById('gt-presupuesto').value)||null,
+    metodo:document.getElementById('gt-metodo').value||null,
+    cuotas_total:parseInt(document.getElementById('gt-cuotas').value)||0,
+    esMensualidad:document.getElementById('gt-mens').checked
+  });
+  save();openGastoTemplates();toast('Gasto agregado');
+}
+
+function editGastoTemplate(id){
+  const item=catTipos.find(function(i){return i.id===id;});
+  if(!item) return;
+  openModal('<div class="mtitle">Editar gasto</div>'
+    +gastoTemplateForm(item)
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openGastoTemplates()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveEditGastoTemplate(\''+id+'\')">Guardar</button>'
+    +'</div>');
+}
+
+function saveEditGastoTemplate(id){
+  const item=catTipos.find(function(i){return i.id===id;});
+  if(!item) return;
+  const nuevoNombre=document.getElementById('gt-nombre').value.trim();
+  if(!nuevoNombre){alert('Escribe un nombre');return;}
+  item.nombre=nuevoNombre;
+  item.presupuesto=parseFloat(document.getElementById('gt-presupuesto').value)||null;
+  item.metodo=document.getElementById('gt-metodo').value||null;
+  item.cuotas_total=parseInt(document.getElementById('gt-cuotas').value)||0;
+  item.esMensualidad=document.getElementById('gt-mens').checked;
+  save();openGastoTemplates();toast('Actualizado');
+}
+
+
 function openOverflowMenu(){
   const icCloud='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>';
   const icTrash='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+  const icList='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
   openModal('<div class="mtitle">Más opciones</div>'
     +'<div style="display:flex;flex-direction:column">'
+    +'<div onclick="closeModal();openCatalogosMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
+    +icList+'<span style="font-size:14px;color:var(--txt)">Catálogos</span></div>'
     +'<div onclick="closeModal();openBackupMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
     +icCloud+'<span style="font-size:14px;color:var(--txt)">Respaldar información</span></div>'
     +'<div onclick="closeModal();openDeleteMonth()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;color:var(--red)">'
@@ -2438,13 +2829,12 @@ function generarGastosCredito(nm){
   });
 }
 
-function createMonth(){
+function buildDraftMonth(){
   const keys=Object.keys(db).map(Number),last=Math.max(...keys),lm=db[last];
   const nk=last+1;
   const nm=migrateMonth(JSON.parse(JSON.stringify(lm)));
   nm.nombre=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(nk+1));
 
-  // Advance fechas por cada tarjeta, movimientos vacíos, cupo se mantiene
   function advanceDate(dateStr){
     if(!dateStr) return null;
     const d = new Date(dateStr+'T12:00:00');
@@ -2465,7 +2855,6 @@ function createMonth(){
     const idMap = {};
     const mapped = gastos
       .filter(function(g){
-        // Excluir gastos de crédito: se regeneran por fecha real en generarGastosCredito
         if(g.creditoId) return false;
         if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
         return true;
@@ -2506,8 +2895,6 @@ function createMonth(){
   nm.q1_gastos = copyGastos(nm.q1_gastos);
   nm.q2_gastos = copyGastos(nm.q2_gastos);
 
-  // Para cada tarjeta que YA estaba vinculada en el mes anterior, garantizar
-  // que el grupo correspondiente exista en el nuevo mes (puede haber varias)
   var prevLinkedGroups=(lm.q2_gastos||[]).filter(function(g){return g.esGrupo&&g.tcCardId;});
   prevLinkedGroups.forEach(function(prevG){
     var stillExists=nm.q2_gastos.some(function(g){return g.esGrupo&&g.tcCardId===prevG.tcCardId;});
@@ -2530,15 +2917,102 @@ function createMonth(){
     }
   });
 
-  // Generar gastos de créditos activos cuyas cuotas caigan en este mes
   generarGastosCredito(nm);
-
-  db[nk]=nm;
   syncTCGrupo(nm);
+
+  return {nk:nk, nm:nm};
+}
+
+function createMonth(){
+  const draft=buildDraftMonth();
+  window._draftMonth=draft.nm;
+  window._draftKey=draft.nk;
+  openMonthReview();
+}
+
+function openMonthReview(){
+  const nm=window._draftMonth;
+  if(!nm) return;
+
+  function rowsForList(list,which){
+    return list.filter(function(g){return !g.parentId;}).map(function(g,i){
+      var otraQ=which==='q1'?'q2':'q1';
+      var grupoTag=g.esGrupo?'<span style="font-size:9px;color:var(--acc);margin-left:5px">grupo</span>':'';
+      var credTag=g.creditoId?'<span style="font-size:9px;color:var(--pur);margin-left:5px">crédito</span>':'';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--brd)">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+g.nombre+grupoTag+credTag+'</div>'
+        +'<div style="font-size:11px;color:var(--mut)">'+cop(g.presupuesto)+'</div>'
+        +'</div>'
+        +'<button onclick="moveDraftGasto(\''+g.id+'\',\''+which+'\',\''+otraQ+'\')" style="background:var(--surf2);border:1px solid var(--brd2);border-radius:20px;padding:5px 10px;font-size:11px;color:var(--acc);cursor:pointer;flex-shrink:0">Mover a '+otraQ.toUpperCase()+' →</button>'
+        +'</div>';
+    }).join('');
+  }
+
+  const q1Html=rowsForList(nm.q1_gastos||[],'q1');
+  const q2Html=rowsForList(nm.q2_gastos||[],'q2');
+  const totalQ1=(nm.q1_gastos||[]).filter(function(g){return !g.parentId;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+  const totalQ2=(nm.q2_gastos||[]).filter(function(g){return !g.parentId;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+
+  openModal('<div class="mtitle">Revisar '+nm.nombre+'</div>'
+    +'<p style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px">'
+    +'Antes de crear el mes, puedes mover gastos entre quincenas si algo no cuadra.</p>'
+    +'<div style="display:flex;gap:10px;margin-bottom:4px">'
+    +'<div style="flex:1;font-size:11px;font-weight:700;color:var(--acc);text-transform:uppercase">Q1 · '+cop(totalQ1)+'</div>'
+    +'</div>'
+    +'<div style="max-height:160px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:14px">'
+    +(q1Html||'<div style="padding:16px;text-align:center;color:var(--mut);font-size:12px">Sin gastos en Q1</div>')
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:4px">'
+    +'<div style="flex:1;font-size:11px;font-weight:700;color:var(--grn);text-transform:uppercase">Q2 · '+cop(totalQ2)+'</div>'
+    +'</div>'
+    +'<div style="max-height:160px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:14px">'
+    +(q2Html||'<div style="padding:16px;text-align:center;color:var(--mut);font-size:12px">Sin gastos en Q2</div>')
+    +'</div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="cancelMonthReview()">Cancelar</button>'
+    +'<button class="bpri" onclick="confirmCreateMonth()">Crear '+nm.nombre+'</button>'
+    +'</div>');
+}
+
+function moveDraftGasto(id,fromQ,toQ){
+  const nm=window._draftMonth; if(!nm) return;
+  const fromList=fromQ==='q1'?nm.q1_gastos:nm.q2_gastos;
+  const toList=toQ==='q1'?nm.q1_gastos:nm.q2_gastos;
+  const idx=fromList.findIndex(function(g){return g.id===id;});
+  if(idx===-1) return;
+  const g=fromList[idx];
+  if(g.esGrupo){
+    const subs=fromList.filter(function(s){return s.parentId===g.id;});
+    fromList.splice(idx,1);
+    toList.push(g);
+    subs.forEach(function(s){
+      const sIdx=fromList.findIndex(function(x){return x.id===s.id;});
+      if(sIdx!==-1){ fromList.splice(sIdx,1); toList.push(s); }
+    });
+  } else {
+    fromList.splice(idx,1);
+    toList.push(g);
+  }
+  openMonthReview();
+}
+
+function cancelMonthReview(){
+  window._draftMonth=null;
+  window._draftKey=null;
+  closeModal();
+}
+
+function confirmCreateMonth(){
+  const nm=window._draftMonth, nk=window._draftKey;
+  if(!nm||nk==null) return;
+  db[nk]=nm;
   save();curM=nk;curTab=0;
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
+  window._draftMonth=null;
+  window._draftKey=null;
   closeModal();render();toast(nm.nombre+' creado');
 }
 
