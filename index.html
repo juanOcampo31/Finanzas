@@ -195,6 +195,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
       <button class="mnav" onclick="nextM()">&#8250;</button>
     </div>
     <div class="topbar-right">
+      <button class="ibtn" onclick="openCreditosMenu()" title="Créditos" style="font-size:14px">&#128181;</button>
       <button class="ibtn" onclick="openBackupMenu()" title="Respaldo" style="font-size:13px">&#128279;</button>
       <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(this)">
       <button class="ibtn" onclick="openDeleteMonth()" title="Eliminar mes" style="color:var(--red)">&#128465;</button>
@@ -282,6 +283,7 @@ function migrateMonth(m) {
   return m;
 }
 
+let creditos={}; // {id: {nombre, valorPrestamo, pctAval, cuotas, tasa, fechaInicio, frecuencia}}
 let db;
 try {
   const raw = localStorage.getItem('fin26');
@@ -292,6 +294,10 @@ if (!db) {
   db = JSON.parse(JSON.stringify(INIT));
   Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
 }
+try {
+  const rawC = localStorage.getItem('fin26_creditos');
+  creditos = rawC ? JSON.parse(rawC) : {};
+} catch(e) { creditos = {}; }
 save();
 
 let curM   = parseInt(localStorage.getItem('fin26m') || '0');
@@ -306,9 +312,277 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 let curTab = 0;
 let tcTipo = 'Compra';
 
-function save()  { localStorage.setItem('fin26', JSON.stringify(db)); }
+function save()  { localStorage.setItem('fin26', JSON.stringify(db)); localStorage.setItem('fin26_creditos', JSON.stringify(creditos)); }
 function getM()  { return db[curM]; }
 function getNom(m) { return m.nomina || {}; }
+
+// ── CRÉDITOS ────────────────────────────────────────────────────────────────
+function calcCuotaPMT(valorPrestamo, tasa, cuotas){
+  // PMT = P * i / (1 - (1+i)^-n)
+  if(tasa<=0) return valorPrestamo/cuotas;
+  return valorPrestamo*tasa/(1-Math.pow(1+tasa,-cuotas));
+}
+
+function generarFechasCredito(fechaInicioStr, cuotas, frecuencia){
+  // frecuencia: 'mensual' o 'quincenal'
+  // La fecha de inicio ES la fecha de la primera cuota
+  const fechas=[];
+  const inicio=new Date(fechaInicioStr+'T12:00:00');
+  fechas.push(fechaInicioStr);
+  if(frecuencia==='mensual'){
+    var esFinDeMes = inicio.getDate() >= 28 || inicio.getDate()===new Date(inicio.getFullYear(),inicio.getMonth()+1,0).getDate();
+    var cursor=new Date(inicio.getFullYear(),inicio.getMonth()+1,1);
+    for(var k=1;k<cuotas;k++){
+      if(esFinDeMes){
+        var d=new Date(cursor.getFullYear(),cursor.getMonth()+1,0);
+        fechas.push(d.toISOString().slice(0,10));
+      } else {
+        var d2=new Date(cursor.getFullYear(),cursor.getMonth(),inicio.getDate());
+        fechas.push(d2.toISOString().slice(0,10));
+      }
+      cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);
+    }
+  } else {
+    // Quincenal: la primera cuota es fechaInicio; luego alterna 15 / fin de mes
+    var y=inicio.getFullYear(), m=inicio.getMonth();
+    var enPrimeraQuincena = inicio.getDate()<15;
+    var ultimoDiaInicio=new Date(y,m+1,0).getDate();
+    var esFinDeMesInicio = inicio.getDate()>=ultimoDiaInicio;
+    // Determinar la siguiente parada después de fechaInicio
+    if(enPrimeraQuincena){
+      // siguiente es fin de mes de este mismo mes
+      var sigEsFinMes=true;
+    } else {
+      // inicio fue 15 o fin de mes → siguiente es el 15 del próximo mes (si ya pasó fin de mes) o fin de mes si inicio fue justo 15
+      if(esFinDeMesInicio){ m++; if(m>11){m=0;y++;} var sigEsFinMes=false; }
+      else { var sigEsFinMes=true; } // inicio fue el 15 → siguiente es fin de mes mismo mes
+    }
+    for(var k=1;k<cuotas;k++){
+      if(sigEsFinMes){
+        var ultimoDia=new Date(y,m+1,0).getDate();
+        fechas.push(new Date(y,m,ultimoDia).toISOString().slice(0,10));
+        sigEsFinMes=false;
+        m++; if(m>11){m=0;y++;}
+      } else {
+        fechas.push(new Date(y,m,15).toISOString().slice(0,10));
+        sigEsFinMes=true;
+      }
+    }
+  }
+  return fechas;
+}
+
+function calcAmortizacion(cred){
+  const valorPrestamo=cred.valorPrestamo||0;
+  const aval=Math.round(valorPrestamo*((cred.pctAval||0)/100));
+  const total=valorPrestamo+aval;
+  const tasa=(cred.tasa||0)/100;
+  const cuotas=cred.cuotas||1;
+  const cuotaPMT=calcCuotaPMT(total,tasa,cuotas);
+  const valorCuota=cred.valorCuotaManual||Math.round(cuotaPMT);
+  const fechas=generarFechasCredito(cred.fechaInicio,cuotas,cred.frecuencia||'quincenal');
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+
+  var saldo=total;
+  const rows=[];
+  for(var k=0;k<cuotas;k++){
+    var interes=Math.round(saldo*tasa*100)/100;
+    var esUltima=(k===cuotas-1);
+    var cuotaReal=esUltima?(saldo+interes):valorCuota;
+    var capital=Math.round((cuotaReal-interes)*100)/100;
+    if(esUltima){ capital=saldo; cuotaReal=Math.round((saldo+interes)*100)/100; }
+    saldo=Math.round((saldo-capital)*100)/100;
+    if(saldo<0) saldo=0;
+    var fechaPago=new Date(fechas[k]+'T12:00:00');
+    var pagado=fechaPago<hoy;
+    rows.push({
+      numero:k+1, fecha:fechas[k], valorCuota:cuotaReal,
+      capital:capital, intereses:interes, saldo:saldo,
+      pagadoSugerido:pagado
+    });
+  }
+  return {cuotaPMT:Math.round(cuotaPMT), valorCuota:valorCuota, aval:aval, total:total, rows:rows};
+}
+
+function openCreditosMenu(){
+  const ids=Object.keys(creditos);
+  var listHtml=ids.length?ids.map(function(id){
+    var cr=creditos[id];
+    var amort=calcAmortizacion(cr);
+    var pagadas=(cr.pagos||[]).filter(function(p){return p;}).length;
+    var saldoActual=amort.rows.length?amort.rows[Math.min(pagadas,amort.rows.length-1)].saldo:0;
+    if(pagadas>=cr.cuotas) saldoActual=0;
+    var pct=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
+    return '<div onclick="openCreditoDetalle(\''+id+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--brd);cursor:pointer">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:14px;font-weight:600;color:var(--txt)">'+cr.nombre+'</div>'
+      +'<div style="font-size:11px;color:var(--mut);margin-top:2px">'+pagadas+'/'+cr.cuotas+' cuotas · '+cop(amort.valorCuota)+' c/u</div>'
+      +'<div style="height:4px;background:var(--brd);border-radius:4px;margin-top:6px;overflow:hidden;width:200px">'
+      +'<div style="height:100%;width:'+pct+'%;background:var(--acc);border-radius:4px"></div></div>'
+      +'</div>'
+      +'<div style="text-align:right">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div>'
+      +'<div style="font-size:10px;color:var(--mut)">saldo</div>'
+      +'</div>'
+      +'</div>';
+  }).join(''):'<div class="empty"><div class="eic">💵</div><p>Sin créditos. Crea uno nuevo.</p></div>';
+
+  openModal('<div class="mtitle">Créditos</div>'
+    +listHtml
+    +'<div class="macts" style="margin-top:14px">'
+    +'<button class="bcnl" onclick="closeModal()">Cerrar</button>'
+    +'<button class="bpri" onclick="openNewCredito()">＋ Nuevo crédito</button>'
+    +'</div>');
+}
+
+function openNewCredito(){
+  const hoy=new Date().toISOString().slice(0,10);
+  openModal('<div class="mtitle">Nuevo crédito</div>'
+    +'<div class="field"><label>Nombre</label><input id="cr-nombre" placeholder="Ej: Crédito electrodomésticos"></div>'
+    +'<div class="field"><label>Valor del préstamo</label><input id="cr-valor" type="number" placeholder="Ej: 3050000" oninput="updateCuotaSugerida()"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div class="field" style="margin:0"><label>% AVAL</label><input id="cr-aval" type="number" step="0.01" placeholder="Ej: 2" oninput="updateCuotaSugerida()"></div>'
+    +'<div class="field" style="margin:0"><label>Cuotas</label><input id="cr-cuotas" type="number" placeholder="Ej: 36" oninput="updateCuotaSugerida()"></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">'
+    +'<div class="field" style="margin:0"><label>Tasa de interés %</label><input id="cr-tasa" type="number" step="0.01" placeholder="Ej: 2.0" oninput="updateCuotaSugerida()"></div>'
+    +'<div class="field" style="margin:0"><label>Fecha inicio</label><input id="cr-fecha" type="date" value="'+hoy+'"></div>'
+    +'</div>'
+    +'<div class="field" style="margin-top:12px"><label>Frecuencia de pago</label>'
+    +'<select id="cr-frec"><option value="quincenal">Quincenal</option><option value="mensual">Mensual</option></select></div>'
+    +'<div class="field"><label>Valor de cuota manual (opcional)</label>'
+    +'<input id="cr-cuota-manual" type="number" placeholder="Se sugiere automáticamente">'
+    +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
+    +'</div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveNewCredito()">Crear</button>'
+    +'</div>');
+}
+
+function updateCuotaSugerida(){
+  const valor=parseFloat(document.getElementById('cr-valor')?.value)||0;
+  const pctAval=parseFloat(document.getElementById('cr-aval')?.value)||0;
+  const cuotas=parseInt(document.getElementById('cr-cuotas')?.value)||0;
+  const tasaPct=parseFloat(document.getElementById('cr-tasa')?.value)||0;
+  const txtEl=document.getElementById('cr-cuota-sugerida-txt');
+  const inputManual=document.getElementById('cr-cuota-manual');
+  if(!txtEl) return;
+  if(valor>0 && cuotas>0){
+    const aval=Math.round(valor*(pctAval/100));
+    const total=valor+aval;
+    const tasa=tasaPct/100;
+    const pmt=calcCuotaPMT(total,tasa,cuotas);
+    const pmtRedondeado=Math.round(pmt);
+    txtEl.innerHTML='AVAL: '+cop(aval)+' · Total: '+cop(total)+'<br>Cuota sugerida: '+cop(pmtRedondeado);
+    if(inputManual) inputManual.placeholder=cop(pmtRedondeado)+' (sugerida)';
+  } else {
+    txtEl.textContent='';
+    if(inputManual) inputManual.placeholder='Se sugiere automáticamente';
+  }
+}
+
+function saveNewCredito(){
+  const nombre=document.getElementById('cr-nombre').value.trim();
+  const valorPrestamo=parseFloat(document.getElementById('cr-valor').value)||0;
+  const pctAval=parseFloat(document.getElementById('cr-aval').value)||0;
+  const cuotas=parseInt(document.getElementById('cr-cuotas').value)||1;
+  const tasa=parseFloat(document.getElementById('cr-tasa').value)||0;
+  const fechaInicio=document.getElementById('cr-fecha').value;
+  const frecuencia=document.getElementById('cr-frec').value;
+  const cuotaManual=parseFloat(document.getElementById('cr-cuota-manual').value)||null;
+  if(!nombre||!valorPrestamo||!cuotas||!fechaInicio){alert('Completa nombre, valor, cuotas y fecha de inicio');return;}
+  const id='cr_'+Date.now();
+  creditos[id]={
+    id:id, nombre:nombre, valorPrestamo:valorPrestamo, pctAval:pctAval,
+    cuotas:cuotas, tasa:tasa, fechaInicio:fechaInicio, frecuencia:frecuencia,
+    valorCuotaManual:cuotaManual, pagos:[]
+  };
+  save();closeModal();openCreditosMenu();toast('Crédito creado');
+}
+
+function openCreditoDetalle(id){
+  const cr=creditos[id]; if(!cr) return;
+  const amort=calcAmortizacion(cr);
+  const aval=amort.aval;
+  const total=amort.total;
+  const pagos=cr.pagos||[];
+
+  var rowsHtml=amort.rows.map(function(r,i){
+    var pagado=!!pagos[i];
+    var statusColor=pagado?'var(--grn)':'var(--mut)';
+    var fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'2-digit'});
+    return '<tr style="border-bottom:1px solid var(--brd)">'
+      +'<td style="padding:6px 8px;font-size:11px;color:var(--txt);text-align:center">'+r.numero+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;color:var(--txt)">'+fechaFmt+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;text-align:right;color:var(--txt)">'+cop(r.valorCuota)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;text-align:right;color:var(--grn)">'+cop(r.capital)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;text-align:right;color:var(--red)">'+cop(r.intereses)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;text-align:right;color:var(--mut)">'+cop(r.saldo)+'</td>'
+      +'<td style="padding:6px 8px;text-align:center"><div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:18px;height:18px;border-radius:50%;border:2px solid '+statusColor+';display:inline-flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+'">'+(pagado?'<span style="color:#fff;font-size:11px">✓</span>':'')+'</div></td>'
+      +'</tr>';
+  }).join('');
+
+  var pagadas=pagos.filter(function(p){return p;}).length;
+  var saldoActual=pagadas>=amort.rows.length?0:(pagadas>0?amort.rows[pagadas-1].saldo:amort.total);
+
+  openModal('<div class="mtitle">'+cr.nombre+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+    +'<div style="background:var(--surf2);border-radius:var(--r2);padding:10px"><div style="font-size:10px;color:var(--mut);text-transform:uppercase">Préstamo</div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+cop(cr.valorPrestamo)+'</div></div>'
+    +'<div style="background:var(--surf2);border-radius:var(--r2);padding:10px"><div style="font-size:10px;color:var(--mut);text-transform:uppercase">Total c/ AVAL</div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+cop(total)+'</div></div>'
+    +'<div style="background:var(--surf2);border-radius:var(--r2);padding:10px"><div style="font-size:10px;color:var(--mut);text-transform:uppercase">Cuota</div><div style="font-size:15px;font-weight:700;color:var(--acc)">'+cop(amort.valorCuota)+'</div></div>'
+    +'<div style="background:var(--surf2);border-radius:var(--r2);padding:10px"><div style="font-size:10px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div></div>'
+    +'</div>'
+    +'<div style="overflow-x:auto;max-height:340px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2)">'
+    +'<table style="width:100%;border-collapse:collapse;min-width:480px">'
+    +'<thead><tr style="border-bottom:1px solid var(--brd2);background:var(--surf2)">'
+    +'<th style="padding:6px 8px;font-size:9px;color:var(--mut);text-transform:uppercase">#</th>'
+    +'<th style="padding:6px 8px;font-size:9px;color:var(--mut);text-transform:uppercase;text-align:left">Fecha</th>'
+    +'<th style="padding:6px 8px;font-size:9px;color:var(--mut);text-transform:uppercase;text-align:right">Cuota</th>'
+    +'<th style="padding:6px 8px;font-size:9px;color:var(--mut);text-transform:uppercase;text-align:right">Capital</th>'
+    +'<th style="padding:6px 8px;font-size:9px;color:var(--mut);text-transform:uppercase;text-align:right">Interés</th>'
+    +'<th style="padding:6px 8px;font-size:9px;color:var(--mut);text-transform:uppercase;text-align:right">Saldo</th>'
+    +'<th style="padding:6px 8px;font-size:9px;color:var(--mut);text-transform:uppercase">Pago</th>'
+    +'</tr></thead><tbody>'+rowsHtml+'</tbody></table></div>'
+    +'<div class="macts" style="margin-top:14px">'
+    +'<button class="bcnl" onclick="openCreditosMenu()">Volver</button>'
+    +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmDeleteCredito(\''+id+'\')">Eliminar</button>'
+    +'</div>');
+}
+
+function toggleCuotaPago(id,idx){
+  const cr=creditos[id]; if(!cr) return;
+  if(!cr.pagos) cr.pagos=[];
+  cr.pagos[idx]=!cr.pagos[idx];
+  // Sincronizar el gasto correspondiente en Q1/Q2 si existe en algún mes
+  const numCuota=idx+1;
+  let encontrado=false;
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+      var g=list.find(function(x){return x.creditoId===id&&x.numCuota===numCuota;});
+      if(g){ g.pagado_flag=cr.pagos[idx]; encontrado=true; }
+    });
+  });
+  save();
+  render(); // actualizar Q1/Q2 de fondo si el gasto cambió
+  openCreditoDetalle(id);
+}
+
+function confirmDeleteCredito(id){
+  const cr=creditos[id]; if(!cr) return;
+  openModal('<div class="mtitle">¿Eliminar '+cr.nombre+'?</div>'
+    +'<p style="font-size:13px;color:var(--mut);margin-bottom:16px">Esta acción no se puede deshacer.</p>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
+    +'<button class="bpri" style="background:var(--red);color:#fff" onclick="deleteCredito(\''+id+'\')">Eliminar</button>'
+    +'</div>');
+}
+
+function deleteCredito(id){
+  delete creditos[id];
+  save();closeModal();toast('Crédito eliminado');
+}
 
 function calcPrimaMes(m){
   // Si el mes actual es Junio o Diciembre, calcula la prima del semestre correspondiente
@@ -1325,6 +1599,10 @@ function toggleP(e,id,which){
   }
   if(g.pagado_flag){
     g.pagado_flag=false;
+    if(g.creditoId && creditos[g.creditoId]){
+      var cr=creditos[g.creditoId];
+      if(cr.pagos) cr.pagos[g.numCuota-1]=false;
+    }
     if(g.parentId){
       const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
       const parent=allGastos.find(x=>x.id===g.parentId);
@@ -1426,6 +1704,12 @@ function confirmarPago(id,which){
   g.fecha_pago=fecha;
   g.comprobante=comp;
   if(mens!==null) g.mensualidad=mens;
+
+  if(g.creditoId && creditos[g.creditoId]){
+    var cr=creditos[g.creditoId];
+    if(!cr.pagos) cr.pagos=[];
+    cr.pagos[g.numCuota-1]=true;
+  }
 
   if(g.parentId){
     const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
@@ -1944,6 +2228,45 @@ function openNewMonth(){
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="createMonth()">Crear '+sig+'</button></div>');
 }
+function generarGastosCredito(nm){
+  // Para cada crédito activo, revisar si alguna cuota cae en el mes nm
+  const mi=MESES.indexOf(nm.nombre);
+  const año=nm.año;
+  Object.keys(creditos).forEach(function(crId){
+    var cr=creditos[crId];
+    var amort=calcAmortizacion(cr);
+    amort.rows.forEach(function(row,idx){
+      var fecha=new Date(row.fecha+'T12:00:00');
+      if(fecha.getFullYear()===año && fecha.getMonth()===mi){
+        var dia=fecha.getDate();
+        var which=dia<=15?'q1':'q2';
+        var list=which==='q1'?nm.q1_gastos:nm.q2_gastos;
+        // Evitar duplicar si ya existe un gasto para este crédito+cuota
+        var yaExiste=list.some(function(g){return g.creditoId===crId&&g.numCuota===row.numero;});
+        if(!yaExiste){
+          list.push({
+            id:uid(),
+            nombre:'Crédito '+cr.nombre,
+            presupuesto:row.valorCuota,
+            metodo:'Nequi',
+            pagado_real:null,
+            pagado_flag:!!(cr.pagos&&cr.pagos[idx]),
+            sinpagar:false,
+            parentId:null,
+            esGrupo:false,
+            cuotas_total:cr.cuotas,
+            cuota_actual:row.numero,
+            creditoId:crId,
+            numCuota:row.numero,
+            fecha_pago:null,
+            comprobante:null
+          });
+        }
+      }
+    });
+  });
+}
+
 function createMonth(){
   const keys=Object.keys(db).map(Number),last=Math.max(...keys),lm=db[last];
   const nk=last+1;
@@ -2033,6 +2356,9 @@ function createMonth(){
       });
     }
   });
+
+  // Generar gastos de créditos activos cuyas cuotas caigan en este mes
+  generarGastosCredito(nm);
 
   db[nk]=nm;
   syncTCGrupo(nm);
