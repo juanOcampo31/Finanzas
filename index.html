@@ -67,8 +67,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .grow{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--brd);gap:10px;cursor:pointer}
 .grow:last-child{border-bottom:none}
 .grow:active{background:var(--surf2)}
-.gchk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--brd2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer}
-.gchk.paid{background:var(--grn);border-color:var(--grn);color:#0F172A}
+.grow.gnew,.g-sub-row.gnew{animation:grow-in .28s ease-out}
+@keyframes grow-in{0%{opacity:0;transform:scaleY(.6) translateY(-4px);max-height:0}100%{opacity:1;transform:scaleY(1) translateY(0);max-height:100px}}
+.gchk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--brd2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;transition:transform .15s cubic-bezier(.34,1.56,.64,1),background-color .15s,border-color .15s}
+.gchk.paid{background:var(--grn);border-color:var(--grn);color:#0F172A;animation:gchk-pop .25s cubic-bezier(.34,1.56,.64,1)}
+@keyframes gchk-pop{0%{transform:scale(.7)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
 .ginfo{flex:1;min-width:0}
 .gname{font-size:13px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gname.pd{color:var(--mut)}
@@ -320,6 +323,7 @@ let gGroupOpen  = {};  // group open state: {groupId: bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
 let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
+let lastCreatedId = null;                         // id del último gasto creado, para animación de entrada
 let nomDedOpen  = {'q1':false,'q2':false};      // deducciones nómina expandidas
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 let curTab = 0;
@@ -1064,7 +1068,7 @@ function renderGastos(gastos,which) {
     var p=g.pagado_flag,tras=g.sinpagar;
     var diff=(g.pagado_real!=null&&g.pagado_real!==g.presupuesto)?g.presupuesto-g.pagado_real:null;
     var dh=diff!==null?' · <span style="color:var(--'+(diff>0?'grn':'red')+')\">'+(diff>0?'Sobró':'Faltó')+' '+cop(Math.abs(diff))+'</span>':'';
-    var gCls=tras?'grow-nopag':'';
+    var gCls=(tras?'grow-nopag':'')+(g.id===lastCreatedId?' gnew':'');
     var cuotaBadge='';
     var mensBadge='';
     if(g.mensualidad){
@@ -1687,8 +1691,10 @@ function saveG(id,which,parentId){
       gasto.numCuota=cuota_auto||cuotas_total;
     }
     list.push(gasto);
+    lastCreatedId=gasto.id;
   }
   save(); closeModal(); render();
+  setTimeout(function(){ lastCreatedId=null; }, 400);
   // Si es Q1 y se marcó "Sin pagar", ofrecer crear el gasto en Q2
   if(which==='q1' && sinpagar) {
     ofrecerCopiarQ2(gasto);
