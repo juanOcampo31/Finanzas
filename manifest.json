@@ -1,11 +1,16 @@
 {
+  "id": "/",
   "name": "Finanzas Personales 2026",
   "short_name": "Finanzas",
+  "description": "Controla tu nómina, gastos quincenales, tarjeta de crédito y créditos personales desde el celular, con tus datos protegidos por PIN y respaldos cifrados.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0F172A",
   "theme_color": "#0F172A",
   "orientation": "portrait",
+  "lang": "es-CO",
+  "categories": ["finance", "productivity"],
   "icons": [
     {
       "src": "icon-192.png",
@@ -24,6 +29,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
