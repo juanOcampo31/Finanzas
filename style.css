@@ -181,7 +181,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .toast{position:fixed
 .toast{position:fixed;bottom:82px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surf2);border:1px solid var(--brd2);border-radius:20px;padding:8px 16px;font-size:13px;color:var(--txt);opacity:0;transition:.25s;z-index:300;white-space:nowrap;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.lock-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px}
+.lock-overlay{min-height:100vh;min-height:100dvh;width:100%;box-sizing:border-box;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
 .lock-overlay.hidden{display:none}
 .lock-box{width:100%;max-width:320px;text-align:center}
 .lock-icon{font-size:38px;margin-bottom:6px}
