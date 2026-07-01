@@ -129,24 +129,27 @@ async function webauthnUnlock(){
 // ── UI de la pantalla de bloqueo ────────────────────────────────────────────
 function buildKeypadHTML(){
   const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
+  const bsIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9l-7-8 7-8z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>';
   let h='<div class="lock-keys">';
   keys.forEach(function(k){
-    if(k==='⌫') h+='<button class="lock-key" onclick="lockPinBackspace()" aria-label="Borrar dígito">⌫</button>';
+    if(k==='⌫') h+='<button class="lock-key" onclick="lockPinBackspace()" aria-label="Borrar dígito">'+bsIcon+'</button>';
     else if(k==='') h+='<div></div>';
     else h+='<button class="lock-key" onclick="lockPinPress(\''+k+'\')">'+k+'</button>';
   });
-  h+='</div><button class="bpri" style="margin-top:16px;width:100%" onclick="lockPinConfirm()">Confirmar</button>';
+  h+='</div><button class="lock-confirm" onclick="lockPinConfirm()">Confirmar</button>';
   return h;
 }
 function renderLockDots(){
   let dots='';
-  for(let i=0;i<6;i++) dots+='<span class="lock-dot'+(i<lockInput.length?' filled':'')+'"></span>';
+  for(let i=0;i<6;i++){
+    dots+='<span class="lock-dot'+(i<lockInput.length?' filled':'')+'"></span>';
+  }
   document.getElementById('lockDots').innerHTML=dots;
 }
 function showLockError(msg){
   const el=document.getElementById('lockError');
   el.textContent=msg;
-  const box=document.querySelector('.lock-box');
+  const box=document.querySelector('.lock-card');
   box.classList.remove('lock-shake'); void box.offsetWidth; box.classList.add('lock-shake');
 }
 async function showLockOverlay(mode){
@@ -180,6 +183,7 @@ function lockPinPress(d){
   lockInput+=d;
   renderLockDots();
   document.getElementById('lockError').textContent='';
+  if(lockInput.length===6) setTimeout(lockPinConfirm,150);
 }
 function lockPinBackspace(){ lockInput=lockInput.slice(0,-1); renderLockDots(); }
 
@@ -217,8 +221,8 @@ function showBioAskUI(){
   document.getElementById('lockDots').innerHTML='';
   document.getElementById('lockKeypad').innerHTML =
     '<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">'
-    +'<button class="bpri" onclick="lockEnableBioSetup()">Sí, activar</button>'
-    +'<button class="bcnl" onclick="lockFinishSetup()">Ahora no</button>'
+    +'<button class="lock-confirm" style="margin-top:0" onclick="lockEnableBioSetup()">Sí, activar</button>'
+    +'<button class="lock-bio-btn" style="margin-top:0" onclick="lockFinishSetup()">Ahora no</button>'
     +'</div>';
 }
 async function lockEnableBioSetup(){
