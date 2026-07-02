@@ -206,3 +206,5 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .lock-bio-btn svg{width:18px;height:18px}
 .lock-shake{animation:lock-shake .4s}
 @keyframes lock-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+.lock-link{width:100%;margin-top:14px;padding:6px;font-size:12px;font-weight:600;color:var(--mut);background:none;border:none;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.lock-link:active{color:var(--acc)}

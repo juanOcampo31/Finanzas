@@ -51,15 +51,22 @@ async function pbkdf2Key(pin, saltBuf, iterations){
   );
 }
 
-// Guarda el PIN cifrando un valor conocido; así verificamos sin persistir el PIN.
-async function pinSetupSave(pin){
+// Calcula el material de verificación del PIN (cifra un valor conocido) SIN escribirlo
+// todavía a localStorage — permite completar todo el trabajo async/criptográfico que
+// puede fallar antes de comprometernos a persistir nada (ver confirmChangePIN).
+async function buildPinCheckMaterial(pin){
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv   = crypto.getRandomValues(new Uint8Array(12));
   const key  = await pbkdf2Key(pin, salt);
   const ct   = await crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, key, new TextEncoder().encode('FINANZAS_OK'));
-  localStorage.setItem('fin26_pin_salt', b64enc(salt));
-  localStorage.setItem('fin26_pin_check_iv', b64enc(iv));
-  localStorage.setItem('fin26_pin_check_ct', b64enc(ct));
+  return {salt:b64enc(salt), iv:b64enc(iv), ct:b64enc(ct)};
+}
+// Guarda el PIN cifrando un valor conocido; así verificamos sin persistir el PIN.
+async function pinSetupSave(pin){
+  const m = await buildPinCheckMaterial(pin);
+  localStorage.setItem('fin26_pin_salt', m.salt);
+  localStorage.setItem('fin26_pin_check_iv', m.iv);
+  localStorage.setItem('fin26_pin_check_ct', m.ct);
 }
 function pinIsConfigured(){ return !!localStorage.getItem('fin26_pin_salt'); }
 async function pinVerify(pin){
@@ -170,6 +177,9 @@ async function showLockOverlay(mode){
   } else {
     bioBtn.style.display='none';
   }
+  // El enlace de recuperación solo aplica cuando ya hay datos protegidos por desbloquear
+  // (no durante la configuración inicial de un PIN nuevo, cuando todavía no hay nada que recuperar).
+  document.getElementById('lockRecoveryLink').style.display = (mode!=='setup') ? 'block' : 'none';
 }
 function hideLockOverlay(){
   document.getElementById('lockOverlay').classList.add('hidden');
@@ -192,8 +202,19 @@ async function lockPinConfirm(){
   if(lockMode==='unlock'){
     const ok = await pinVerify(lockInput);
     if(ok){
-      sessionPIN=lockInput; appUnlocked=true; lockInput='';
-      hideLockOverlay(); render();
+      const pin=lockInput; sessionPIN=pin; lockInput='';
+      try{
+        if(!sessionDataKey){ await ensureDataKey(pin); await loadAppData(); }
+        clearPinRecoveryBackup(); // el material actual funciona de punta a punta: ya no hace falta el respaldo
+        appUnlocked=true; hideLockOverlay(); render();
+      }catch(e){
+        // Nota: mantenemos sessionPIN (el PIN correcto y ya verificado) en memoria — las
+        // opciones de recuperación de abajo lo necesitan para re-envolver la data key una
+        // vez restaurado el acceso. No se persiste en ningún momento, solo vive en RAM.
+        sessionDataKey=null;
+        showLockError('No se pudieron descifrar tus datos. Intenta de nuevo.');
+        document.getElementById('lockRecoveryLink').style.display='block';
+      }
     } else {
       showLockError('PIN incorrecto'); lockInput=''; renderLockDots();
     }
@@ -210,6 +231,8 @@ async function lockPinConfirm(){
     }
     await pinSetupSave(lockInput);
     sessionPIN=lockInput; lockInput='';
+    await ensureDataKey(sessionPIN);
+    await loadAppData();
     const bioOk = await webauthnPlatformAvailable();
     if(bioOk){ showBioAskUI(); }
     else { appUnlocked=true; hideLockOverlay(); render(); toast('PIN configurado ✓'); }
@@ -234,12 +257,27 @@ function lockFinishSetup(){ appUnlocked=true; hideLockOverlay(); render(); toast
 
 async function lockTryBiometric(){
   const ok = await webauthnUnlock();
-  if(ok){
-    appUnlocked=true; hideLockOverlay(); render();
-    if(!sessionPIN) toast('Desbloqueado con huella. Se te pedirá tu PIN al exportar/importar.');
-  } else {
-    showLockError('No se pudo verificar. Usa tu PIN.');
+  if(!ok){ showLockError('No se pudo verificar. Usa tu PIN.'); return; }
+  if(!sessionDataKey){
+    // Primer desbloqueo de esta sesión (arranque en frío): la huella confirma tu identidad,
+    // pero para descifrar los datos en reposo todavía necesitamos derivar la clave del PIN.
+    const pin = await promptPINModal('Ingresa tu PIN para descifrar tus datos');
+    if(pin===null){ return; }
+    const verified = await pinVerify(pin);
+    if(!verified){ showLockError('PIN incorrecto.'); return; }
+    try{
+      sessionPIN=pin;
+      await ensureDataKey(pin);
+      await loadAppData();
+      clearPinRecoveryBackup();
+    }catch(e){
+      sessionDataKey=null;
+      showLockError('No se pudieron descifrar tus datos. Intenta de nuevo.');
+      document.getElementById('lockRecoveryLink').style.display='block';
+      return;
+    }
   }
+  appUnlocked=true; hideLockOverlay(); render();
 }
 
 // Modal genérico para pedir el PIN puntualmente (ej: exportar tras desbloqueo por huella)
@@ -254,6 +292,190 @@ function promptPINModal(message){
     window._ppmResolve=function(val){ closeModal(); resolve(val); };
     setTimeout(function(){ const el=document.getElementById('ppm-pin'); if(el) el.focus(); },100);
   });
+}
+
+// ── Recuperación de datos desde la pantalla de bloqueo ─────────────────────────
+// Se ofrece cuando el PIN es correcto pero los datos guardados no se pueden descifrar
+// (p.ej. un cambio de PIN anterior quedó a medias), o simplemente si el usuario no recuerda
+// cómo desbloquear y prefiere restaurar desde un backup o empezar de nuevo.
+function showRecoveryOptions(){
+  const hasDataKey = !!localStorage.getItem('fin26_datakey') || !!localStorage.getItem('fin26_datakey_prev');
+  const hasRecoveryPhone = !!localStorage.getItem('fin26_recovery');
+  openModal('<div class="mtitle">Recuperar acceso</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
+    +'Si tu PIN no descifra tus datos guardados (por ejemplo, porque un cambio de PIN anterior '
+    +'quedó a medias), elige una opción:</p>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +(hasRecoveryPhone?'<button class="bcnl" onclick="closeModal();recoverWithPhone()">📱 Recuperar con mi número de celular</button>':'')
+    +(hasDataKey?'<button class="bcnl" onclick="closeModal();recoverWithPreviousPin()">↩️ Intentar con mi PIN anterior</button>':'')
+    +'<button class="bcnl" onclick="closeModal();document.getElementById(\'lock-imp-file\').click()">📥 Restaurar desde un backup exportado (.json)</button>'
+    +'<button class="bcnl" style="color:var(--red)" onclick="closeModal();confirmWipeAll()">🗑️ Borrar todo y empezar de nuevo</button>'
+    +'</div>'
+    +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cancelar</button></div>');
+}
+// Recupera el acceso con los últimos 6 dígitos del número de celular registrado en Seguridad
+// (fin26_recovery envuelve la MISMA data key que fin26_datakey, solo que con esta clave alterna).
+// Al recuperar así se fuerza de inmediato la creación de un PIN nuevo — el PIN anterior se da
+// por perdido/no confiable, por eso existe esta vía de recuperación.
+async function recoverWithPhone(){
+  const raw=localStorage.getItem('fin26_recovery');
+  if(!raw){ showAlert('No hay un número de recuperación configurado en este dispositivo.'); return; }
+  const code=await promptPINModal('Ingresa los últimos 6 dígitos de tu número de celular registrado');
+  if(code===null) return;
+  try{
+    const dataKey=await unwrapDataKeyFromEnvelope(JSON.parse(raw), code);
+    sessionDataKey=dataKey;
+    promptNewPinAfterRecovery();
+  }catch(e){
+    sessionDataKey=null;
+    showAlert('Esos dígitos no coinciden con tu número de recuperación registrado.');
+  }
+}
+function promptNewPinAfterRecovery(){
+  openModal('<div class="mtitle">Crea un PIN nuevo</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Recuperaste el acceso con tu número de celular. Por seguridad, define un PIN nuevo para seguir usando la app.</p>'
+    +'<div class="field"><label>PIN nuevo (4-6 dígitos)</label><input id="rp-new1" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
+    +'<div class="field"><label>Confirma el PIN nuevo</label><input id="rp-new2" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
+    +'<div class="macts"><button class="bpri" style="grid-column:1/-1" onclick="confirmRecoveryNewPin()">Guardar y continuar</button></div>');
+}
+async function confirmRecoveryNewPin(){
+  const n1=document.getElementById('rp-new1').value.trim();
+  const n2=document.getElementById('rp-new2').value.trim();
+  if(n1.length<4||n1.length>6){ showAlert('El PIN debe tener entre 4 y 6 dígitos'); return; }
+  if(n1!==n2){ showAlert('Los PIN no coinciden'); return; }
+  if(!sessionDataKey){ showAlert('Ocurrió un error inesperado. Vuelve a intentar la recuperación.'); return; }
+  try{
+    await commitNewPin(n1);
+    await loadAppData();
+    clearPinRecoveryBackup();
+    closeModal();
+    appUnlocked=true; hideLockOverlay(); render();
+    toast('PIN actualizado. Acceso recuperado ✓');
+  }catch(e){
+    console.error('Error definiendo el PIN tras recuperación por celular', e);
+    showAlert('No se pudo guardar el PIN nuevo. Intenta de nuevo.');
+  }
+}
+// Intenta recuperar el acceso desenvolviendo la data key con el PIN que el usuario tenía antes
+// de cambiarlo. Lo prueba contra DOS lugares posibles, porque puede tratarse de dos incidentes
+// distintos:
+//  1) fin26_datakey_prev — el respaldo que confirmChangePIN guarda automáticamente ANTES de
+//     reescribir nada (protege cambios de PIN hechos con esta versión de la app).
+//  2) fin26_datakey (el actual) — si el cambio de PIN se interrumpió de la forma antigua (antes
+//     de este arreglo), el "check" del PIN ya había quedado en el PIN nuevo pero la data key
+//     seguía envuelta con el PIN viejo, sin haberse respaldado en ningún lado.
+// Si alguno funciona, re-envuelve esa misma data key bajo el PIN actual y así queda consistente,
+// sin perder ni un dato.
+async function recoverWithPreviousPin(){
+  // Para re-envolver la data key hace falta saber cuál es el PIN ACTUAL (el que ya quedó
+  // guardado como válido en fin26_pin_salt/check). Si todavía no se verificó en esta sesión
+  // (p.ej. se entró directo por el enlace sin intentar desbloquear antes), se pide aquí.
+  if(!sessionPIN){
+    const cur=await promptPINModal('Primero, ingresa tu PIN actual (el más reciente)');
+    if(cur===null) return;
+    if(!(await pinVerify(cur))){ showAlert('Ese no es tu PIN actual.'); return; }
+    sessionPIN=cur;
+  }
+  const pin=await promptPINModal('Ahora ingresa el PIN que usabas ANTES de cambiarlo');
+  if(pin===null) return;
+  const candidates=[localStorage.getItem('fin26_datakey_prev'), localStorage.getItem('fin26_datakey')].filter(Boolean);
+  for(const raw of candidates){
+    try{
+      const dataKey=await unwrapDataKeyFromEnvelope(JSON.parse(raw), pin);
+      sessionDataKey=dataKey;
+      await wrapAndStoreDataKey(sessionDataKey, sessionPIN);
+      await loadAppData();
+      clearPinRecoveryBackup();
+      appUnlocked=true; hideLockOverlay(); render();
+      toast('Acceso recuperado con tu PIN anterior ✓');
+      return;
+    }catch(e){ /* prueba el siguiente candidato */ }
+  }
+  sessionDataKey=null;
+  showAlert('Ese PIN anterior tampoco pudo descifrar tus datos.');
+}
+// Restaura los datos desde un backup JSON exportado, disponible incluso con la app bloqueada.
+// Genera una data key nueva envuelta bajo el PIN con el que se desbloqueó la pantalla (sessionPIN),
+// así se recupera el acceso sin depender del PIN con el que se exportó el backup.
+function lockImportBackup(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const parsed=JSON.parse(e.target.result);
+      let importedPayload;
+      if(parsed.encrypted){
+        const pin=await promptPINModal('Ingresa el PIN con el que exportaste este backup');
+        if(pin===null){ input.value=''; return; }
+        let plain;
+        try{ plain=await decryptString(parsed,pin); }
+        catch(err){ showAlert('PIN incorrecto o archivo dañado. No se pudo descifrar el backup.'); input.value=''; return; }
+        importedPayload=JSON.parse(plain);
+      } else {
+        importedPayload=parsed; // compatibilidad con backups antiguos sin cifrar
+      }
+      const importedDb=importedPayload.data||importedPayload;
+      if(typeof importedDb!=='object'||Array.isArray(importedDb)){
+        showAlert('Archivo no válido. Debe ser un backup exportado desde esta app.'); input.value=''; return;
+      }
+      if(!sessionPIN){
+        const pin=await promptPINModal('Ingresa (o crea) el PIN con el que quieres proteger la app de ahora en adelante');
+        if(pin===null){ input.value=''; return; }
+        sessionPIN=pin;
+        await pinSetupSave(pin);
+      }
+      db=importedDb;
+      Object.keys(db).forEach(function(k){ db[k]=migrateMonth(db[k]); });
+      creditos=importedPayload.creditos||{};
+      catMetodos=importedPayload.catMetodos||[];
+      catTipos=importedPayload.catTipos||[];
+      catCategorias=importedPayload.catCategorias||[];
+      perfilTelefono=importedPayload.telefono||'';
+      // Esta ruta genera una data key COMPLETAMENTE NUEVA (la anterior se da por perdida), así
+      // que cualquier número de recuperación configurado con la data key vieja ya no sirve.
+      // Si el backup traía un teléfono, se reconstruye el envelope de recuperación bajo la
+      // nueva data key; si no, se elimina el que hubiera quedado huérfano.
+      sessionDataKey=await generateDataKey();
+      await wrapAndStoreDataKey(sessionDataKey, sessionPIN);
+      const digitsRestored=perfilTelefono.replace(/\D/g,'');
+      if(digitsRestored.length>=6){
+        const recEnv=await buildDataKeyEnvelope(sessionDataKey, digitsRestored.slice(-6));
+        localStorage.setItem('fin26_recovery', JSON.stringify(recEnv));
+      } else {
+        localStorage.removeItem('fin26_recovery');
+      }
+      await save();
+      clearPinRecoveryBackup();
+      appUnlocked=true; hideLockOverlay(); render();
+      toast('Datos restaurados desde backup ✓');
+    }catch(err){
+      showAlert('Error al leer el archivo: '+err.message);
+    }
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+// Último recurso: borra todo (PIN, data key y datos financieros) y vuelve a la pantalla de
+// creación de PIN. Requiere escribir una palabra de confirmación para evitar borrados accidentales.
+function confirmWipeAll(){
+  openModal('<div class="mtitle" style="color:var(--red)">Borrar todos los datos</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
+    +'Esto borra permanentemente tu PIN y todos tus datos financieros guardados en este dispositivo. '
+    +'<b style="color:var(--txt)">No se puede deshacer.</b> Si tienes un backup exportado (.json), usa mejor la opción de restaurar.</p>'
+    +'<div class="field"><label>Escribe BORRAR para confirmar</label><input id="wipe-confirm" type="text" placeholder="BORRAR"></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" style="background:var(--red);color:#fff" onclick="executeWipeAll()">Borrar todo</button></div>');
+}
+function executeWipeAll(){
+  const v=(document.getElementById('wipe-confirm').value||'').trim().toUpperCase();
+  if(v!=='BORRAR'){ showAlert('Escribe BORRAR para confirmar.'); return; }
+  ['fin26_pin_salt','fin26_pin_check_iv','fin26_pin_check_ct',
+   'fin26_pin_salt_prev','fin26_pin_check_iv_prev','fin26_pin_check_ct_prev',
+   'fin26_datakey','fin26_datakey_prev','fin26_recovery','fin26_enc','fin26_webauthn_id',
+   'fin26','fin26_creditos','fin26_cat_metodos','fin26_cat_tipos','fin26_cat_categorias','fin26m'
+  ].forEach(function(k){ localStorage.removeItem(k); });
+  location.reload();
 }
 
 // Vuelve a bloquear la app al pasar a segundo plano; al volver, exige PIN/huella de nuevo.
@@ -274,11 +496,13 @@ function initApp(){
 async function openSecurityMenu(){
   const bioReg = !!localStorage.getItem('fin26_webauthn_id');
   const bioSupported = await webauthnPlatformAvailable();
+  const hasRecoveryPhone = !!localStorage.getItem('fin26_recovery');
   openModal('<div class="mtitle">Seguridad</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Tu PIN protege el acceso a la app y cifra tus copias de seguridad exportadas.</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<button class="bcnl" onclick="closeModal();startChangePIN()">🔑 Cambiar PIN</button>'
     +(bioSupported?('<button class="bcnl" onclick="closeModal();'+(bioReg?'disableBio()':'enableBioFromSettings()')+'">👆 '+(bioReg?'Desactivar':'Activar')+' huella / Face ID</button>'):'')
+    +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">📱 '+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
     +'<button class="bcnl" style="color:var(--red)" onclick="lockNow()">🔒 Bloquear ahora</button>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
@@ -291,6 +515,42 @@ function startChangePIN(){
     +'<p style="font-size:11px;color:var(--amb);margin-bottom:8px">Los backups ya exportados quedaron cifrados con tu PIN anterior; necesitarás ese PIN anterior para restaurarlos.</p>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button><button class="bpri" onclick="confirmChangePIN()">Guardar</button></div>');
 }
+// Claves de localStorage que forman el "material de PIN" (verificación + data key envuelta).
+const PIN_MATERIAL_KEYS = ['fin26_pin_salt','fin26_pin_check_iv','fin26_pin_check_ct','fin26_datakey'];
+// Copia el material de PIN actual a claves "_prev" antes de sobrescribirlo, para poder
+// ofrecer "recuperar con mi PIN anterior" desde la pantalla de bloqueo si algo sale mal.
+function backupPinMaterialForRecovery(){
+  PIN_MATERIAL_KEYS.forEach(function(k){
+    const v = localStorage.getItem(k);
+    if(v!==null) localStorage.setItem(k+'_prev', v); else localStorage.removeItem(k+'_prev');
+  });
+}
+function clearPinRecoveryBackup(){
+  PIN_MATERIAL_KEYS.forEach(function(k){ localStorage.removeItem(k+'_prev'); });
+}
+// Calcula, verifica y persiste de forma segura un PIN nuevo para la data key ya cargada en
+// sessionDataKey. Usado tanto por "Cambiar PIN" como por la recuperación con número de celular.
+// Lanza si algo falla — en ese caso no se modificó ninguna clave en localStorage.
+async function commitNewPin(newPin){
+  // 1) Todo el trabajo async/criptográfico —lo único que puede fallar— se hace ANTES de
+  //    tocar localStorage, calculando los nuevos envelopes sin persistir nada todavía.
+  const newDataKeyEnv = await buildDataKeyEnvelope(sessionDataKey, newPin);
+  const newPinCheck   = await buildPinCheckMaterial(newPin);
+  // 2) Verificación cruzada: confirmamos que el envelope nuevo realmente se desenvuelve
+  //    con newPin antes de comprometernos a guardarlo (nunca guardar un estado que ya sabemos roto).
+  await unwrapDataKeyFromEnvelope(newDataKeyEnv, newPin);
+  // 3) Respaldamos el material anterior para poder recuperarlo desde la pantalla de bloqueo
+  //    si el paso 4 se interrumpe a medias (cierre de la app, sistema operativo, etc).
+  backupPinMaterialForRecovery();
+  // 4) Escribimos todo junto, sin ningún await entre medio, para minimizar al máximo la
+  //    ventana en la que localStorage puede quedar a medio actualizar — la causa raíz del
+  //    bug original (el check del PIN y la data key se guardaban en dos pasos separados).
+  localStorage.setItem('fin26_datakey', JSON.stringify(newDataKeyEnv));
+  localStorage.setItem('fin26_pin_salt', newPinCheck.salt);
+  localStorage.setItem('fin26_pin_check_iv', newPinCheck.iv);
+  localStorage.setItem('fin26_pin_check_ct', newPinCheck.ct);
+  sessionPIN=newPin;
+}
 async function confirmChangePIN(){
   const oldPin=document.getElementById('cp-old').value.trim();
   const n1=document.getElementById('cp-new1').value.trim();
@@ -298,11 +558,63 @@ async function confirmChangePIN(){
   if(!(await pinVerify(oldPin))){ showAlert('PIN actual incorrecto'); return; }
   if(n1.length<4||n1.length>6){ showAlert('El nuevo PIN debe tener entre 4 y 6 dígitos'); return; }
   if(n1!==n2){ showAlert('Los PIN nuevos no coinciden'); return; }
-  await pinSetupSave(n1);
-  sessionPIN=n1;
-  closeModal();
-  toast('PIN actualizado ✓');
+  if(!sessionDataKey){ showAlert('No se puede cambiar el PIN en este momento. Cierra y vuelve a abrir la app, e inténtalo de nuevo.'); return; }
+  try{
+    await commitNewPin(n1);
+    closeModal();
+    toast('PIN actualizado ✓');
+  }catch(e){
+    console.error('Error cambiando PIN — no se modificó ninguna información', e);
+    showAlert('No se pudo cambiar el PIN de forma segura. No se modificó tu información; intenta de nuevo.');
+  }
 }
+
+// ── Número de recuperación (últimos 6 dígitos del celular) ────────────────────
+// Además del PIN, la data key también puede envolverse bajo una clave derivada de los
+// últimos 6 dígitos de un número de celular que el usuario define aquí. Sirve como respaldo
+// permanente: si el PIN queda inservible (p.ej. por un cambio de PIN fallido), esos 6 dígitos
+// permiten recuperar el acceso desde la pantalla de bloqueo y de inmediato definir un PIN nuevo.
+// El número se guarda cifrado junto al resto de los datos (perfilTelefono, dentro de fin26_enc);
+// nunca se guarda en texto plano en localStorage.
+function startSetRecoveryPhone(){
+  openModal('<div class="mtitle">Número de recuperación</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
+    +'Si alguna vez tu PIN no logra descifrar tus datos (por ejemplo, tras un cambio de PIN que falló), '
+    +'podrás recuperar el acceso ingresando los <b style="color:var(--txt)">últimos 6 dígitos</b> de este número, '
+    +'y de inmediato se te pedirá definir un PIN nuevo. '
+    +'<b style="color:var(--amb)">Cualquiera que conozca estos 6 dígitos podrá recuperar el acceso a tus datos</b>, así que elige un número que solo tú sepas de memoria.</p>'
+    +'<div class="field"><label>Número de celular</label><input id="rp-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="Ej: 3001234567" value="'+(perfilTelefono||'').replace(/"/g,'&quot;')+'"></div>'
+    +(perfilTelefono?'<button class="bcnl" style="width:100%;color:var(--red);margin-bottom:10px" onclick="removeRecoveryPhone()">🗑️ Quitar número de recuperación</button>':'')
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button><button class="bpri" onclick="confirmSetRecoveryPhone()">Guardar</button></div>');
+}
+async function confirmSetRecoveryPhone(){
+  const raw=(document.getElementById('rp-phone').value||'').trim();
+  const digits=raw.replace(/\D/g,'');
+  if(digits.length<6){ showAlert('Ingresa un número de celular válido (al menos 6 dígitos).'); return; }
+  if(!sessionDataKey){ showAlert('No se puede configurar en este momento. Intenta de nuevo.'); return; }
+  const code=digits.slice(-6);
+  try{
+    // Igual que con el PIN: se calcula y verifica el envelope ANTES de persistir nada.
+    const env=await buildDataKeyEnvelope(sessionDataKey, code);
+    await unwrapDataKeyFromEnvelope(env, code);
+    localStorage.setItem('fin26_recovery', JSON.stringify(env));
+    perfilTelefono=raw;
+    await save();
+    closeModal();
+    toast('Número de recuperación guardado ✓');
+  }catch(e){
+    console.error('Error guardando número de recuperación', e);
+    showAlert('No se pudo guardar el número de recuperación. Intenta de nuevo.');
+  }
+}
+function removeRecoveryPhone(){
+  localStorage.removeItem('fin26_recovery');
+  perfilTelefono='';
+  save();
+  closeModal();
+  toast('Número de recuperación eliminado');
+}
+
 async function enableBioFromSettings(){
   const ok = await webauthnRegister();
   toast(ok?'Huella/Face ID activada ✓':'No se pudo activar la huella/Face ID');
@@ -378,44 +690,136 @@ function migrateMonth(m) {
 let creditos={}; // {id: {nombre, valorPrestamo, pctAval, cuotas, tasa, fechaInicio, frecuencia}}
 let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
 let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
-let db;
-try {
-  const raw = localStorage.getItem('fin26');
-  db = raw ? JSON.parse(raw) : null;
-  if (db) Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
-} catch(e) { db = null; }
-if (!db) {
-  db = JSON.parse(JSON.stringify(INIT));
-  Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
+let catCategorias=[]; // [{id, nombre}] catálogo de categorías de gasto
+let perfilTelefono=''; // número de celular para recuperación (ver Seguridad); viaja cifrado junto al resto de los datos
+let db=null; // se puebla en loadAppData(), después de desbloquear con PIN/huella — nunca antes
+let sessionDataKey=null; // CryptoKey AES-256 en memoria; nunca se persiste. Cifra/descifra fin26_enc.
+let saveChain=Promise.resolve(); // serializa los guardados para no pisar escrituras si save() se llama varias veces seguidas
+
+// Carga la estructura legacy en texto plano (versiones anteriores al cifrado en reposo).
+// Solo se usa la primera vez que un usuario existente se desbloquea tras esta actualización
+// (o si no hay ningún dato todavía); loadAppData() la migra a fin26_enc y borra estas claves.
+function loadLegacyPlaintext(){
+  try {
+    const raw = localStorage.getItem('fin26');
+    db = raw ? JSON.parse(raw) : null;
+  } catch(e) { db = null; }
+  if (!db) db = JSON.parse(JSON.stringify(INIT));
+  try {
+    const rawC = localStorage.getItem('fin26_creditos');
+    creditos = rawC ? JSON.parse(rawC) : {};
+  } catch(e) { creditos = {}; }
+  try {
+    const rawCM = localStorage.getItem('fin26_cat_metodos');
+    if(rawCM){
+      catMetodos = JSON.parse(rawCM);
+    } else {
+      // Migrar valores por defecto la primera vez
+      const defaults=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
+      catMetodos = defaults.map(function(n){ return {id:uid(), nombre:n}; });
+    }
+  } catch(e) { catMetodos = []; }
+  try {
+    const rawCT = localStorage.getItem('fin26_cat_tipos');
+    catTipos = rawCT ? JSON.parse(rawCT) : [];
+  } catch(e) { catTipos = []; }
+  try {
+    const rawCC = localStorage.getItem('fin26_cat_categorias');
+    catCategorias = rawCC ? JSON.parse(rawCC) : [];
+  } catch(e) { catCategorias = []; }
 }
-try {
-  const rawC = localStorage.getItem('fin26_creditos');
-  creditos = rawC ? JSON.parse(rawC) : {};
-} catch(e) { creditos = {}; }
 
-try {
-  const rawCM = localStorage.getItem('fin26_cat_metodos');
-  if(rawCM){
-    catMetodos = JSON.parse(rawCM);
-  } else {
-    // Migrar valores por defecto la primera vez
-    const defaults=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
-    catMetodos = defaults.map(function(n){ return {id:uid(), nombre:n}; });
+// Genera la clave AES-256 que cifra los datos financieros en reposo (fin26_enc).
+async function generateDataKey(){
+  return crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
+}
+// Calcula el envelope de la data key envuelta con el PIN, SIN persistirlo todavía
+// (mismo motivo que buildPinCheckMaterial: separar el cálculo, que puede fallar, de la escritura).
+async function buildDataKeyEnvelope(dataKey, pin){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const pinKey = await pbkdf2Key(pin, salt);
+  const rawKey = await crypto.subtle.exportKey('raw', dataKey);
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, pinKey, rawKey);
+  return {salt:b64enc(salt), iv:b64enc(iv), ct:b64enc(ct)};
+}
+// Envuelve (cifra) la data key con una clave derivada del PIN y la persiste.
+async function wrapAndStoreDataKey(dataKey, pin){
+  const env = await buildDataKeyEnvelope(dataKey, pin);
+  localStorage.setItem('fin26_datakey', JSON.stringify(env));
+}
+// Desenvuelve un envelope de data key (ya sea el guardado o uno calculado en memoria) con el PIN dado.
+// Lanza si el PIN no coincide con ese envelope — nunca hay que tratar eso como "no existe",
+// porque generar una data key nueva en ese caso deja los datos ya cifrados sin forma de
+// recuperarse (fue exactamente el bug que corrompió el acceso al cambiar el PIN).
+async function unwrapDataKeyFromEnvelope(env, pin){
+  const salt = new Uint8Array(b64dec(env.salt));
+  const iv   = new Uint8Array(b64dec(env.iv));
+  const ct   = b64dec(env.ct);
+  const pinKey = await pbkdf2Key(pin, salt);
+  const rawKey = await crypto.subtle.decrypt({name:'AES-GCM', iv:iv}, pinKey, ct); // lanza si el PIN no coincide
+  // extractable:true — necesario para poder reenvolver esta misma data key bajo un PIN
+  // nuevo en confirmChangePIN() (exportKey exige que la clave sea extraíble).
+  return crypto.subtle.importKey('raw', rawKey, 'AES-GCM', true, ['encrypt','decrypt']);
+}
+// Desenvuelve la data key guardada en localStorage usando el PIN. Devuelve null SOLO si
+// todavía no existe ninguna data key guardada (usuario nuevo).
+async function unwrapDataKey(pin){
+  const raw = localStorage.getItem('fin26_datakey');
+  if(!raw) return null;
+  return unwrapDataKeyFromEnvelope(JSON.parse(raw), pin);
+}
+// Asegura que sessionDataKey exista: la desenvuelve si ya hay una guardada (debe funcionar
+// con el PIN correcto — si falla, propaga el error), o crea una nueva SOLO si es la primera
+// vez que se guarda algo (no existe ninguna data key en absoluto).
+async function ensureDataKey(pin){
+  const yaExiste = !!localStorage.getItem('fin26_datakey');
+  if(!yaExiste){
+    sessionDataKey = await generateDataKey();
+    await wrapAndStoreDataKey(sessionDataKey, pin);
+    return;
   }
-} catch(e) { catMetodos = []; }
+  sessionDataKey = await unwrapDataKey(pin); // si el PIN no coincide, lanza — no genera una nueva
+}
 
-try {
-  const rawCT = localStorage.getItem('fin26_cat_tipos');
-  catTipos = rawCT ? JSON.parse(rawCT) : [];
-} catch(e) { catTipos = []; }
+async function encryptPayload(obj){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const pt = new TextEncoder().encode(JSON.stringify(obj));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, sessionDataKey, pt);
+  return {iv:b64enc(iv), ct:b64enc(ct)};
+}
+async function decryptPayload(envelope){
+  const iv = new Uint8Array(b64dec(envelope.iv));
+  const ct = b64dec(envelope.ct);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:iv}, sessionDataKey, ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
 
-save();
+// Carga db/creditos/catálogos ya descifrados con sessionDataKey (o migra datos legacy en
+// texto plano la primera vez). Requiere que ensureDataKey() ya se haya ejecutado.
+async function loadAppData(){
+  const encRaw = localStorage.getItem('fin26_enc');
+  if(encRaw){
+    const payload = await decryptPayload(JSON.parse(encRaw)); // lanza si la clave no coincide
+    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; catCategorias = payload.catCategorias||[]; perfilTelefono = payload.telefono||'';
+  } else {
+    loadLegacyPlaintext();
+  }
+  Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
+  await save();
+  localStorage.removeItem('fin26');
+  localStorage.removeItem('fin26_creditos');
+  localStorage.removeItem('fin26_cat_metodos');
+  localStorage.removeItem('fin26_cat_tipos');
+}
 
 let curM   = parseInt(localStorage.getItem('fin26m') || '0');
 let gFiltro = {'q1':'todos','q2':'todos'}; // filtro por método en Q1/Q2
 let gSort      = {'q1':'orden','q2':'orden'};  // orden activo en Q1/Q2
 let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
+let gGroupByCat= {'q1':false,'q2':false};   // vista agrupada por categoría (estilo tarjetas)
 let gGroupOpen  = {};  // group open state: {groupId: bool}
+let gCatGroupOpen = {}; // estado abierto/cerrado de los grupos de categoría en Q1/Q2: {'q1_catId': bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
 let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
@@ -425,11 +829,13 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 let curTab = 0;
 let tcTipo = 'Compra';
 
-function save()  {
-  localStorage.setItem('fin26', JSON.stringify(db));
-  localStorage.setItem('fin26_creditos', JSON.stringify(creditos));
-  localStorage.setItem('fin26_cat_metodos', JSON.stringify(catMetodos));
-  localStorage.setItem('fin26_cat_tipos', JSON.stringify(catTipos));
+function save(){
+  saveChain = saveChain.then(async function(){
+    if(!sessionDataKey) return; // no debería pasar: save() solo se usa después de desbloquear
+    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, catCategorias:catCategorias, telefono:perfilTelefono});
+    localStorage.setItem('fin26_enc', JSON.stringify(envelope));
+  }).catch(function(e){ console.error('Error guardando datos cifrados', e); });
+  return saveChain;
 }
 function getM()  { return db[curM]; }
 function getNom(m) { return m.nomina || {}; }
@@ -572,8 +978,6 @@ function openNewCredito(){
     +'<input id="cr-cuota-manual" type="number" placeholder="Se sugiere automáticamente">'
     +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
     +'</div>'
-    +'<div class="cbx-row"><input type="checkbox" id="cr-wa" checked>'
-    +'<label for="cr-wa" style="font-size:13px;color:var(--txt)">Enviar comprobante por WhatsApp al pagar una cuota</label></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCredito()">Crear</button>'
@@ -611,13 +1015,12 @@ function saveNewCredito(){
   const fechaInicio=document.getElementById('cr-fecha').value;
   const frecuencia=document.getElementById('cr-frec').value;
   const cuotaManual=parseFloat(document.getElementById('cr-cuota-manual').value)||null;
-  const whatsappAuto=document.getElementById('cr-wa').checked;
   if(!nombre||!valorPrestamo||!cuotas||!fechaInicio){showAlert('Completa nombre, valor, cuotas y fecha de inicio');return;}
   const id='cr_'+Date.now();
   creditos[id]={
     id:id, nombre:nombre, valorPrestamo:valorPrestamo, pctAval:pctAval,
     cuotas:cuotas, tasa:tasa, fechaInicio:fechaInicio, frecuencia:frecuencia,
-    valorCuotaManual:cuotaManual, whatsappAuto:whatsappAuto, pagos:[]
+    valorCuotaManual:cuotaManual, pagos:[]
   };
   save();closeModal();openCreditosMenu();toast('Crédito creado');
 }
@@ -648,9 +1051,6 @@ function openCreditoDetalle(id){
       +'<div style="font-size:10px;margin-top:1px"><span style="color:var(--grn)">Capital '+cop(r.capital)+'</span> · <span style="color:var(--red)">Interés '+cop(r.intereses)+'</span></div>'
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:6px">'
-      +'<button onclick="event.stopPropagation();shareCuotaWhatsApp(\''+id+'\','+i+')" style="background:none;border:none;cursor:pointer;color:var(--mut);padding:4px" title="Compartir por WhatsApp">'
-      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A8.86 8.86 0 0 0 12.05 4a8.94 8.94 0 0 0-7.74 13.4L3 21l3.71-1.27A8.93 8.93 0 0 0 12.05 21a8.94 8.94 0 0 0 8.92-8.95 8.88 8.88 0 0 0-3.37-5.73Zm-5.55 13.7a7.42 7.42 0 0 1-3.78-1.04l-.27-.16-2.8.96.94-2.73-.18-.28a7.4 7.4 0 0 1-1.13-3.95 7.43 7.43 0 1 1 7.42 7.4Zm4.07-5.56c-.22-.11-1.3-.64-1.5-.72-.2-.07-.35-.11-.5.11-.15.22-.57.72-.7.87-.13.15-.26.16-.48.05-.22-.11-1.32-.49-2.16-1.34a8.13 8.13 0 0 1-1.51-1.88c-.16-.27-.02-.42.12-.57.13-.13.3-.34.45-.5.15-.17.2-.29.3-.49.1-.2.05-.36-.02-.5-.07-.13-.62-1.5-.85-2.06-.22-.55-.45-.47-.62-.48h-.53c-.18 0-.46.07-.7.34-.24.27-.94.92-.94 2.23 0 1.32.97 2.59 1.1 2.77.13.18 1.86 2.85 4.5 3.88 2.64 1.04 2.64.7 3.12.66.47-.05 1.51-.62 1.72-1.21.21-.6.21-1.11.15-1.21-.06-.1-.21-.16-.43-.27Z"/></svg>'
-      +'</button>'
       +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(r.valorCuota)+'</div>'
       +'</div>'
       +'</div>';
@@ -685,51 +1085,10 @@ function openCreditoDetalle(id){
   },50);
 }
 
-function buildCuotaMsg(cr,r,pagado){
-  const fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
-  const lineas=[
-    '*Pago de crédito — '+cr.nombre+'*',
-    '--------------------------------',
-    'Cuota: '+r.numero+' de '+cr.cuotas,
-    'Fecha: '+fechaFmt,
-    'Estado: '+(pagado?'Pagada':'Pendiente'),
-    '--------------------------------',
-    'Valor de la cuota: '+cop(r.valorCuota),
-    'Abono a capital: '+cop(r.capital),
-    'Intereses: '+cop(r.intereses),
-    'Saldo pendiente: '+cop(r.saldo)
-  ];
-  return lineas.join('\n');
-}
-
-function sendCuotaWhatsApp(creditoId,numCuota){
-  const cr=creditos[creditoId]; if(!cr) return;
-  if(cr.whatsappAuto===false) return; // desactivado para este crédito
-  const amort=calcAmortizacion(cr);
-  const r=amort.rows[numCuota-1]; if(!r) return;
-  const pagado=!!(cr.pagos&&cr.pagos[numCuota-1]);
-  const msg=buildCuotaMsg(cr,r,pagado);
-  const url='https://wa.me/?text='+encodeURIComponent(msg);
-  window.open(url,'_blank');
-}
-
-function shareCuotaWhatsApp(id,idx){
-  const cr=creditos[id]; if(!cr) return;
-  const amort=calcAmortizacion(cr);
-  const r=amort.rows[idx]; if(!r) return;
-  const pagado=!!(cr.pagos&&cr.pagos[idx]);
-  const msg=buildCuotaMsg(cr,r,pagado);
-  const url='https://wa.me/?text='+encodeURIComponent(msg);
-  window.open(url,'_blank');
-}
-
 function editNombreCredito(id){
   const cr=creditos[id]; if(!cr) return;
-  const waEnabled=cr.whatsappAuto!==false; // por defecto activado si no existe el campo
   openModal('<div class="mtitle">Editar crédito</div>'
     +'<div class="field"><label>Nombre del crédito</label><input id="cr-edit-nombre" value="'+esc(cr.nombre)+'"></div>'
-    +'<div class="cbx-row"><input type="checkbox" id="cr-edit-wa"'+(waEnabled?' checked':'')+'>'
-    +'<label for="cr-edit-wa" style="font-size:13px;color:var(--txt)">Enviar comprobante por WhatsApp al pagar una cuota</label></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveNombreCredito(\''+id+'\')">Guardar</button>'
@@ -741,7 +1100,6 @@ function saveNombreCredito(id){
   if(!nuevoNombre){showAlert('Escribe un nombre');return;}
   const nombreViejo=cr.nombre;
   cr.nombre=nuevoNombre;
-  cr.whatsappAuto=document.getElementById('cr-edit-wa').checked;
   // Actualizar el nombre en los gastos ya generados que referencian este crédito
   Object.keys(db).forEach(function(k){
     var mes=db[k];
@@ -765,9 +1123,7 @@ function toggleOcultarPagadas(id){
 function toggleCuotaPago(id,idx){
   const cr=creditos[id]; if(!cr) return;
   if(!cr.pagos) cr.pagos=[];
-  const yaEstabaPagada=!!cr.pagos[idx];
   cr.pagos[idx]=!cr.pagos[idx];
-  const ahoraPagada=cr.pagos[idx];
   // Sincronizar el gasto correspondiente en Q1/Q2 si existe en algún mes
   const numCuota=idx+1;
   let encontrado=false;
@@ -781,10 +1137,6 @@ function toggleCuotaPago(id,idx){
   save();
   render(); // actualizar Q1/Q2 de fondo si el gasto cambió
   openCreditoDetalle(id);
-  // Si se marcó como pagada (no al desmarcar), enviar comprobante por WhatsApp
-  if(!yaEstabaPagada && ahoraPagada){
-    sendCuotaWhatsApp(id,numCuota);
-  }
 }
 
 function confirmDeleteCredito(id){
@@ -853,6 +1205,19 @@ function esc(s){
   return String(s).replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
+}
+
+// Escapa texto de usuario para insertarlo dentro de un argumento de string simple
+// ('...') dentro de un atributo onclick="..." (comillas dobles). No basta con esc():
+// el navegador decodifica entidades HTML del atributo ANTES de compilarlo como JS,
+// así que una comilla simple codificada como &#39; vuelve a ser ' y rompe el string.
+// Por eso la comilla simple se escapa como \' (secuencia de escape JS, no entidad),
+// mientras que la comilla doble sí se codifica como entidad para proteger el atributo.
+function escJS(s){
+  if(s==null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
 }
 
 function cop(v) {
@@ -1099,6 +1464,24 @@ function toggleGFilter(which){
   document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
 }
 
+function toggleGGroupByCat(which){
+  gGroupByCat[which]=!gGroupByCat[which];
+  var m=getM();
+  document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
+}
+
+function toggleGCatGroup(which,cid){
+  var key=which+'_'+cid;
+  gCatGroupOpen[key]=!gCatGroupOpen[key];
+  const wrap=document.getElementById('gcatd-'+key);
+  const chev=document.getElementById('gcatc-'+key);
+  if(!wrap||!chev) return;
+  const open=gCatGroupOpen[key];
+  wrap.style.display=open?'block':'none';
+  chev.style.transform=open?'rotate(90deg)':'rotate(0deg)';
+  chev.style.color=open?'var(--acc)':'var(--mut)';
+}
+
 function setGSort(which,s){
   gSort[which]=s;
   // Re-render
@@ -1203,12 +1586,14 @@ function renderGastos(gastos,which) {
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+chkTxt+'</div>'
       +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
       +'<div class="gname '+nameCls+'">'+esc(nombreGasto(s))+nopagBadge+'</div>'
-      +'<div class="gmeta">'+(s.metodo||'')+sdh+'</div></div>'
+      +'<div class="gmeta">'+esc(s.metodo||'')+sdh+'</div></div>'
       +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+cop(s.presupuesto)+'</div></div>'
       +'</div>'
   }
 
-  var rows=topGastos.map(function(g,gi){
+  var gastoRowGiCounter=0; // índice único para ids de DOM (gg-/gc-), incremental sin importar si la vista está agrupada por categoría
+  function buildGastoRowHtml(g){
+    var gi=gastoRowGiCounter++;
     if(g.esGrupo){
       var subs=subMap[g.id]||[];
       // Base del grupo: si tiene presupuesto propio (ej. saldo tarjeta), usarlo; si no, sumar subgastos
@@ -1254,7 +1639,7 @@ function renderGastos(gastos,which) {
       var mLabel=mNames[parseInt(mp2[1])-1]; // only month, no year
       mensBadge='<span style="font-size:10px;font-weight:600;background:var(--pur-d);color:var(--pur);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+mLabel+'</span>';
     }
-    var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px">🧾 '+g.comprobante+'</span>':'';
+    var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px">🧾 '+esc(g.comprobante)+'</span>':'';
     if(g.cuotas_total>0&&g.cuota_actual>0){
       var cuotaColor=g.pagado_flag?'var(--grn)':'var(--amb)';
       cuotaBadge='<span style="font-size:10px;font-weight:600;background:var(--surf2);color:'+cuotaColor+';padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+g.cuota_actual+'/'+g.cuotas_total+'</span>';
@@ -1264,13 +1649,73 @@ function renderGastos(gastos,which) {
     var amtCls=p?'pa':'';
     var nopag=tras?'<span class="nopag-badge">Sin pagar</span>':'';
     var chkTxt=p?'✓':tras?'→':'';
-    var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):g.metodo||'';
+    var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):esc(g.metodo||'');
     return '<div class="grow '+gCls+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
       +'<div class="ginfo"><div class="gname '+namCls+'">'+esc(nombreGasto(g))+cuotaBadge+mensBadge+nopag+'</div><div class="gmeta">'+esc(g.metodo||'')+dh+compBadge+'</div></div>'
       +'<div style="text-align:right"><div class="gamt '+amtCls+'">'+cop(g.presupuesto)+'</div><div class="gmth">'+realLine+'</div></div>'
       +'</div>';
-  }).join('');
+  }
+
+  // Total "gastable" de un top-level gasto (grupo o simple), usado para el subtotal por categoría
+  function totalGastoTopLevel(g){
+    if(g.esGrupo){
+      var base=g.presupuesto&&g.presupuesto>0?g.presupuesto:0;
+      if(base>0) return base;
+      return (subMap[g.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
+    }
+    return Math.abs(g.presupuesto||0);
+  }
+  // Cuánto de un top-level gasto (grupo o simple) ya está pagado, usado para el subtotal por categoría
+  function pagadoGastoTopLevel(g){
+    if(g.esGrupo){
+      return (subMap[g.id]||[]).filter(function(s){return !s.sinpagar&&s.pagado_flag;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
+    }
+    return g.pagado_flag?Math.abs(g.presupuesto||0):0;
+  }
+
+  var rows;
+  if(gGroupByCat[which] && topGastos.length){
+    var catBuckets={}, catOrder=[];
+    topGastos.forEach(function(g){
+      var cid=g.categoriaId||'__sin__';
+      if(!catBuckets[cid]){ catBuckets[cid]=[]; catOrder.push(cid); }
+      catBuckets[cid].push(g);
+    });
+    // "Sin categoría" siempre al final; el resto ordenado por total descendente
+    catOrder.sort(function(a,b){
+      if(a==='__sin__') return 1;
+      if(b==='__sin__') return -1;
+      var ta=catBuckets[a].reduce(function(s,g){return s+totalGastoTopLevel(g);},0);
+      var tb=catBuckets[b].reduce(function(s,g){return s+totalGastoTopLevel(g);},0);
+      return tb-ta;
+    });
+    rows=catOrder.map(function(cid){
+      var items=catBuckets[cid];
+      var catItem=cid==='__sin__'?null:catCategorias.find(function(c){return c.id===cid;});
+      var catNombre=catItem?esc(catItem.nombre):'Sin categoría';
+      var catTotal=items.reduce(function(s,g){return s+totalGastoTopLevel(g);},0);
+      var catPagado=items.reduce(function(s,g){return s+pagadoGastoTopLevel(g);},0);
+      var catPagadoHtml=catPagado>0?'<div style="font-size:10px;color:var(--grn);margin-top:1px">Pag: '+cop(catPagado)+'</div>':'';
+      var countBadge=items.length>1?'<span class="tc-count">'+items.length+'</span>':'';
+      var itemsHtml=items.map(function(g){return buildGastoRowHtml(g);}).join('');
+      var gkey=which+'_'+cid;
+      var isOpenCat=!!gCatGroupOpen[gkey];
+      return '<div class="tc-group" id="gcatg-'+gkey+'">'
+        +'<div class="tc-group-head" onclick="toggleGCatGroup(\''+which+'\',\''+cid+'\')">'
+        +'<div class="tcic" style="background:var(--pur-d);color:var(--pur)">🏷</div>'
+        +'<div style="flex:1;min-width:0"><div class="tcdesc">'+catNombre+countBadge+'</div></div>'
+        +'<div style="text-align:right;display:flex;align-items:center;gap:8px">'
+        +'<div><div class="tcval" style="color:var(--txt)">'+cop(catTotal)+'</div>'+catPagadoHtml+'</div>'
+        +'<div class="tc-chevron" id="gcatc-'+gkey+'" style="'+(isOpenCat?'transform:rotate(90deg);color:var(--acc)':'')+'">›</div>'
+        +'</div>'
+        +'</div>'
+        +'<div class="tc-detail-wrap" id="gcatd-'+gkey+'" style="display:'+(isOpenCat?'block':'none')+'">'+itemsHtml+'</div>'
+        +'</div>';
+    }).join('');
+  } else {
+    rows=topGastos.map(function(g){ return buildGastoRowHtml(g); }).join('');
+  }
 
   var spNote=sinPagarTotal>0?'<span style="color:var(--amb);font-size:11px;font-weight:500;margin-left:6px">· '+cop(sinPagarTotal)+' sin pagar</span>':'';
   var dispColor=disp>=0?'grn':'red';
@@ -1281,10 +1726,10 @@ function renderGastos(gastos,which) {
   var pillsHtml='<div style="position:relative"><div style="display:flex;gap:6px;overflow-x:auto;padding:8px 14px 6px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory">'
     +metodos.map(function(m){
       var active=m===activeFiltro;
-      var label=m==='todos'?'Todos':m;
+      var label=m==='todos'?'Todos':esc(m);
       var mTotal=m==='todos'?total:topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-      var pillOnClick='onclick="setGFiltro(\''+which+'\''+',\''+m+'\')"';
-      return '<button class="g-pill-'+which+'" data-f="'+m+'" '+pillOnClick+' style="'
+      var pillOnClick='onclick="setGFiltro(\''+which+'\''+',\''+escJS(m)+'\')"';
+      return '<button class="g-pill-'+which+'" data-f="'+esc(m)+'" '+pillOnClick+' style="'
         +'flex-shrink:0;padding:4px 10px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;scroll-snap-align:start;'
         +'background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'
         +label+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
@@ -1301,9 +1746,9 @@ function renderGastos(gastos,which) {
       {k:'monto-desc',lbl:'Mayor $'},{k:'monto-asc',lbl:'Menor $'},{k:'metodo',lbl:'F. Pago'}];
     var filterPills=metodos.map(function(m){
       var active=m===activeFiltro;
-      var lbl=m==='todos'?'Todos':m;
+      var lbl=m==='todos'?'Todos':esc(m);
       var mTotal=m==='todos'?total:topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-      return '<button class="g-pill-'+which+'" data-f="'+m+'" onclick="setGFiltro(\''+which+'\',\''+m+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'+lbl+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
+      return '<button class="g-pill-'+which+'" data-f="'+esc(m)+'" onclick="setGFiltro(\''+which+'\',\''+escJS(m)+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'+lbl+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
     }).join('');
     var sortPills=sortOpts.map(function(opt){
       var isA=opt.k===activeSort;
@@ -1332,6 +1777,7 @@ function renderGastos(gastos,which) {
     +'<span style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Progreso de pagos</span>'
     +'<div style="display:flex;align-items:center;gap:8px">'
     +'<span style="font-size:11px;font-weight:700;color:var(--txt)">'+pct+'%</span>'
+    +(catCategorias.length?'<button onclick="toggleGGroupByCat(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:'+(gGroupByCat[which]?'var(--acc)':'var(--mut)')+';display:flex;align-items:center;gap:4px">'+(gGroupByCat[which]?'🏷 Agrupado':'🏷 Agrupar')+'</button>':'')
     +'<button onclick="toggleGFilter(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px">'
     +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
     +'Filtrar '+(isOpen?'▲':'▼')
@@ -1372,7 +1818,7 @@ function convertirGrupo(id,which){
     var card=m.tarjetas[tid];
     var saldo=calcTCSaldo(m,tid);
     var sel=(g.tcCardId===tid)?' selected':'';
-    return '<option value="'+tid+'"'+sel+'>'+card.nombre+' ('+cop(saldo)+')</option>';
+    return '<option value="'+tid+'"'+sel+'>'+esc(card.nombre)+' ('+cop(saldo)+')</option>';
   }).join('');
   openModal('<div class="mtitle">'+(g.esGrupo?'Editar grupo':'Convertir en grupo')+'</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
@@ -1445,7 +1891,7 @@ function renderTC(m) {
       var cardSaldo=calcTCSaldo(m,tid);
       return '<button onclick="selectTC(\''+tid+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;'
         +'background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'
-        +card.nombre+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
+        +esc(card.nombre)+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
     }).join('')
     +'<button onclick="openNewCard()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>'
     +'</div>';
@@ -1472,7 +1918,7 @@ function renderTC(m) {
 
   const infoCard='<div class="card" style="margin-bottom:10px">'
     +'<div class="chead" onclick="toggleTCInfo()" style="cursor:pointer">'
-    +'<span class="ctitle">Info de '+t.nombre+'</span>'
+    +'<span class="ctitle">Info de '+esc(t.nombre)+'</span>'
     +'<div style="display:flex;align-items:center;gap:8px">'
     +(tcOpen?'':'<span style="font-size:11px;color:var(--mut)">'+(info.fechaPago?fmtInfoDate(info.fechaPago):'Sin definir')+'</span>')
     +'<button onclick="event.stopPropagation();editTCInfo()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:14px;padding:2px 6px">✎</button>'
@@ -1527,7 +1973,7 @@ function renderTC(m) {
 
   return cardPills+infoCard+'<div class="card">'
     +'<div class="chead">'
-    +'<span class="ctitle">'+t.nombre+'</span>'
+    +'<span class="ctitle">'+esc(t.nombre)+'</span>'
     +'<div style="display:flex;gap:8px;align-items:center">'
     +'<span class="badge '+(saldo<0?'br':'ba')+'">Saldo '+(saldo<0?'-':'')+cop(Math.abs(saldo))+'</span>'
     +(info.cupo?'<span class="badge '+(cupoDisp>=0?'bg':'br')+'">Disp: '+(cupoDisp<0?'-':'')+cop(Math.abs(cupoDisp))+'</span>':'')
@@ -1571,7 +2017,7 @@ function confirmDeleteCard(tid){
     return;
   }
   const card=m.tarjetas[tid];
-  openModal('<div class="mtitle">¿Eliminar '+card.nombre+'?</div>'
+  openModal('<div class="mtitle">¿Eliminar '+esc(card.nombre)+'?</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
     +'Se eliminarán los movimientos de esta tarjeta. Los gastos vinculados quedarán sin tarjeta asociada. Esta acción <b style="color:var(--red)">no se puede deshacer</b>.</p>'
     +'<div class="macts">'
@@ -1800,13 +2246,16 @@ function openGasto(g,which,parentId){
     if(parentG&&parentG.metodo) defaultMetodo=parentG.metodo;
   }
 
-  const opts=catMetodos.map(function(x){return '<option'+(defaultMetodo===x.nombre?' selected':'')+'>'+x.nombre+'</option>';}).join('');
+  const opts=catMetodos.map(function(x){return '<option'+(defaultMetodo===x.nombre?' selected':'')+'>'+esc(x.nombre)+'</option>';}).join('');
+  const catOpts='<option value="">— Sin categoría —</option>'+catCategorias.map(function(c){
+    return '<option value="'+c.id+'"'+(e.categoriaId===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>';
+  }).join('');
 
   // Selector opcional de plantilla de gasto (catálogo de Gastos) — solo en creación, no edición ni subgastos
   var templateField='';
   if(!isE && !pid && catTipos.length>0){
     var tplOpts='<option value="">— Escribir libremente —</option>'+catTipos.map(function(t){
-      return '<option value="'+t.id+'">'+t.nombre+'</option>';
+      return '<option value="'+t.id+'">'+esc(t.nombre)+'</option>';
     }).join('');
     templateField='<div class="field"><label>Usar gasto guardado (opcional)</label>'
       +'<select id="g-template" onchange="aplicarPlantillaGasto()">'+tplOpts+'</select></div>';
@@ -1854,6 +2303,8 @@ function openGasto(g,which,parentId){
     +'<div class="field"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
     +'<div class="field"><label>F. Pago</label><select id="g-m">'+opts+'</select>'
     +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Crear nueva forma de pago</button></div>'
+    +'<div class="field"><label>Categoría (opcional)</label><select id="g-cat">'+catOpts+'</select>'
+    +'<button onclick="event.preventDefault();openNewCategoriaInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Crear nueva categoría</button></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +'<div class="field" style="margin:0"><label>Total cuotas</label><input id="g-ct" type="number" min="0" value="'+(e.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
     +'<div class="field" style="margin:0"><label>Cuota actual</label><input id="g-ca" type="number" min="1" value="'+( suggestedCuota||'')+'" placeholder="Auto"></div>'
@@ -1900,6 +2351,7 @@ function aplicarPlantillaGasto(){
   if(!item) return;
   const pEl=document.getElementById('g-p');
   const mEl=document.getElementById('g-m');
+  const catEl=document.getElementById('g-cat');
   const ctEl=document.getElementById('g-ct');
   nEl.value=item.nombre;
   nEl.readOnly=true;
@@ -1908,6 +2360,7 @@ function aplicarPlantillaGasto(){
   nEl.dataset.catTipoId=item.id;
   if(pEl&&item.presupuesto) pEl.value=item.presupuesto;
   if(mEl&&item.metodo) mEl.value=item.metodo;
+  if(catEl&&item.categoriaId) catEl.value=item.categoriaId;
   if(ctEl&&item.cuotas_total) ctEl.value=item.cuotas_total;
   if(item.esMensualidad){
     document.getElementById('g-esmens').checked=true;
@@ -1955,6 +2408,27 @@ function saveNewMetodoInline(){
   toast('Agregado. Vuelve a abrir el formulario para usarlo.');
 }
 
+function openNewCategoriaInline(){
+  openModal('<div class="mtitle">Nueva categoría</div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Alimentación, Transporte..."></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveNewCategoriaInline()">Guardar</button>'
+    +'</div>');
+}
+
+function saveNewCategoriaInline(){
+  const nombre=document.getElementById('cat-nombre').value.trim();
+  if(!nombre){showAlert('Escribe un nombre');return;}
+  if(catCategorias.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
+    showAlert('Ya existe esa categoría');return;
+  }
+  catCategorias.push({id:uid(),nombre:nombre});
+  save();
+  closeModal();
+  toast('Agregada. Vuelve a abrir el formulario para usarla.');
+}
+
 
 
 function saveG(id,which,parentId){
@@ -1965,6 +2439,7 @@ function saveG(id,which,parentId){
   const presup=parseFloat(document.getElementById('g-p').value)||0;
   const real=parseFloat(document.getElementById('g-r').value)||null;
   const metodo=document.getElementById('g-m').value;
+  const categoriaId=document.getElementById('g-cat')?.value||null;
   const paid=document.getElementById('g-pd').checked;
   const cuotas_total=parseInt(document.getElementById('g-ct').value)||0;
   const cuota_actual_input=parseInt(document.getElementById('g-ca').value)||0;
@@ -1976,7 +2451,7 @@ function saveG(id,which,parentId){
   let gasto;
   if(id){
     gasto=list.find(x=>x.id===id);
-    if(gasto){gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;
+    if(gasto){gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.categoriaId=categoriaId;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;
       gasto.cuotas_total=cuotas_total||0;
       gasto.cuota_actual=cuota_actual_input||gasto.cuota_actual||0;
       gasto.fecha_pago=document.getElementById('g-fp')?.value||gasto.fecha_pago||null;
@@ -2002,7 +2477,7 @@ function saveG(id,which,parentId){
         else cuota_auto=1;
       } else { cuota_auto=1; }
     }
-    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0,mensualidad:mensualidad||null};
+    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0,mensualidad:mensualidad||null,categoriaId:categoriaId};
     if(catTipoIdSel){ gasto.catTipoId=catTipoIdSel; }
     if(creditoIdSel){
       gasto.creditoId=creditoIdSel;
@@ -2035,7 +2510,7 @@ function copiarGastoQ2(id) {
   const m=getM();
   const g=m.q1_gastos.find(x=>x.id===id);
   if(!g){closeModal();return;}
-  const copia={id:uid(),nombre:g.nombre,catTipoId:g.catTipoId||null,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,pagado_flag:false,sinpagar:false};
+  const copia={id:uid(),nombre:g.nombre,catTipoId:g.catTipoId||null,categoriaId:g.categoriaId||null,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,pagado_flag:false,sinpagar:false};
   m.q2_gastos.push(copia);
   save(); closeModal(); render(); toast('Copiado a Q2');
 }
@@ -2112,9 +2587,6 @@ function toggleP(e,id,which){
       cr2.pagos[g.numCuota-1]=true;
     }
     save();render();
-    if(g.creditoId && g.numCuota){
-      sendCuotaWhatsApp(g.creditoId,g.numCuota);
-    }
   }
 }
 
@@ -2207,11 +2679,6 @@ function confirmarPago(id,which){
   }
 
   save();closeModal();render();toast('Pago registrado');
-
-  // Si el gasto pagado pertenece a un crédito, enviar comprobante por WhatsApp
-  if(g.creditoId && g.numCuota){
-    sendCuotaWhatsApp(g.creditoId,g.numCuota);
-  }
 }
 
 // ── CRUD Tarjeta ──────────────────────────────────────────────────────────────
@@ -2284,7 +2751,7 @@ function editTCInfo(){
   const m=getM(), t=getTC(m), info=t.info||{fechaCorte:null,fechaPago:null,cupo:null};
   openModal('<div class="mtitle">Editar tarjeta</div>'
     +'<div class="field"><label>Nombre de la tarjeta</label>'
-    +'<input id="tci-nombre" value="'+t.nombre+'" placeholder="Ej: BBVA, Falabella..."></div>'
+    +'<input id="tci-nombre" value="'+esc(t.nombre)+'" placeholder="Ej: BBVA, Falabella..."></div>'
     +'<div class="field"><label>Cupo total</label>'
     +'<input id="tci-cupo" type="number" value="'+(info.cupo||'')+'" placeholder="Ej: 5000000"></div>'
     +'<div class="field"><label>Fecha de corte</label>'
@@ -2414,7 +2881,7 @@ function editDed(e,lbl,i){
   const isSuma=d.tipo==='suma';
   const rCls=!isSuma?' sc':'', sCls=isSuma?' sa':'';
   openModal('<div class="mtitle">Editar deducción</div>'
-    +'<div class="field"><label>Nombre</label><input id="d-n" value="'+d.nombre+'"></div>'
+    +'<div class="field"><label>Nombre</label><input id="d-n" value="'+esc(d.nombre)+'"></div>'
     +'<div class="trow2">'
     +'<button class="topt'+rCls+'" id="d-resta" onclick="setDedTipo(\'resta\')">− Resta</button>'
     +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
@@ -2471,23 +2938,26 @@ function openCatalogosMenu(){
     +'<div onclick="openGastoTemplates()" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer">'
     +'<span style="font-size:14px;color:var(--txt)">Gastos</span>'
     +'<span style="font-size:11px;color:var(--mut)">'+catTipos.length+' ítem(s) ›</span></div>'
-    +'<div onclick="openCatList(\'metodos\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer">'
+    +'<div onclick="openCatList(\'metodos\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer">'
     +'<span style="font-size:14px;color:var(--txt)">Formas de pago</span>'
     +'<span style="font-size:11px;color:var(--mut)">'+catMetodos.length+' ítem(s) ›</span></div>'
+    +'<div onclick="openCatList(\'categorias\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer">'
+    +'<span style="font-size:14px;color:var(--txt)">Categorías</span>'
+    +'<span style="font-size:11px;color:var(--mut)">'+catCategorias.length+' ítem(s) ›</span></div>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
 }
 
-function getCat(tipo){ return tipo==='tipos'?catTipos:catMetodos; }
-function setCat(tipo,arr){ if(tipo==='tipos') catTipos=arr; else catMetodos=arr; }
-function catLabel(tipo){ return tipo==='tipos'?'Gasto':'Forma de pago'; }
+function getCat(tipo){ return tipo==='tipos'?catTipos:tipo==='categorias'?catCategorias:catMetodos; }
+function setCat(tipo,arr){ if(tipo==='tipos') catTipos=arr; else if(tipo==='categorias') catCategorias=arr; else catMetodos=arr; }
+function catLabel(tipo){ return tipo==='tipos'?'Gasto':tipo==='categorias'?'Categoría':'Forma de pago'; }
 
 // ── Catálogo de Formas de pago (simple: solo nombre) ──────────────────────────
 function openCatList(tipo){
   const arr=getCat(tipo);
   const rowsHtml=arr.length?arr.map(function(item){
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
-      +'<span style="font-size:13px;color:var(--txt)">'+item.nombre+'</span>'
+      +'<span style="font-size:13px;color:var(--txt)">'+esc(item.nombre)+'</span>'
       +'<div style="display:flex;gap:8px">'
       +'<button onclick="editCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✎</button>'
       +'<button onclick="deleteCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑</button>'
@@ -2528,7 +2998,7 @@ function editCatItem(tipo,id){
   const item=arr.find(function(i){return i.id===id;});
   if(!item) return;
   openModal('<div class="mtitle">Editar: '+catLabel(tipo)+'</div>'
-    +'<div class="field"><label>Nombre</label><input id="cat-edit-nombre" value="'+item.nombre+'"></div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-edit-nombre" value="'+esc(item.nombre)+'"></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCatList(\''+tipo+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveEditCatItem(\''+tipo+'\',\''+id+'\')">Guardar</button>'
@@ -2544,12 +3014,18 @@ function saveEditCatItem(tipo,id){
   const nombreViejo=item.nombre;
   item.nombre=nuevoNombre;
   setCat(tipo,arr);
-  Object.keys(db).forEach(function(k){
-    var mes=db[k];
-    [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
-      list.forEach(function(g){ if(g.metodo===nombreViejo) g.metodo=nuevoNombre; });
+  if(tipo==='metodos'){
+    // La forma de pago se guarda como texto en cada gasto (no por id), así que
+    // al renombrarla hay que propagar el cambio a los gastos existentes.
+    Object.keys(db).forEach(function(k){
+      var mes=db[k];
+      [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+        list.forEach(function(g){ if(g.metodo===nombreViejo) g.metodo=nuevoNombre; });
+      });
     });
-  });
+  }
+  // 'categorias' y 'tipos' se referencian por id (categoriaId/catTipoId), así que
+  // renombrar el catálogo no requiere tocar los gastos existentes.
   save();render();openCatList(tipo);toast('Actualizado');
 }
 
@@ -2567,6 +3043,15 @@ function deleteCatItem(tipo,id){
         });
       });
       save();render();openGastoTemplates();toast('Eliminado');
+    } else if(tipo==='categorias'){
+      // Los gastos que tenían esta categoría quedan sin categoría (no eliminados).
+      Object.keys(db).forEach(function(k){
+        var mes=db[k];
+        [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+          list.forEach(function(g){ if(g.categoriaId===id){ g.categoriaId=null; } });
+        });
+      });
+      save();render();openCatList(tipo);toast('Eliminado');
     } else {
       save();openCatList(tipo);toast('Eliminado');
     }
@@ -2600,6 +3085,7 @@ function seedGastosDesdeUltimoMes(){
       nombre:g.nombre,
       presupuesto:g.presupuesto||null,
       metodo:g.metodo||null,
+      categoriaId:g.categoriaId||null,
       cuotas_total:0, // no copiamos cuotas: cada plantilla es genérica, no atada a un avance específico
       esMensualidad:!!g.mensualidad
     });
@@ -2618,12 +3104,16 @@ function openGastoTemplates(){
   const rowsHtml=catTipos.length?catTipos.map(function(item){
     var detalle=[];
     if(item.presupuesto) detalle.push(cop(item.presupuesto));
-    if(item.metodo) detalle.push(item.metodo);
+    if(item.metodo) detalle.push(esc(item.metodo));
+    if(item.categoriaId){
+      var itemCat=catCategorias.find(function(c){return c.id===item.categoriaId;});
+      if(itemCat) detalle.push('🏷 '+esc(itemCat.nombre));
+    }
     if(item.cuotas_total>0) detalle.push(item.cuotas_total+' cuotas');
     if(item.esMensualidad) detalle.push('mensualidad');
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
       +'<div style="min-width:0">'
-      +'<div style="font-size:13px;color:var(--txt)">'+item.nombre+'</div>'
+      +'<div style="font-size:13px;color:var(--txt)">'+esc(item.nombre)+'</div>'
       +(detalle.length?'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+detalle.join(' · ')+'</div>':'')
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-shrink:0">'
@@ -2645,13 +3135,18 @@ function openGastoTemplates(){
 }
 
 function gastoTemplateForm(item){
-  item = item || {nombre:'',presupuesto:'',metodo:'',cuotas_total:'',esMensualidad:false};
+  item = item || {nombre:'',presupuesto:'',metodo:'',cuotas_total:'',esMensualidad:false,categoriaId:null};
   const metodoOpts='<option value="">— Ninguna —</option>'+catMetodos.map(function(m){
-    return '<option'+(item.metodo===m.nombre?' selected':'')+'>'+m.nombre+'</option>';
+    return '<option'+(item.metodo===m.nombre?' selected':'')+'>'+esc(m.nombre)+'</option>';
   }).join('');
-  return '<div class="field"><label>Nombre</label><input id="gt-nombre" value="'+item.nombre+'" placeholder="Ej: Arriendo, Mercado..."></div>'
+  const categoriaOpts='<option value="">— Sin categoría —</option>'+catCategorias.map(function(c){
+    return '<option value="'+c.id+'"'+(item.categoriaId===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>';
+  }).join('');
+  return '<div class="field"><label>Nombre</label><input id="gt-nombre" value="'+esc(item.nombre)+'" placeholder="Ej: Arriendo, Mercado..."></div>'
     +'<div class="field"><label>Presupuesto (opcional)</label><input id="gt-presupuesto" type="number" value="'+(item.presupuesto||'')+'" placeholder="Ej: 950000"></div>'
     +'<div class="field"><label>Forma de pago asociada (opcional)</label><select id="gt-metodo">'+metodoOpts+'</select></div>'
+    +'<div class="field"><label>Categoría (opcional)</label><select id="gt-categoria">'+categoriaOpts+'</select>'
+    +'<button onclick="event.preventDefault();openNewCategoriaInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Crear nueva categoría</button></div>'
     +'<div class="field"><label>Cuotas (opcional)</label><input id="gt-cuotas" type="number" min="0" value="'+(item.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
     +'<div class="cbx-row"><input type="checkbox" id="gt-mens"'+(item.esMensualidad?' checked':'')+'>'
     +'<label for="gt-mens" style="font-size:13px;color:var(--txt)">Es una mensualidad (pago adelantado al mes siguiente)</label></div>';
@@ -2677,6 +3172,7 @@ function saveNewGastoTemplate(){
     nombre:nombre,
     presupuesto:parseFloat(document.getElementById('gt-presupuesto').value)||null,
     metodo:document.getElementById('gt-metodo').value||null,
+    categoriaId:document.getElementById('gt-categoria').value||null,
     cuotas_total:parseInt(document.getElementById('gt-cuotas').value)||0,
     esMensualidad:document.getElementById('gt-mens').checked
   });
@@ -2702,6 +3198,7 @@ function saveEditGastoTemplate(id){
   item.nombre=nuevoNombre;
   item.presupuesto=parseFloat(document.getElementById('gt-presupuesto').value)||null;
   item.metodo=document.getElementById('gt-metodo').value||null;
+  item.categoriaId=document.getElementById('gt-categoria').value||null;
   item.cuotas_total=parseInt(document.getElementById('gt-cuotas').value)||0;
   item.esMensualidad=document.getElementById('gt-mens').checked;
   // Integridad estricta: solo se actualizan los gastos VINCULADOS a esta plantilla
@@ -3261,7 +3758,7 @@ function openBackupMenu(){
 
 async function exportJSON(){
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,catCategorias:catCategorias,telefono:perfilTelefono});
   let pin=sessionPIN;
   if(!pin){
     pin=await promptPINModal('Confirma tu PIN para cifrar el backup');
@@ -3315,7 +3812,9 @@ function importJSON(input){
       window._importedExtra={
         creditos: importedPayload.creditos||null,
         catMetodos: importedPayload.catMetodos||null,
-        catTipos: importedPayload.catTipos||null
+        catTipos: importedPayload.catTipos||null,
+        catCategorias: importedPayload.catCategorias||null,
+        telefono: importedPayload.telefono||null
       };
       openModal('<div class="mtitle">Importar backup</div>'
         +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
@@ -3343,6 +3842,8 @@ function confirmImport(){
     if(window._importedExtra.creditos) creditos=window._importedExtra.creditos;
     if(window._importedExtra.catMetodos) catMetodos=window._importedExtra.catMetodos;
     if(window._importedExtra.catTipos) catTipos=window._importedExtra.catTipos;
+    if(window._importedExtra.catCategorias) catCategorias=window._importedExtra.catCategorias;
+    if(window._importedExtra.telefono) perfilTelefono=window._importedExtra.telefono;
   }
   // Reset navigation
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});

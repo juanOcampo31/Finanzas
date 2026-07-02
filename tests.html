@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>🧪 Pruebas de lógica financiera</h1>
-<p class="subt">Finanzas Personales 2026 — valida PMT de créditos, fechas de pago, prima, nómina y utilidades clave contra casos con resultado conocido.</p>
+<p class="subt">Finanzas Personales — valida PMT de créditos, fechas de pago, prima, nómina y utilidades clave contra casos con resultado conocido.</p>
 <div id="summary" class="summary">Ejecutando pruebas…</div>
 <table>
 <thead><tr><th>Función</th><th>Caso</th><th>Esperado</th><th>Obtenido</th><th>Resultado</th></tr></thead>
@@ -96,6 +96,36 @@
 </script>
 <script>const FE   = new Set(["2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01", "2026-05-18", "2026-06-08", "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07", "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16", "2026-12-08", "2026-12-25"]);
 const INIT = {"0": {"nombre": "Enero", "año": 2026, "q1_gastos": [], "q2_gastos": [], "tarjeta": [], "tcInfo": {"fechaCorte": null, "fechaPago": null}, "nomina": {"basico_total": 5000000, "bonos_total": 500000, "basico_q1": 2500000, "basico_q2": 2500000, "bonos_q1": 250000, "bonos_q2": 250000, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}], "ded_q2": [{"nombre": "F. Solidaridad", "porcentaje": 0.01, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}]}}, "1": {"nombre": "Febrero", "año": 2026, "q1_gastos": [], "q2_gastos": [], "tarjeta": [], "tcInfo": {"fechaCorte": null, "fechaPago": null}, "nomina": {"basico_total": 5000000, "bonos_total": 500000, "basico_q1": 2500000, "basico_q2": 2500000, "bonos_q1": 250000, "bonos_q2": 250000, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}], "ded_q2": [{"nombre": "F. Solidaridad", "porcentaje": 0.01, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}]}}, "2": {"nombre": "Marzo", "año": 2026, "q1_gastos": [], "q2_gastos": [], "tarjeta": [], "tcInfo": {"fechaCorte": null, "fechaPago": null}, "nomina": {"basico_total": 5000000, "bonos_total": 500000, "basico_q1": 2500000, "basico_q2": 2500000, "bonos_q1": 250000, "bonos_q2": 250000, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}], "ded_q2": [{"nombre": "F. Solidaridad", "porcentaje": 0.01, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}]}}, "3": {"nombre": "Abril", "año": 2026, "q1_gastos": [], "q2_gastos": [], "tarjeta": [], "tcInfo": {"fechaCorte": null, "fechaPago": null}, "nomina": {"basico_total": 5000000, "bonos_total": 500000, "basico_q1": 2500000, "basico_q2": 2500000, "bonos_q1": 250000, "bonos_q2": 250000, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}], "ded_q2": [{"nombre": "F. Solidaridad", "porcentaje": 0.01, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}]}}, "4": {"nombre": "Mayo", "año": 2026, "q1_gastos": [], "q2_gastos": [], "tarjeta": [], "tcInfo": {"fechaCorte": null, "fechaPago": null}, "nomina": {"basico_total": 5000000, "bonos_total": 500000, "basico_q1": 2500000, "basico_q2": 2500000, "bonos_q1": 250000, "bonos_q2": 250000, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}], "ded_q2": [{"nombre": "F. Solidaridad", "porcentaje": 0.01, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}]}}, "5": {"nombre": "Junio", "año": 2026, "q1_gastos": [], "q2_gastos": [], "tarjeta": [], "tcInfo": {"fechaCorte": null, "fechaPago": null}, "nomina": {"basico_total": 5000000, "bonos_total": 500000, "basico_q1": 2500000, "basico_q2": 2500000, "bonos_q1": 250000, "bonos_q2": 250000, "ded_q1": [{"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}], "ded_q2": [{"nombre": "F. Solidaridad", "porcentaje": 0.01, "valor_fijo": null}, {"nombre": "Salud", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "Pensión", "porcentaje": 0.04, "valor_fijo": null}, {"nombre": "AporteFE", "porcentaje": 0.02, "valor_fijo": null}, {"nombre": "AhorroFE", "porcentaje": null, "valor_fijo": 167500}]}}};
+
+// ── Manejador de errores visible (diagnóstico) ─────────────────────────────────
+// Si algo falla durante la carga (ej. una API no soportada por el navegador),
+// en vez de quedar en silencio, se muestra un aviso en pantalla con el error real.
+(function(){
+  function showBootError(msg){
+    try{
+      var el=document.getElementById('boot-error');
+      if(!el){
+        el=document.createElement('div');
+        el.id='boot-error';
+        el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#F87171;color:#450a0a;font-size:12px;line-height:1.5;padding:10px 14px;font-family:monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
+        document.body.appendChild(el);
+      }
+      el.textContent='⚠️ Error al cargar la app: '+msg+'\n\nToca para copiar y compartir este mensaje.';
+      el.onclick=function(){
+        if(navigator.clipboard) navigator.clipboard.writeText(msg).catch(function(){});
+      };
+    }catch(e){}
+  }
+  window.addEventListener('error', function(e){
+    showBootError((e.message||'Error desconocido')+' — '+(e.filename||'')+':'+(e.lineno||''));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    showBootError('Promesa rechazada: '+(e.reason&&e.reason.message?e.reason.message:e.reason));
+  });
+  if(!(window.crypto && window.crypto.subtle)){
+    showBootError('Este navegador no soporta Web Crypto (crypto.subtle), necesario para el PIN y el cifrado de backups. Prueba con Chrome o Safari actualizados, fuera de un navegador integrado en otra app (Instagram/Facebook/etc).');
+  }
+})();
 
 // ── SEGURIDAD: PIN, biometría (WebAuthn) y cifrado de backups (AES-GCM) ────────
 let appUnlocked = false;   // controla si la UI está visible o tapada por el lock
@@ -195,29 +225,35 @@ async function webauthnUnlock(){
 // ── UI de la pantalla de bloqueo ────────────────────────────────────────────
 function buildKeypadHTML(){
   const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
-  let h='<div class="lock-keys">';
+  const keyStyle='background:var(--bg);border:1px solid var(--brd2);border-radius:50%;width:66px;height:66px;font-size:24px;font-weight:600;color:var(--txt);cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1';
+  let h='<div class="lock-keys" style="display:grid;grid-template-columns:repeat(3,66px);justify-content:center;gap:12px 18px;margin:0 auto">';
   keys.forEach(function(k){
-    if(k==='⌫') h+='<button class="lock-key" onclick="lockPinBackspace()" aria-label="Borrar dígito">⌫</button>';
+    if(k==='⌫') h+='<button class="lock-key" style="'+keyStyle+'" onclick="lockPinBackspace()" aria-label="Borrar dígito">⌫</button>';
     else if(k==='') h+='<div></div>';
-    else h+='<button class="lock-key" onclick="lockPinPress(\''+k+'\')">'+k+'</button>';
+    else h+='<button class="lock-key" style="'+keyStyle+'" onclick="lockPinPress(\''+k+'\')">'+k+'</button>';
   });
-  h+='</div><button class="bpri" style="margin-top:16px;width:100%" onclick="lockPinConfirm()">Confirmar</button>';
+  h+='</div><button class="bpri" style="margin-top:20px;width:100%;padding:14px;font-size:15px" onclick="lockPinConfirm()">Confirmar</button>';
   return h;
 }
 function renderLockDots(){
   let dots='';
-  for(let i=0;i<6;i++) dots+='<span class="lock-dot'+(i<lockInput.length?' filled':'')+'"></span>';
+  for(let i=0;i<6;i++){
+    dots+='<span class="lock-dot'+(i<lockInput.length?' filled':'')+'"></span>';
+  }
   document.getElementById('lockDots').innerHTML=dots;
 }
 function showLockError(msg){
   const el=document.getElementById('lockError');
   el.textContent=msg;
-  const box=document.querySelector('.lock-box');
+  const box=document.querySelector('.lock-card');
   box.classList.remove('lock-shake'); void box.offsetWidth; box.classList.add('lock-shake');
 }
 async function showLockOverlay(mode){
   lockMode = (mode==='setup')?'setup1':'unlock';
   lockInput=''; lockFirstPin='';
+  const appEl=document.getElementById('app');
+  if(appEl) appEl.style.display='none';
+  document.body.style.overflow='auto';
   document.getElementById('lockOverlay').classList.remove('hidden');
   document.getElementById('lockTitle').textContent = (mode==='setup')?'Crea tu PIN':'Ingresa tu PIN';
   document.getElementById('lockSub').textContent = (mode==='setup')?'Protege tu información financiera (4 a 6 dígitos). También se usará para cifrar tus copias de seguridad.':'';
@@ -231,7 +267,12 @@ async function showLockOverlay(mode){
     bioBtn.style.display='none';
   }
 }
-function hideLockOverlay(){ document.getElementById('lockOverlay').classList.add('hidden'); }
+function hideLockOverlay(){
+  document.getElementById('lockOverlay').classList.add('hidden');
+  const appEl=document.getElementById('app');
+  if(appEl) appEl.style.display='flex';
+  document.body.style.overflow='hidden';
+}
 
 function lockPinPress(d){
   if(lockInput.length>=6) return;
@@ -626,8 +667,6 @@ function openNewCredito(){
     +'<input id="cr-cuota-manual" type="number" placeholder="Se sugiere automáticamente">'
     +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
     +'</div>'
-    +'<div class="cbx-row"><input type="checkbox" id="cr-wa" checked>'
-    +'<label for="cr-wa" style="font-size:13px;color:var(--txt)">Enviar comprobante por WhatsApp al pagar una cuota</label></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCredito()">Crear</button>'
@@ -665,13 +704,12 @@ function saveNewCredito(){
   const fechaInicio=document.getElementById('cr-fecha').value;
   const frecuencia=document.getElementById('cr-frec').value;
   const cuotaManual=parseFloat(document.getElementById('cr-cuota-manual').value)||null;
-  const whatsappAuto=document.getElementById('cr-wa').checked;
   if(!nombre||!valorPrestamo||!cuotas||!fechaInicio){showAlert('Completa nombre, valor, cuotas y fecha de inicio');return;}
   const id='cr_'+Date.now();
   creditos[id]={
     id:id, nombre:nombre, valorPrestamo:valorPrestamo, pctAval:pctAval,
     cuotas:cuotas, tasa:tasa, fechaInicio:fechaInicio, frecuencia:frecuencia,
-    valorCuotaManual:cuotaManual, whatsappAuto:whatsappAuto, pagos:[]
+    valorCuotaManual:cuotaManual, pagos:[]
   };
   save();closeModal();openCreditosMenu();toast('Crédito creado');
 }
@@ -702,9 +740,6 @@ function openCreditoDetalle(id){
       +'<div style="font-size:10px;margin-top:1px"><span style="color:var(--grn)">Capital '+cop(r.capital)+'</span> · <span style="color:var(--red)">Interés '+cop(r.intereses)+'</span></div>'
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:6px">'
-      +'<button onclick="event.stopPropagation();shareCuotaWhatsApp(\''+id+'\','+i+')" style="background:none;border:none;cursor:pointer;color:var(--mut);padding:4px" title="Compartir por WhatsApp">'
-      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A8.86 8.86 0 0 0 12.05 4a8.94 8.94 0 0 0-7.74 13.4L3 21l3.71-1.27A8.93 8.93 0 0 0 12.05 21a8.94 8.94 0 0 0 8.92-8.95 8.88 8.88 0 0 0-3.37-5.73Zm-5.55 13.7a7.42 7.42 0 0 1-3.78-1.04l-.27-.16-2.8.96.94-2.73-.18-.28a7.4 7.4 0 0 1-1.13-3.95 7.43 7.43 0 1 1 7.42 7.4Zm4.07-5.56c-.22-.11-1.3-.64-1.5-.72-.2-.07-.35-.11-.5.11-.15.22-.57.72-.7.87-.13.15-.26.16-.48.05-.22-.11-1.32-.49-2.16-1.34a8.13 8.13 0 0 1-1.51-1.88c-.16-.27-.02-.42.12-.57.13-.13.3-.34.45-.5.15-.17.2-.29.3-.49.1-.2.05-.36-.02-.5-.07-.13-.62-1.5-.85-2.06-.22-.55-.45-.47-.62-.48h-.53c-.18 0-.46.07-.7.34-.24.27-.94.92-.94 2.23 0 1.32.97 2.59 1.1 2.77.13.18 1.86 2.85 4.5 3.88 2.64 1.04 2.64.7 3.12.66.47-.05 1.51-.62 1.72-1.21.21-.6.21-1.11.15-1.21-.06-.1-.21-.16-.43-.27Z"/></svg>'
-      +'</button>'
       +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(r.valorCuota)+'</div>'
       +'</div>'
       +'</div>';
@@ -739,51 +774,10 @@ function openCreditoDetalle(id){
   },50);
 }
 
-function buildCuotaMsg(cr,r,pagado){
-  const fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
-  const lineas=[
-    '*Pago de crédito — '+cr.nombre+'*',
-    '--------------------------------',
-    'Cuota: '+r.numero+' de '+cr.cuotas,
-    'Fecha: '+fechaFmt,
-    'Estado: '+(pagado?'Pagada':'Pendiente'),
-    '--------------------------------',
-    'Valor de la cuota: '+cop(r.valorCuota),
-    'Abono a capital: '+cop(r.capital),
-    'Intereses: '+cop(r.intereses),
-    'Saldo pendiente: '+cop(r.saldo)
-  ];
-  return lineas.join('\n');
-}
-
-function sendCuotaWhatsApp(creditoId,numCuota){
-  const cr=creditos[creditoId]; if(!cr) return;
-  if(cr.whatsappAuto===false) return; // desactivado para este crédito
-  const amort=calcAmortizacion(cr);
-  const r=amort.rows[numCuota-1]; if(!r) return;
-  const pagado=!!(cr.pagos&&cr.pagos[numCuota-1]);
-  const msg=buildCuotaMsg(cr,r,pagado);
-  const url='https://wa.me/?text='+encodeURIComponent(msg);
-  window.open(url,'_blank');
-}
-
-function shareCuotaWhatsApp(id,idx){
-  const cr=creditos[id]; if(!cr) return;
-  const amort=calcAmortizacion(cr);
-  const r=amort.rows[idx]; if(!r) return;
-  const pagado=!!(cr.pagos&&cr.pagos[idx]);
-  const msg=buildCuotaMsg(cr,r,pagado);
-  const url='https://wa.me/?text='+encodeURIComponent(msg);
-  window.open(url,'_blank');
-}
-
 function editNombreCredito(id){
   const cr=creditos[id]; if(!cr) return;
-  const waEnabled=cr.whatsappAuto!==false; // por defecto activado si no existe el campo
   openModal('<div class="mtitle">Editar crédito</div>'
     +'<div class="field"><label>Nombre del crédito</label><input id="cr-edit-nombre" value="'+esc(cr.nombre)+'"></div>'
-    +'<div class="cbx-row"><input type="checkbox" id="cr-edit-wa"'+(waEnabled?' checked':'')+'>'
-    +'<label for="cr-edit-wa" style="font-size:13px;color:var(--txt)">Enviar comprobante por WhatsApp al pagar una cuota</label></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveNombreCredito(\''+id+'\')">Guardar</button>'
@@ -795,7 +789,6 @@ function saveNombreCredito(id){
   if(!nuevoNombre){showAlert('Escribe un nombre');return;}
   const nombreViejo=cr.nombre;
   cr.nombre=nuevoNombre;
-  cr.whatsappAuto=document.getElementById('cr-edit-wa').checked;
   // Actualizar el nombre en los gastos ya generados que referencian este crédito
   Object.keys(db).forEach(function(k){
     var mes=db[k];
@@ -819,9 +812,7 @@ function toggleOcultarPagadas(id){
 function toggleCuotaPago(id,idx){
   const cr=creditos[id]; if(!cr) return;
   if(!cr.pagos) cr.pagos=[];
-  const yaEstabaPagada=!!cr.pagos[idx];
   cr.pagos[idx]=!cr.pagos[idx];
-  const ahoraPagada=cr.pagos[idx];
   // Sincronizar el gasto correspondiente en Q1/Q2 si existe en algún mes
   const numCuota=idx+1;
   let encontrado=false;
@@ -835,10 +826,6 @@ function toggleCuotaPago(id,idx){
   save();
   render(); // actualizar Q1/Q2 de fondo si el gasto cambió
   openCreditoDetalle(id);
-  // Si se marcó como pagada (no al desmarcar), enviar comprobante por WhatsApp
-  if(!yaEstabaPagada && ahoraPagada){
-    sendCuotaWhatsApp(id,numCuota);
-  }
 }
 
 function confirmDeleteCredito(id){
@@ -907,6 +894,13 @@ function esc(s){
   return String(s).replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
+}
+
+function escJS(s){
+  if(s==null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
 }
 
 function cop(v) {
@@ -1257,7 +1251,7 @@ function renderGastos(gastos,which) {
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+chkTxt+'</div>'
       +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
       +'<div class="gname '+nameCls+'">'+esc(nombreGasto(s))+nopagBadge+'</div>'
-      +'<div class="gmeta">'+(s.metodo||'')+sdh+'</div></div>'
+      +'<div class="gmeta">'+esc(s.metodo||'')+sdh+'</div></div>'
       +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+cop(s.presupuesto)+'</div></div>'
       +'</div>'
   }
@@ -1308,7 +1302,7 @@ function renderGastos(gastos,which) {
       var mLabel=mNames[parseInt(mp2[1])-1]; // only month, no year
       mensBadge='<span style="font-size:10px;font-weight:600;background:var(--pur-d);color:var(--pur);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+mLabel+'</span>';
     }
-    var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px">🧾 '+g.comprobante+'</span>':'';
+    var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px">🧾 '+esc(g.comprobante)+'</span>':'';
     if(g.cuotas_total>0&&g.cuota_actual>0){
       var cuotaColor=g.pagado_flag?'var(--grn)':'var(--amb)';
       cuotaBadge='<span style="font-size:10px;font-weight:600;background:var(--surf2);color:'+cuotaColor+';padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+g.cuota_actual+'/'+g.cuotas_total+'</span>';
@@ -1318,7 +1312,7 @@ function renderGastos(gastos,which) {
     var amtCls=p?'pa':'';
     var nopag=tras?'<span class="nopag-badge">Sin pagar</span>':'';
     var chkTxt=p?'✓':tras?'→':'';
-    var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):g.metodo||'';
+    var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):esc(g.metodo||'');
     return '<div class="grow '+gCls+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
       +'<div class="ginfo"><div class="gname '+namCls+'">'+esc(nombreGasto(g))+cuotaBadge+mensBadge+nopag+'</div><div class="gmeta">'+esc(g.metodo||'')+dh+compBadge+'</div></div>'
@@ -1337,8 +1331,8 @@ function renderGastos(gastos,which) {
       var active=m===activeFiltro;
       var label=m==='todos'?'Todos':m;
       var mTotal=m==='todos'?total:topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-      var pillOnClick='onclick="setGFiltro(\''+which+'\''+',\''+m+'\')"';
-      return '<button class="g-pill-'+which+'" data-f="'+m+'" '+pillOnClick+' style="'
+      var pillOnClick='onclick="setGFiltro(\''+which+'\''+',\''+escJS(m)+'\')"';
+      return '<button class="g-pill-'+which+'" data-f="'+esc(m)+'" '+pillOnClick+' style="'
         +'flex-shrink:0;padding:4px 10px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;scroll-snap-align:start;'
         +'background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'
         +label+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
@@ -1357,7 +1351,7 @@ function renderGastos(gastos,which) {
       var active=m===activeFiltro;
       var lbl=m==='todos'?'Todos':m;
       var mTotal=m==='todos'?total:topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-      return '<button class="g-pill-'+which+'" data-f="'+m+'" onclick="setGFiltro(\''+which+'\',\''+m+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'+lbl+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
+      return '<button class="g-pill-'+which+'" data-f="'+esc(m)+'" onclick="setGFiltro(\''+which+'\',\''+escJS(m)+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'+lbl+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
     }).join('');
     var sortPills=sortOpts.map(function(opt){
       var isA=opt.k===activeSort;
@@ -1426,7 +1420,7 @@ function convertirGrupo(id,which){
     var card=m.tarjetas[tid];
     var saldo=calcTCSaldo(m,tid);
     var sel=(g.tcCardId===tid)?' selected':'';
-    return '<option value="'+tid+'"'+sel+'>'+card.nombre+' ('+cop(saldo)+')</option>';
+    return '<option value="'+tid+'"'+sel+'>'+esc(card.nombre)+' ('+cop(saldo)+')</option>';
   }).join('');
   openModal('<div class="mtitle">'+(g.esGrupo?'Editar grupo':'Convertir en grupo')+'</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
@@ -1499,7 +1493,7 @@ function renderTC(m) {
       var cardSaldo=calcTCSaldo(m,tid);
       return '<button onclick="selectTC(\''+tid+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;'
         +'background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'
-        +card.nombre+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
+        +esc(card.nombre)+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
     }).join('')
     +'<button onclick="openNewCard()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>'
     +'</div>';
@@ -1526,7 +1520,7 @@ function renderTC(m) {
 
   const infoCard='<div class="card" style="margin-bottom:10px">'
     +'<div class="chead" onclick="toggleTCInfo()" style="cursor:pointer">'
-    +'<span class="ctitle">Info de '+t.nombre+'</span>'
+    +'<span class="ctitle">Info de '+esc(t.nombre)+'</span>'
     +'<div style="display:flex;align-items:center;gap:8px">'
     +(tcOpen?'':'<span style="font-size:11px;color:var(--mut)">'+(info.fechaPago?fmtInfoDate(info.fechaPago):'Sin definir')+'</span>')
     +'<button onclick="event.stopPropagation();editTCInfo()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:14px;padding:2px 6px">✎</button>'
@@ -1581,7 +1575,7 @@ function renderTC(m) {
 
   return cardPills+infoCard+'<div class="card">'
     +'<div class="chead">'
-    +'<span class="ctitle">'+t.nombre+'</span>'
+    +'<span class="ctitle">'+esc(t.nombre)+'</span>'
     +'<div style="display:flex;gap:8px;align-items:center">'
     +'<span class="badge '+(saldo<0?'br':'ba')+'">Saldo '+(saldo<0?'-':'')+cop(Math.abs(saldo))+'</span>'
     +(info.cupo?'<span class="badge '+(cupoDisp>=0?'bg':'br')+'">Disp: '+(cupoDisp<0?'-':'')+cop(Math.abs(cupoDisp))+'</span>':'')
@@ -1625,7 +1619,7 @@ function confirmDeleteCard(tid){
     return;
   }
   const card=m.tarjetas[tid];
-  openModal('<div class="mtitle">¿Eliminar '+card.nombre+'?</div>'
+  openModal('<div class="mtitle">¿Eliminar '+esc(card.nombre)+'?</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
     +'Se eliminarán los movimientos de esta tarjeta. Los gastos vinculados quedarán sin tarjeta asociada. Esta acción <b style="color:var(--red)">no se puede deshacer</b>.</p>'
     +'<div class="macts">'
@@ -1854,13 +1848,13 @@ function openGasto(g,which,parentId){
     if(parentG&&parentG.metodo) defaultMetodo=parentG.metodo;
   }
 
-  const opts=catMetodos.map(function(x){return '<option'+(defaultMetodo===x.nombre?' selected':'')+'>'+x.nombre+'</option>';}).join('');
+  const opts=catMetodos.map(function(x){return '<option'+(defaultMetodo===x.nombre?' selected':'')+'>'+esc(x.nombre)+'</option>';}).join('');
 
   // Selector opcional de plantilla de gasto (catálogo de Gastos) — solo en creación, no edición ni subgastos
   var templateField='';
   if(!isE && !pid && catTipos.length>0){
     var tplOpts='<option value="">— Escribir libremente —</option>'+catTipos.map(function(t){
-      return '<option value="'+t.id+'">'+t.nombre+'</option>';
+      return '<option value="'+t.id+'">'+esc(t.nombre)+'</option>';
     }).join('');
     templateField='<div class="field"><label>Usar gasto guardado (opcional)</label>'
       +'<select id="g-template" onchange="aplicarPlantillaGasto()">'+tplOpts+'</select></div>';
@@ -2166,9 +2160,6 @@ function toggleP(e,id,which){
       cr2.pagos[g.numCuota-1]=true;
     }
     save();render();
-    if(g.creditoId && g.numCuota){
-      sendCuotaWhatsApp(g.creditoId,g.numCuota);
-    }
   }
 }
 
@@ -2261,11 +2252,6 @@ function confirmarPago(id,which){
   }
 
   save();closeModal();render();toast('Pago registrado');
-
-  // Si el gasto pagado pertenece a un crédito, enviar comprobante por WhatsApp
-  if(g.creditoId && g.numCuota){
-    sendCuotaWhatsApp(g.creditoId,g.numCuota);
-  }
 }
 
 // ── CRUD Tarjeta ──────────────────────────────────────────────────────────────
@@ -2338,7 +2324,7 @@ function editTCInfo(){
   const m=getM(), t=getTC(m), info=t.info||{fechaCorte:null,fechaPago:null,cupo:null};
   openModal('<div class="mtitle">Editar tarjeta</div>'
     +'<div class="field"><label>Nombre de la tarjeta</label>'
-    +'<input id="tci-nombre" value="'+t.nombre+'" placeholder="Ej: BBVA, Falabella..."></div>'
+    +'<input id="tci-nombre" value="'+esc(t.nombre)+'" placeholder="Ej: BBVA, Falabella..."></div>'
     +'<div class="field"><label>Cupo total</label>'
     +'<input id="tci-cupo" type="number" value="'+(info.cupo||'')+'" placeholder="Ej: 5000000"></div>'
     +'<div class="field"><label>Fecha de corte</label>'
@@ -2468,7 +2454,7 @@ function editDed(e,lbl,i){
   const isSuma=d.tipo==='suma';
   const rCls=!isSuma?' sc':'', sCls=isSuma?' sa':'';
   openModal('<div class="mtitle">Editar deducción</div>'
-    +'<div class="field"><label>Nombre</label><input id="d-n" value="'+d.nombre+'"></div>'
+    +'<div class="field"><label>Nombre</label><input id="d-n" value="'+esc(d.nombre)+'"></div>'
     +'<div class="trow2">'
     +'<button class="topt'+rCls+'" id="d-resta" onclick="setDedTipo(\'resta\')">− Resta</button>'
     +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
@@ -2541,7 +2527,7 @@ function openCatList(tipo){
   const arr=getCat(tipo);
   const rowsHtml=arr.length?arr.map(function(item){
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
-      +'<span style="font-size:13px;color:var(--txt)">'+item.nombre+'</span>'
+      +'<span style="font-size:13px;color:var(--txt)">'+esc(item.nombre)+'</span>'
       +'<div style="display:flex;gap:8px">'
       +'<button onclick="editCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✎</button>'
       +'<button onclick="deleteCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑</button>'
@@ -2582,7 +2568,7 @@ function editCatItem(tipo,id){
   const item=arr.find(function(i){return i.id===id;});
   if(!item) return;
   openModal('<div class="mtitle">Editar: '+catLabel(tipo)+'</div>'
-    +'<div class="field"><label>Nombre</label><input id="cat-edit-nombre" value="'+item.nombre+'"></div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-edit-nombre" value="'+esc(item.nombre)+'"></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCatList(\''+tipo+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveEditCatItem(\''+tipo+'\',\''+id+'\')">Guardar</button>'
@@ -2672,12 +2658,12 @@ function openGastoTemplates(){
   const rowsHtml=catTipos.length?catTipos.map(function(item){
     var detalle=[];
     if(item.presupuesto) detalle.push(cop(item.presupuesto));
-    if(item.metodo) detalle.push(item.metodo);
+    if(item.metodo) detalle.push(esc(item.metodo));
     if(item.cuotas_total>0) detalle.push(item.cuotas_total+' cuotas');
     if(item.esMensualidad) detalle.push('mensualidad');
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
       +'<div style="min-width:0">'
-      +'<div style="font-size:13px;color:var(--txt)">'+item.nombre+'</div>'
+      +'<div style="font-size:13px;color:var(--txt)">'+esc(item.nombre)+'</div>'
       +(detalle.length?'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+detalle.join(' · ')+'</div>':'')
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-shrink:0">'
@@ -2701,9 +2687,9 @@ function openGastoTemplates(){
 function gastoTemplateForm(item){
   item = item || {nombre:'',presupuesto:'',metodo:'',cuotas_total:'',esMensualidad:false};
   const metodoOpts='<option value="">— Ninguna —</option>'+catMetodos.map(function(m){
-    return '<option'+(item.metodo===m.nombre?' selected':'')+'>'+m.nombre+'</option>';
+    return '<option'+(item.metodo===m.nombre?' selected':'')+'>'+esc(m.nombre)+'</option>';
   }).join('');
-  return '<div class="field"><label>Nombre</label><input id="gt-nombre" value="'+item.nombre+'" placeholder="Ej: Arriendo, Mercado..."></div>'
+  return '<div class="field"><label>Nombre</label><input id="gt-nombre" value="'+esc(item.nombre)+'" placeholder="Ej: Arriendo, Mercado..."></div>'
     +'<div class="field"><label>Presupuesto (opcional)</label><input id="gt-presupuesto" type="number" value="'+(item.presupuesto||'')+'" placeholder="Ej: 950000"></div>'
     +'<div class="field"><label>Forma de pago asociada (opcional)</label><select id="gt-metodo">'+metodoOpts+'</select></div>'
     +'<div class="field"><label>Cuotas (opcional)</label><input id="gt-cuotas" type="number" min="0" value="'+(item.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
