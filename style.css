@@ -129,7 +129,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .bcnl{background:none;border:1px solid var(--brd2);border-radius:var(--r2);padding:11px;color:var(--mut);font-size:14px;cursor:pointer}
 .bpri{background:var(--acc);border:none;border-radius:var(--r2);padding:11px;color:#0F172A;font-size:14px;font-weight:700;cursor:pointer}
 .bdel{background:var(--red-d);border:1px solid rgba(248,113,113,.4);border-radius:var(--r2);padding:9px;color:var(--red);font-size:13px;cursor:pointer;width:100%;margin-top:8px}
-.cbx-row{display:flex;align-items:center;gap:8px;padding:8px 0}
+.cbx-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 0}
 .cbx-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc)}
 .grow-nopag{background:rgba(251,191,36,.04)}
 .gchk.nopag{border-color:var(--amb);color:var(--amb);font-size:13px}

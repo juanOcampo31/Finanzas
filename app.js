@@ -2164,19 +2164,45 @@ function openGasto(g,which,parentId){
     var tplOpts='<option value="">— Escribir libremente —</option>'+catTipos.map(function(t){
       return '<option value="'+t.id+'">'+esc(t.nombre)+'</option>';
     }).join('');
-    templateField='<div class="field"><label>Usar gasto guardado (opcional)</label>'
+    templateField='<div class="field" style="margin:0"><label>Usar gasto guardado (opcional)</label>'
       +'<select id="g-template" onchange="aplicarPlantillaGasto()">'+tplOpts+'</select></div>';
   }
 
+  // Checks con su lista/campo mostrado DEBAJO del checkbox (no en línea) — dentro de columnas
+  // angostas (Información adicional queda a la mitad del ancho) un select al lado no cabía bien.
   var creditoField='';
   const creditoIds=Object.keys(creditos);
   if(!isE && !pid && creditoIds.length>0){
-    var creditoOpts='<option value="">— Ninguno —</option>'+creditoIds.map(function(cid){
+    var creditoOpts='<option value="">— Selecciona un crédito —</option>'+creditoIds.map(function(cid){
       var cr=creditos[cid];
       return '<option value="'+cid+'">'+esc(cr.nombre)+'</option>';
     }).join('');
-    creditoField='<div class="field"><label>¿Es cuota de un crédito?</label>'
+    creditoField='<div class="cbx-row"><input type="checkbox" id="g-escredito" onchange="toggleCreditoField()">'
+      +'<label for="g-escredito" style="font-size:13px;color:var(--txt)">Es cuota de un crédito</label></div>'
+      +'<div class="field" id="g-credito-field" style="display:none;margin:-2px 0 10px">'
       +'<select id="g-credito" onchange="sugerirCuotaCredito()">'+creditoOpts+'</select></div>';
+  }
+
+  // Crear directamente como grupo desplegable (antes había que crear el gasto, editarlo y
+  // luego "Convertir en grupo desplegable" en un tercer modal — esto lo colapsa a un solo paso).
+  var grupoCreacionField='';
+  if(!isE && !pid){
+    const mNow=getM();
+    const tcIdsNow=listTCIds(mNow);
+    var cardOptsNow=tcIdsNow.map(function(tid){
+      var card=mNow.tarjetas[tid];
+      var saldo=calcTCSaldo(mNow,tid);
+      return '<option value="'+tid+'">'+esc(card.nombre)+' ('+cop(saldo)+')</option>';
+    }).join('');
+    grupoCreacionField='<div class="cbx-row"><input type="checkbox" id="g-esgrupo" onchange="toggleGrupoCreacionField()">'
+      +'<label for="g-esgrupo" style="font-size:13px;color:var(--acc)">Crear como grupo desplegable</label></div>'
+      +(tcIdsNow.length>0
+        ?('<div class="cbx-row" id="g-grp-linked-row" style="display:none">'
+          +'<input type="checkbox" id="g-grp-linked" onchange="toggleGrupoLinkedField()">'
+          +'<label for="g-grp-linked" style="font-size:13px;color:var(--acc)">Vincular al saldo de una tarjeta</label></div>'
+          +'<div class="field" id="g-grp-card-field" style="display:none;margin:-2px 0 10px">'
+          +'<select id="g-grp-card">'+cardOptsNow+'</select></div>')
+        :'');
   }
 
   const delBtn=isE?'<button class="bdel" onclick="delG(\''+eid+'\',\''+wh+'\')">Eliminar gasto</button>':'';
@@ -2194,49 +2220,149 @@ function openGasto(g,which,parentId){
   var linkedItem = e.catTipoId ? catTipos.find(function(t){return t.id===e.catTipoId;}) : null;
   var nameFieldHtml;
   if(linkedItem){
-    nameFieldHtml = '<div class="field"><label>Nombre</label>'
+    nameFieldHtml = '<div class="field" style="margin:0"><label>Nombre</label>'
       +'<input id="g-n" value="'+esc(linkedItem.nombre)+'" readonly data-cat-tipo-id="'+linkedItem.id+'" style="opacity:.7;cursor:not-allowed">'
       +'<div id="g-n-note" style="font-size:11px;color:var(--acc);margin-top:4px">Vinculado al catálogo "'+esc(linkedItem.nombre)+'". Para renombrarlo edita el catálogo, o <span onclick="unlinkGastoNameField()" style="text-decoration:underline;cursor:pointer">desvincúlalo aquí</span>.</div>'
       +'</div>';
   } else {
-    nameFieldHtml = '<div class="field"><label>Nombre</label><input id="g-n" value="'+esc(e.nombre)+'" data-cat-tipo-id="" placeholder="Arriendo, Mercado, Luz..."></div>';
+    nameFieldHtml = '<div class="field" style="margin:0"><label>Nombre</label><input id="g-n" value="'+esc(e.nombre)+'" data-cat-tipo-id="" placeholder="Arriendo, Mercado, Luz..."></div>';
   }
+  // "Usar gasto guardado" y "Nombre" van en la misma fila cuando existe la plantilla; si no
+  // existe (edición, subgastos, o sin catálogo), el Nombre ocupa toda la fila solo.
+  const nameRowHtml=templateField
+    ?('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+templateField+nameFieldHtml+'</div>')
+    :('<div style="margin-bottom:12px">'+nameFieldHtml+'</div>');
 
-  const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
-    +creditoField
-    +templateField
-    +nameFieldHtml
-    +'<div class="field"><label>Presupuesto</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
-    +'<div class="field"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
-    +'<div class="field"><label>F. Pago</label><select id="g-m">'+opts+'</select>'
-    +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Crear nueva forma de pago</button></div>'
-    +'<div class="field"><label>Categoría (opcional)</label><select id="g-cat">'+catOpts+'</select>'
-    +'<button onclick="event.preventDefault();openNewCategoriaInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Crear nueva categoría</button></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+  // "¿Maneja cuotas?": antes "Total cuotas"/"Cuota actual" se mostraban siempre; ahora quedan
+  // ocultas detrás de este check, igual que el resto de los checks de Información adicional.
+  const manejaCuotasChecked=e.cuotas_total>0;
+  const cuotasField='<div class="cbx-row"><input type="checkbox" id="g-esCuotas"'+(manejaCuotasChecked?' checked':'')+' onchange="toggleCuotasField()">'
+    +'<label for="g-esCuotas" style="font-size:13px;color:var(--txt)">¿Maneja cuotas?</label></div>'
+    +'<div id="g-cuotas-row" style="display:'+(manejaCuotasChecked?'grid':'none')+';grid-template-columns:1fr 1fr;gap:8px;margin:-4px 0 8px">'
     +'<div class="field" style="margin:0"><label>Total cuotas</label><input id="g-ct" type="number" min="0" value="'+(e.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
     +'<div class="field" style="margin:0"><label>Cuota actual</label><input id="g-ca" type="number" min="1" value="'+( suggestedCuota||'')+'" placeholder="Auto"></div>'
-    +'</div>'
+    +'</div>';
+
+  // Sección "Información del gasto": nombre + presupuesto/valor real.
+  const infoGastoCard='<div class="card" style="margin-bottom:12px">'
+    +'<div class="chead"><span class="ctitle">Información del gasto</span></div>'
+    +'<div style="padding:4px 14px 12px">'
+    +nameRowHtml
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div class="field" style="margin:0"><label>Presupuesto</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
+    +'<div class="field" style="margin:0"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
+    +'</div></div></div>';
+
+  // Sección "Clasificación": forma de pago + categoría.
+  const clasificacionCard='<div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box">'
+    +'<div class="chead"><span class="ctitle">Clasificación</span></div>'
+    +'<div style="padding:4px 14px 12px">'
+    +'<div class="field"><label>F. Pago</label><select id="g-m">'+opts+'</select>'
+    +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Nueva forma de pago</button></div>'
+    +'<div class="field" style="margin-bottom:0"><label>Categoría (opcional)</label><select id="g-cat">'+catOpts+'</select>'
+    +'<button onclick="event.preventDefault();openNewCategoriaInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Nueva categoría</button></div>'
+    +'</div></div>';
+
+  // Sección "Información adicional": todos los checks (crédito, mensualidad, cuotas, grupo,
+  // pagado, sin pagar), al lado de Clasificación — mismo estándar visual .card/.chead.
+  const infoAdicionalCard='<div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box">'
+    +'<div class="chead"><span class="ctitle">Información adicional</span></div>'
+    +'<div style="padding:4px 14px 12px">'
+    +creditoField
     +'<div class="cbx-row"><input type="checkbox" id="g-esmens"'+(e.mensualidad?' checked':'')+' onchange="toggleMensField()">'
     +'<label for="g-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad</label></div>'
-    +'<div class="field" id="g-mens-field" style="'+(e.mensualidad?'':'display:none')+'"><label>Mensualidad de</label><input id="g-mens" type="month" value="'+(e.mensualidad||'')+'"></div>'
+    +'<div class="field" id="g-mens-field" style="'+(e.mensualidad?'':'display:none;')+'margin:-2px 0 10px">'
+    +'<input id="g-mens" type="month" value="'+(e.mensualidad||'')+'"></div>'
+    +cuotasField
+    +grupoCreacionField
     +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Marcado como pagado</label></div>'
     +'<div class="cbx-row"><input type="checkbox" id="g-sp"'+spChecked+'><label for="g-sp" style="font-size:13px;color:var(--amb)">'+spLabel+'</label></div>'
+    +'</div></div>';
+
+  const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
+    +infoGastoCard
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;align-items:stretch">'
+    +clasificacionCard+infoAdicionalCard
+    +'</div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
     +delBtn+grpBtn;
   openModal(html);
 }
 
+function toggleCuotasField(){
+  const chk=document.getElementById('g-esCuotas');
+  const row=document.getElementById('g-cuotas-row');
+  if(!chk||!row) return;
+  row.style.display=chk.checked?'grid':'none';
+}
+
 function toggleMensField(){
   const chk=document.getElementById('g-esmens');
-  const field=document.getElementById('g-mens-field');
-  if(!chk||!field) return;
-  field.style.display=chk.checked?'block':'none';
-  if(chk.checked && !document.getElementById('g-mens').value){
+  const wrap=document.getElementById('g-mens-field');
+  const field=document.getElementById('g-mens');
+  if(!chk||!wrap||!field) return;
+  wrap.style.display=chk.checked?'block':'none';
+  if(chk.checked && !field.value){
     var now=new Date();
     var y=now.getFullYear(), m=now.getMonth()+2;
     if(m>12){m=1;y++;}
-    document.getElementById('g-mens').value=y+'-'+(m<10?'0':'')+m;
+    field.value=y+'-'+(m<10?'0':'')+m;
+  }
+}
+
+function toggleGrupoCreacionField(){
+  const chk=document.getElementById('g-esgrupo');
+  const row=document.getElementById('g-grp-linked-row');
+  if(!chk) return;
+  // Si no hay tarjetas creadas todavía, esta fila ni siquiera existe en el formulario.
+  if(row) row.style.display=chk.checked?'flex':'none';
+}
+function toggleGrupoLinkedField(){
+  const chk=document.getElementById('g-grp-linked');
+  const cardField=document.getElementById('g-grp-card-field');
+  if(!chk) return;
+  if(cardField) cardField.style.display=chk.checked?'block':'none';
+  // Si se vincula a una tarjeta, el presupuesto lo calcula el saldo de la tarjeta —
+  // el campo "Presupuesto" de arriba se ignora al guardar, así que se atenúa visualmente.
+  const presupField=document.getElementById('g-p')?document.getElementById('g-p').closest('.field'):null;
+  if(presupField){
+    presupField.style.opacity=chk.checked?'.4':'1';
+    presupField.style.pointerEvents=chk.checked?'none':'auto';
+  }
+  // Un gasto vinculado al saldo de una tarjeta siempre se paga con "Tarjeta" — se fija ese
+  // método automáticamente (creándolo en el catálogo si todavía no existe) y se bloquea el
+  // selector mientras esté vinculado, para que quede consistente con la tarjeta elegida.
+  const metodoSel=document.getElementById('g-m');
+  const metodoField=metodoSel?metodoSel.closest('.field'):null;
+  if(metodoField){
+    metodoField.style.opacity=chk.checked?'.4':'1';
+    metodoField.style.pointerEvents=chk.checked?'none':'auto';
+  }
+  if(chk.checked && metodoSel){
+    let tarjetaMetodo=catMetodos.find(function(x){return x.nombre.toLowerCase()==='tarjeta';});
+    if(!tarjetaMetodo){
+      tarjetaMetodo={id:uid(),nombre:'Tarjeta'};
+      catMetodos.push(tarjetaMetodo);
+      save();
+    }
+    let opt=Array.from(metodoSel.options).find(function(o){return o.value.toLowerCase()==='tarjeta';});
+    if(!opt){
+      opt=document.createElement('option');
+      opt.value=tarjetaMetodo.nombre; opt.textContent=tarjetaMetodo.nombre;
+      metodoSel.appendChild(opt);
+    }
+    metodoSel.value=tarjetaMetodo.nombre;
+  }
+}
+function toggleCreditoField(){
+  const chk=document.getElementById('g-escredito');
+  const field=document.getElementById('g-credito-field');
+  if(!chk||!field) return;
+  field.style.display=chk.checked?'block':'none';
+  if(!chk.checked){
+    const sel=document.getElementById('g-credito');
+    if(sel) sel.value='';
   }
 }
 
@@ -2348,8 +2474,9 @@ function saveG(id,which,parentId){
   const metodo=document.getElementById('g-m').value;
   const categoriaId=document.getElementById('g-cat')?.value||null;
   const paid=document.getElementById('g-pd').checked;
-  const cuotas_total=parseInt(document.getElementById('g-ct').value)||0;
-  const cuota_actual_input=parseInt(document.getElementById('g-ca').value)||0;
+  const manejaCuotas=document.getElementById('g-esCuotas')?.checked||false;
+  const cuotas_total=manejaCuotas?(parseInt(document.getElementById('g-ct').value)||0):0;
+  const cuota_actual_input=manejaCuotas?(parseInt(document.getElementById('g-ca').value)||0):0;
   const mensualidad=document.getElementById('g-mens')?.value||null;
   const sinpagar=document.getElementById('g-sp')?.checked||false;
   const creditoSel=document.getElementById('g-credito');
@@ -2390,8 +2517,24 @@ function saveG(id,which,parentId){
       gasto.creditoId=creditoIdSel;
       gasto.numCuota=cuota_auto||cuotas_total;
     }
+    // Crear directamente como grupo desplegable (checkbox "Crear como grupo desplegable" en
+    // el propio formulario de creación), en vez de tener que crear el gasto, editarlo y luego
+    // usar "Convertir en grupo desplegable" en un modal aparte.
+    const esGrupoChk=document.getElementById('g-esgrupo');
+    if(esGrupoChk&&esGrupoChk.checked){
+      gasto.esGrupo=true;
+      const linkedChk=document.getElementById('g-grp-linked');
+      if(linkedChk&&linkedChk.checked){
+        const cardSel=document.getElementById('g-grp-card');
+        const tcId=cardSel?cardSel.value:listTCIds(m)[0];
+        gasto.tcCardId=tcId;
+        gasto.tcLinked=true;
+        gasto.presupuesto=calcTCSaldo(m,tcId);
+      }
+    }
     list.push(gasto);
     lastCreatedId=gasto.id;
+    if(gasto.esGrupo&&gasto.tcCardId) syncTCGrupo(m); // crea el subgasto "Abono TC" automáticamente
   }
   save(); closeModal(); render();
   setTimeout(function(){ lastCreatedId=null; }, 400);
@@ -2399,7 +2542,7 @@ function saveG(id,which,parentId){
   if(which==='q1' && sinpagar) {
     ofrecerCopiarQ2(gasto);
   } else {
-    toast(id?'Gasto actualizado':'Gasto agregado');
+    toast(id?'Gasto actualizado':(gasto.esGrupo?'Grupo creado ✓':'Gasto agregado'));
   }
 }
 
