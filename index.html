@@ -24,7 +24,7 @@
       <button class="mnav" onclick="nextM()" aria-label="Mes siguiente">&#8250;</button>
     </div>
     <div class="topbar-right">
-      <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importJSON(this)">
+      <input type="file" id="imp-file" accept=".json,.txt" style="display:none" onchange="importJSON(this)">
       <button class="ibtn" onclick="openOverflowMenu()" title="Más opciones" aria-label="Más opciones" style="font-size:18px">&#8942;</button>
       <button class="ibtn" onclick="openNewMonth()" title="Nuevo mes" aria-label="Crear nuevo mes">&#43;</button>
     </div>
@@ -58,7 +58,7 @@
     <div class="lock-dots" id="lockDots"></div>
     <div class="lock-error" id="lockError"></div>
     <div id="lockKeypad"></div>
-    <input type="file" id="lock-imp-file" accept=".json" style="display:none" onchange="lockImportBackup(this)">
+    <input type="file" id="lock-imp-file" accept=".json,.txt" style="display:none" onchange="lockImportBackup(this)">
     <button class="lock-link" id="lockRecoveryLink" style="display:none" onclick="showRecoveryOptions()">¿Problemas para ingresar?</button>
   </div>
 </div>

@@ -3676,21 +3676,26 @@ async function exportJSON(){
   const envelope=await encryptString(payload,pin);
   const fileObj=Object.assign({encrypted:true, app:'FinanzasPersonales', version:2, fecha:hoy}, envelope);
   const fileName='finanzas_backup_'+hoy+'.json';
-  const blob=new Blob([JSON.stringify(fileObj,null,2)],{type:'application/json'});
-  // En móvil, usar el share sheet nativo: permite enviar el archivo directo por WhatsApp,
-  // correo, Drive, etc. sin pasar por la carpeta de Descargas. El backup sigue cifrado con
-  // el PIN igual que siempre; compartirlo no lo expone en texto plano.
-  const file=new File([blob], fileName, {type:'application/json'});
+  const contenido=JSON.stringify(fileObj,null,2);
+  const blob=new Blob([contenido],{type:'application/json'});
+  // Para COMPARTIR (WhatsApp/Gmail/Mensajes) se usa .txt + text/plain en vez de .json +
+  // application/json: muchas apps (sobre todo WhatsApp) filtran por tipo de archivo en su
+  // "intent" de compartir y no reconocen application/json como adjunto válido, así que ni
+  // siquiera aparecen en el panel — text/plain sí lo reconoce prácticamente cualquier app.
+  // El contenido es exactamente el mismo backup cifrado, solo cambia la extensión/tipo.
+  const shareFileName='finanzas_backup_'+hoy+'.txt';
+  const shareBlob=new Blob([contenido],{type:'text/plain'});
+  const shareFile=new File([shareBlob], shareFileName, {type:'text/plain'});
   if(!window.isSecureContext){
     // Web Share API exige HTTPS (o localhost); en http:// simple ni siquiera existe.
     toast('Necesitas abrir la app por HTTPS para poder compartir. Se descargará el archivo.');
   } else if(!navigator.share){
     toast('Este navegador no soporta compartir archivos. Se descargará el archivo.');
-  } else if(navigator.canShare && !navigator.canShare({files:[file]})){
+  } else if(navigator.canShare && !navigator.canShare({files:[shareFile]})){
     toast('Este navegador no permite compartir este tipo de archivo. Se descargará el archivo.');
   } else {
     try{
-      await navigator.share({files:[file], title:'Backup Finanzas Personales', text:'Backup cifrado de Finanzas Personales ('+hoy+')'});
+      await navigator.share({files:[shareFile], title:'Backup Finanzas Personales', text:'Backup cifrado de Finanzas Personales ('+hoy+')'});
       toast('Backup cifrado compartido ✓');
       return;
     }catch(e){
