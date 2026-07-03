@@ -3681,14 +3681,22 @@ async function exportJSON(){
   // correo, Drive, etc. sin pasar por la carpeta de Descargas. El backup sigue cifrado con
   // el PIN igual que siempre; compartirlo no lo expone en texto plano.
   const file=new File([blob], fileName, {type:'application/json'});
-  if(navigator.canShare && navigator.canShare({files:[file]})){
+  if(!window.isSecureContext){
+    // Web Share API exige HTTPS (o localhost); en http:// simple ni siquiera existe.
+    toast('Necesitas abrir la app por HTTPS para poder compartir. Se descargará el archivo.');
+  } else if(!navigator.share){
+    toast('Este navegador no soporta compartir archivos. Se descargará el archivo.');
+  } else if(navigator.canShare && !navigator.canShare({files:[file]})){
+    toast('Este navegador no permite compartir este tipo de archivo. Se descargará el archivo.');
+  } else {
     try{
       await navigator.share({files:[file], title:'Backup Finanzas Personales', text:'Backup cifrado de Finanzas Personales ('+hoy+')'});
       toast('Backup cifrado compartido ✓');
       return;
     }catch(e){
       if(e.name==='AbortError') return; // el usuario cerró el share sheet sin elegir nada
-      // si el share falla por otro motivo, seguimos abajo con la descarga normal
+      console.error('Error al compartir el backup', e);
+      toast('No se pudo abrir compartir ('+e.name+'). Se descargará el archivo.');
     }
   }
   const a=document.createElement('a');
