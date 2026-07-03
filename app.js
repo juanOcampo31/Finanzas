@@ -97,42 +97,6 @@ async function decryptString(envelope, pin){
   return new TextDecoder().decode(pt);
 }
 
-// ── Biometría (WebAuthn) ────────────────────────────────────────────────────
-function webauthnSupported(){ return !!(window.PublicKeyCredential && navigator.credentials); }
-async function webauthnPlatformAvailable(){
-  if(!webauthnSupported()) return false;
-  try{ return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }catch(e){ return false; }
-}
-async function webauthnRegister(){
-  try{
-    const userId = crypto.getRandomValues(new Uint8Array(16));
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const cred = await navigator.credentials.create({publicKey:{
-      challenge: challenge,
-      rp:{name:'Finanzas Personales'},
-      user:{id:userId, name:'usuario-finanzas', displayName:'Finanzas Personales'},
-      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
-      authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required'},
-      timeout:60000
-    }});
-    if(cred){ localStorage.setItem('fin26_webauthn_id', b64enc(cred.rawId)); return true; }
-    return false;
-  }catch(e){ return false; }
-}
-async function webauthnUnlock(){
-  const idB64 = localStorage.getItem('fin26_webauthn_id');
-  if(!idB64) return false;
-  try{
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const assertion = await navigator.credentials.get({publicKey:{
-      challenge: challenge,
-      allowCredentials:[{id:b64dec(idB64), type:'public-key'}],
-      userVerification:'required', timeout:60000
-    }});
-    return !!assertion;
-  }catch(e){ return false; }
-}
-
 // ── UI de la pantalla de bloqueo ────────────────────────────────────────────
 function buildKeypadHTML(){
   const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
@@ -171,12 +135,6 @@ async function showLockOverlay(mode){
   document.getElementById('lockError').textContent='';
   document.getElementById('lockKeypad').innerHTML = buildKeypadHTML();
   renderLockDots();
-  const bioBtn=document.getElementById('lockBioBtn');
-  if(mode!=='setup' && localStorage.getItem('fin26_webauthn_id') && await webauthnPlatformAvailable()){
-    bioBtn.style.display='block';
-  } else {
-    bioBtn.style.display='none';
-  }
   // El enlace de recuperación solo aplica cuando ya hay datos protegidos por desbloquear
   // (no durante la configuración inicial de un PIN nuevo, cuando todavía no hay nada que recuperar).
   document.getElementById('lockRecoveryLink').style.display = (mode!=='setup') ? 'block' : 'none';
@@ -233,54 +191,11 @@ async function lockPinConfirm(){
     sessionPIN=lockInput; lockInput='';
     await ensureDataKey(sessionPIN);
     await loadAppData();
-    const bioOk = await webauthnPlatformAvailable();
-    if(bioOk){ showBioAskUI(); }
-    else { appUnlocked=true; hideLockOverlay(); render(); toast('PIN configurado ✓'); }
+    appUnlocked=true; hideLockOverlay(); render(); toast('PIN configurado ✓');
   }
 }
-function showBioAskUI(){
-  document.getElementById('lockTitle').textContent='¿Activar huella / Face ID?';
-  document.getElementById('lockSub').textContent='Podrás desbloquear la app más rápido. Tu PIN se seguirá pidiendo para exportar o importar copias cifradas si la app se reinicia.';
-  document.getElementById('lockDots').innerHTML='';
-  document.getElementById('lockKeypad').innerHTML =
-    '<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">'
-    +'<button class="lock-confirm" style="margin-top:0" onclick="lockEnableBioSetup()">Sí, activar</button>'
-    +'<button class="lock-bio-btn" style="margin-top:0" onclick="lockFinishSetup()">Ahora no</button>'
-    +'</div>';
-}
-async function lockEnableBioSetup(){
-  const ok = await webauthnRegister();
-  appUnlocked=true; hideLockOverlay(); render();
-  toast(ok?'PIN y huella/Face ID activados ✓':'PIN activado. La huella no se pudo configurar.');
-}
-function lockFinishSetup(){ appUnlocked=true; hideLockOverlay(); render(); toast('PIN configurado ✓'); }
 
-async function lockTryBiometric(){
-  const ok = await webauthnUnlock();
-  if(!ok){ showLockError('No se pudo verificar. Usa tu PIN.'); return; }
-  if(!sessionDataKey){
-    // Primer desbloqueo de esta sesión (arranque en frío): la huella confirma tu identidad,
-    // pero para descifrar los datos en reposo todavía necesitamos derivar la clave del PIN.
-    const pin = await promptPINModal('Ingresa tu PIN para descifrar tus datos');
-    if(pin===null){ return; }
-    const verified = await pinVerify(pin);
-    if(!verified){ showLockError('PIN incorrecto.'); return; }
-    try{
-      sessionPIN=pin;
-      await ensureDataKey(pin);
-      await loadAppData();
-      clearPinRecoveryBackup();
-    }catch(e){
-      sessionDataKey=null;
-      showLockError('No se pudieron descifrar tus datos. Intenta de nuevo.');
-      document.getElementById('lockRecoveryLink').style.display='block';
-      return;
-    }
-  }
-  appUnlocked=true; hideLockOverlay(); render();
-}
-
-// Modal genérico para pedir el PIN puntualmente (ej: exportar tras desbloqueo por huella)
+// Modal genérico para pedir el PIN puntualmente (ej: exportar o importar backups)
 function promptPINModal(message){
   return new Promise(function(resolve){
     openModal('<div class="mtitle">'+message+'</div>'
@@ -478,7 +393,7 @@ function executeWipeAll(){
   location.reload();
 }
 
-// Vuelve a bloquear la app al pasar a segundo plano; al volver, exige PIN/huella de nuevo.
+// Vuelve a bloquear la app al pasar a segundo plano; al volver, exige el PIN de nuevo.
 document.addEventListener('visibilitychange', function(){
   if(document.hidden){
     if(appUnlocked) appUnlocked=false;
@@ -492,16 +407,13 @@ function initApp(){
   else showLockOverlay('setup');
 }
 
-// ── Menú de seguridad (cambiar PIN / biometría / bloquear ahora) ───────────────
-async function openSecurityMenu(){
-  const bioReg = !!localStorage.getItem('fin26_webauthn_id');
-  const bioSupported = await webauthnPlatformAvailable();
+// ── Menú de seguridad (cambiar PIN / número de recuperación / bloquear ahora) ──
+function openSecurityMenu(){
   const hasRecoveryPhone = !!localStorage.getItem('fin26_recovery');
   openModal('<div class="mtitle">Seguridad</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Tu PIN protege el acceso a la app y cifra tus copias de seguridad exportadas.</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<button class="bcnl" onclick="closeModal();startChangePIN()">🔑 Cambiar PIN</button>'
-    +(bioSupported?('<button class="bcnl" onclick="closeModal();'+(bioReg?'disableBio()':'enableBioFromSettings()')+'">👆 '+(bioReg?'Desactivar':'Activar')+' huella / Face ID</button>'):'')
     +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">📱 '+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
     +'<button class="bcnl" style="color:var(--red)" onclick="lockNow()">🔒 Bloquear ahora</button>'
     +'</div>'
@@ -615,11 +527,6 @@ function removeRecoveryPhone(){
   toast('Número de recuperación eliminado');
 }
 
-async function enableBioFromSettings(){
-  const ok = await webauthnRegister();
-  toast(ok?'Huella/Face ID activada ✓':'No se pudo activar la huella/Face ID');
-}
-function disableBio(){ localStorage.removeItem('fin26_webauthn_id'); toast('Huella/Face ID desactivada'); }
 function lockNow(){
   closeModal();
   appUnlocked=false; sessionPIN=null;
@@ -692,7 +599,7 @@ let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
 let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
 let catCategorias=[]; // [{id, nombre}] catálogo de categorías de gasto
 let perfilTelefono=''; // número de celular para recuperación (ver Seguridad); viaja cifrado junto al resto de los datos
-let db=null; // se puebla en loadAppData(), después de desbloquear con PIN/huella — nunca antes
+let db=null; // se puebla en loadAppData(), después de desbloquear con el PIN — nunca antes
 let sessionDataKey=null; // CryptoKey AES-256 en memoria; nunca se persiste. Cifra/descifra fin26_enc.
 let saveChain=Promise.resolve(); // serializa los guardados para no pisar escrituras si save() se llama varias veces seguidas
 
@@ -3750,7 +3657,7 @@ function openBackupMenu(){
     +'Importa un backup para restaurar tus datos.</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<button class="bpri" onclick="exportJSON()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
-    +'<span style="font-size:16px">📤</span> Exportar backup JSON</button>'
+    +'<span style="font-size:16px">📤</span> Exportar / compartir backup</button>'
     +'<button class="bcnl" onclick="document.getElementById(\'imp-file\').click();closeModal()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
     +'<span style="font-size:16px">📥</span> Importar backup JSON</button>'
     +'</div>');
@@ -3768,10 +3675,25 @@ async function exportJSON(){
   }
   const envelope=await encryptString(payload,pin);
   const fileObj=Object.assign({encrypted:true, app:'FinanzasPersonales', version:2, fecha:hoy}, envelope);
+  const fileName='finanzas_backup_'+hoy+'.json';
   const blob=new Blob([JSON.stringify(fileObj,null,2)],{type:'application/json'});
+  // En móvil, usar el share sheet nativo: permite enviar el archivo directo por WhatsApp,
+  // correo, Drive, etc. sin pasar por la carpeta de Descargas. El backup sigue cifrado con
+  // el PIN igual que siempre; compartirlo no lo expone en texto plano.
+  const file=new File([blob], fileName, {type:'application/json'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file], title:'Backup Finanzas Personales', text:'Backup cifrado de Finanzas Personales ('+hoy+')'});
+      toast('Backup cifrado compartido ✓');
+      return;
+    }catch(e){
+      if(e.name==='AbortError') return; // el usuario cerró el share sheet sin elegir nada
+      // si el share falla por otro motivo, seguimos abajo con la descarga normal
+    }
+  }
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='finanzas_backup_'+hoy+'.json';
+  a.download=fileName;
   a.click();
   URL.revokeObjectURL(a.href);
   toast('Backup cifrado exportado ✓');

@@ -1,7 +1,7 @@
 // Sube este número cada vez que despliegues cambios en index.html/CSS/JS.
 // Si lo olvidas, los usuarios seguirán viendo la versión anterior offline
 // hasta que haya red disponible para revalidar.
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const CACHE = 'finanzas-' + CACHE_VERSION;
 const FILES = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
