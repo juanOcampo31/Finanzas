@@ -865,7 +865,7 @@ function openNewCredito(){
   const hoy=new Date().toISOString().slice(0,10);
   openModal('<div class="mtitle">Nuevo crédito</div>'
     +'<div class="field"><label>Nombre</label><input id="cr-nombre" placeholder="Ej: Crédito electrodomésticos"></div>'
-    +'<div class="field"><label>Valor del préstamo</label><input id="cr-valor" type="number" placeholder="Ej: 3050000" oninput="updateCuotaSugerida()"></div>'
+    +'<div class="field"><label>Valor del préstamo</label><input id="cr-valor" type="text" inputmode="numeric" placeholder="Ej: 3.050.000" oninput="maskMoneyInput(this);updateCuotaSugerida()"></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
     +'<div class="field" style="margin:0"><label>% AVAL</label><input id="cr-aval" type="number" step="0.01" placeholder="Ej: 2" oninput="updateCuotaSugerida()"></div>'
     +'<div class="field" style="margin:0"><label>Cuotas</label><input id="cr-cuotas" type="number" placeholder="Ej: 36" oninput="updateCuotaSugerida()"></div>'
@@ -877,7 +877,7 @@ function openNewCredito(){
     +'<div class="field" style="margin-top:12px"><label>Frecuencia de pago</label>'
     +'<select id="cr-frec"><option value="quincenal">Quincenal</option><option value="mensual">Mensual</option></select></div>'
     +'<div class="field"><label>Valor de cuota manual (opcional)</label>'
-    +'<input id="cr-cuota-manual" type="number" placeholder="Se sugiere automáticamente">'
+    +'<input id="cr-cuota-manual" type="text" inputmode="numeric" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this)">'
     +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
     +'</div>'
     +'<div class="macts">'
@@ -887,7 +887,7 @@ function openNewCredito(){
 }
 
 function updateCuotaSugerida(){
-  const valor=parseFloat(document.getElementById('cr-valor')?.value)||0;
+  const valor=moneyVal('cr-valor');
   const pctAval=parseFloat(document.getElementById('cr-aval')?.value)||0;
   const cuotas=parseInt(document.getElementById('cr-cuotas')?.value)||0;
   const tasaPct=parseFloat(document.getElementById('cr-tasa')?.value)||0;
@@ -910,13 +910,13 @@ function updateCuotaSugerida(){
 
 function saveNewCredito(){
   const nombre=document.getElementById('cr-nombre').value.trim();
-  const valorPrestamo=parseFloat(document.getElementById('cr-valor').value)||0;
+  const valorPrestamo=moneyVal('cr-valor');
   const pctAval=parseFloat(document.getElementById('cr-aval').value)||0;
   const cuotas=parseInt(document.getElementById('cr-cuotas').value)||1;
   const tasa=parseFloat(document.getElementById('cr-tasa').value)||0;
   const fechaInicio=document.getElementById('cr-fecha').value;
   const frecuencia=document.getElementById('cr-frec').value;
-  const cuotaManual=parseFloat(document.getElementById('cr-cuota-manual').value)||null;
+  const cuotaManual=moneyVal('cr-cuota-manual')||null;
   if(!nombre||!valorPrestamo||!cuotas||!fechaInicio){showAlert('Completa nombre, valor, cuotas y fecha de inicio');return;}
   const id='cr_'+Date.now();
   creditos[id]={
@@ -1126,6 +1126,30 @@ function cop(v) {
   if (v == null || isNaN(v)) return '$0';
   return '$' + Math.round(Math.abs(v)).toLocaleString('es-CO');
 }
+// ── Máscara de moneda para inputs (sin símbolo $, solo puntos de miles) ────────
+// Los campos de dinero usan type="text" + inputmode="numeric" (un <input type="number">
+// nativo no admite puntos de miles) y llaman a esto en su "oninput" para formatear mientras
+// se escribe. moneyVal() hace el camino inverso al leer el valor guardado.
+function moneyInputFmt(v){
+  // 0 se trata igual que vacío (mismo criterio que usaban estos campos antes: "valor||''"),
+  // así un gasto nuevo no arranca con un "0" que haya que borrar para empezar a escribir.
+  return v?Math.round(v).toLocaleString('es-CO'):'';
+}
+function maskMoneyInput(el){
+  const digits=el.value.replace(/\D/g,'');
+  el.value=digits?Number(digits).toLocaleString('es-CO'):'';
+  el.setSelectionRange(el.value.length, el.value.length);
+}
+function setMoneyValue(el, v){
+  if(!el) return;
+  el.value=moneyInputFmt(v);
+}
+function moneyVal(id){
+  const el=document.getElementById(id);
+  if(!el) return 0;
+  const digits=(el.value||'').replace(/\D/g,'');
+  return digits?parseInt(digits):0;
+}
 function uid()  { return Math.random().toString(36).slice(2,9); }
 function fmtD(d) {
   if (!d) return '';
@@ -1320,10 +1344,16 @@ function netoQ2(m) { return calcNeto(basicoQ2(m), getNom(m).ded_q2); }
 // Total de gastos activos (no "sin pagar") de una quincena, consciente de grupos: si el grupo
 // tiene base propia (vinculado a tarjeta o monto manual) se usa esa; si no, se suman sus subgastos.
 // Compartido entre renderGastos() y calcDisponibleQuincena() para no duplicar esta lógica.
-function calcTotalGrupoAware(activos, subMap){
+// excludeTarjetaVinculada: en Q1 el SALDO de tarjeta (la "base" sincronizada con calcTCSaldo)
+// se muestra solo como información — no debe restar del total ni del disponible ahí, porque el
+// abono real solo ocurre en la quincena de pago (Q2). Pero los subgastos que sí se hayan
+// agregado manualmente a ese grupo (ej. "Gasolina" pagada con la tarjeta) son gastos reales de
+// la quincena y deben seguir contando, así que se ignora solo la base, nunca los subgastos.
+function calcTotalGrupoAware(activos, subMap, excludeTarjetaVinculada){
   return activos.reduce(function(a,x){
     if(x.esGrupo){
-      var base=x.presupuesto&&x.presupuesto>0?x.presupuesto:0;
+      var usaBase=!(excludeTarjetaVinculada && x.tcCardId);
+      var base=(usaBase && x.presupuesto>0)?x.presupuesto:0;
       if(base>0) return a+base;
       return a+(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
     }
@@ -1341,7 +1371,7 @@ function calcTotalQuincena(m, which){
     else topGastosAll.push(g);
   }
   const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
-  return calcTotalGrupoAware(activos, subMap);
+  return calcTotalGrupoAware(activos, subMap, which==='q1');
 }
 // Disponible de una quincena = neto de nómina de esa quincena menos el total de gastos activos.
 function calcDisponibleQuincena(m, which){
@@ -1543,12 +1573,13 @@ function renderGastos(gastos,which) {
   const topGastos=sortGastos(topGastosFiltered,which);
 
   const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
-  const total=calcTotalGrupoAware(activos, subMap);
+  const total=calcTotalGrupoAware(activos, subMap, which==='q1');
   const pagado=activos.reduce(function(a,x){
     if(x.esGrupo){
-      var base=x.presupuesto&&x.presupuesto>0?x.presupuesto:0;
+      // "pagado" de un grupo siempre se calcula sumando sus subgastos ya pagados (nunca la
+      // base) — así que un grupo vinculado a tarjeta en Q1 ya solo suma lo que sí es un gasto
+      // real ahí (ej. "Gasolina" pagada con la tarjeta), consistente con calcTotalGrupoAware.
       var paid=(subMap[x.id]||[]).filter(function(s){return !s.sinpagar&&s.pagado_flag;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
-      // Si tiene base, "pagado" del grupo = lo que se ha abonado vía subgastos
       return a+paid;
     }
     return x.pagado_flag?a+Math.abs(x.presupuesto||0):a;
@@ -1754,13 +1785,13 @@ function convertirGrupo(id,which){
     +' onchange="var f=document.getElementById(\'grp-base-field\');var c=document.getElementById(\'grp-card-field\');'
     +'f.style.opacity=this.checked?\'0.4\':\'1\';f.style.pointerEvents=this.checked?\'none\':\'auto\';'
     +'c.style.opacity=this.checked?\'1\':\'0.4\';c.style.pointerEvents=this.checked?\'auto\':\'none\';">'
-    +'<label for="grp-linked" style="font-size:13px;color:var(--acc)">Asociar a saldo de tarjeta</label></div>'
+    +'<label for="grp-linked" style="font-size:13px;color:var(--acc)">Vincular saldo de tarjeta</label></div>'
     +'<div class="field" id="grp-card-field" style="'+cardOptStyle+'">'
     +'<label>Tarjeta vinculada</label>'
     +'<select id="grp-card">'+cardOpts+'</select></div>'
     +'<div class="field" id="grp-base-field" style="'+fieldStyle+'">'
     +'<label>Monto base manual</label>'
-    +'<input id="grp-base" type="number" value="'+baseVal+'" placeholder="Ej: 1209417"></div>'
+    +'<input id="grp-base" type="text" inputmode="numeric" value="'+moneyInputFmt(baseVal)+'" placeholder="Ej: 1.209.417" oninput="maskMoneyInput(this)"></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveConvertir()">'+(g.esGrupo?'Guardar':'Convertir')+'</button>'
@@ -1783,7 +1814,7 @@ function saveConvertir(){
   } else {
     g.tcCardId=null;
     g.tcLinked=false;
-    g.presupuesto=parseFloat(document.getElementById('grp-base').value)||0;
+    g.presupuesto=moneyVal('grp-base');
   }
   save();closeModal();render();toast(nombreGasto(g)+' convertido en grupo');
 }
@@ -1938,6 +1969,8 @@ function openNewCard(){
     +'<div class="field"><label>Nombre de la tarjeta</label>'
     +'<input id="newcard-nombre" placeholder="Ej: BBVA, Falabella, Visa..."></div>'
     +'<div class="field"><label>Marca (opcional)</label><select id="newcard-marca">'+marcaOpts+'</select></div>'
+    +'<div class="field"><label>Últimos 4 dígitos (opcional)</label>'
+    +'<input id="newcard-ultimos4" maxlength="4" inputmode="numeric" placeholder="Ej: 9537"></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCard()">Crear</button>'
@@ -1948,10 +1981,11 @@ function saveNewCard(){
   if(!nombre){showAlert('Escribe un nombre');return;}
   const marcaSel=document.getElementById('newcard-marca');
   const marca=marcaSel&&marcaSel.value!=='Ninguna'?marcaSel.value:null;
+  const ultimos4=(document.getElementById('newcard-ultimos4').value||'').trim().replace(/\D/g,'').slice(-4)||null;
   const m=getM();
   const tid='tc'+(Object.keys(m.tarjetas||{}).length+1)+'_'+Date.now();
   if(!m.tarjetas) m.tarjetas={};
-  m.tarjetas[tid]={id:tid,nombre:nombre,movimientos:[],info:{fechaCorte:null,fechaPago:null,cupo:null,marca:marca}};
+  m.tarjetas[tid]={id:tid,nombre:nombre,movimientos:[],info:{fechaCorte:null,fechaPago:null,cupo:null,marca:marca,ultimos4:ultimos4}};
   curTC=tid;
   save();closeModal();render();toast('Tarjeta creada');
 }
@@ -2161,7 +2195,7 @@ function sugerirCuotaCredito(){
   const ctEl=document.getElementById('g-ct');
   const caEl=document.getElementById('g-ca');
   if(nEl) nEl.value='Crédito '+cr.nombre;
-  if(pEl) pEl.value=row.valorCuota;
+  if(pEl) setMoneyValue(pEl,row.valorCuota);
   if(ctEl) ctEl.value=cr.cuotas;
   if(caEl) caEl.value=row.numero;
 }
@@ -2234,11 +2268,11 @@ function openGasto(g,which,parentId){
     grupoCreacionField='<div class="cbx-row"><input type="checkbox" id="g-esgrupo" onchange="toggleGrupoCreacionField()">'
       +'<label for="g-esgrupo" style="font-size:13px;color:var(--acc)">Agrupar subgastos</label></div>'
       +(tcIdsNow.length>0
-        ?('<div class="cbx-row" id="g-grp-linked-row" style="display:none;padding-left:24px">'
+        ?('<div class="cbx-row" id="g-grp-linked-row" style="display:none">'
           +'<input type="checkbox" id="g-grp-linked" onchange="toggleGrupoLinkedField()">'
           +'<label for="g-grp-linked" style="font-size:13px;color:var(--acc)">Vincular saldo de tarjeta</label></div>'
-          +'<div class="field" id="g-grp-card-field" style="display:none;margin:-2px 0 10px;padding-left:48px">'
-          +'<select id="g-grp-card">'+cardOptsNow+'</select></div>')
+          +'<div class="field" id="g-grp-card-field" style="display:none;margin:-2px 0 10px">'
+          +'<select id="g-grp-card" onchange="applyTCNombreGasto()">'+cardOptsNow+'</select></div>')
         :'');
   }
 
@@ -2289,10 +2323,10 @@ function openGasto(g,which,parentId){
     +'<div style="padding:4px 14px 12px">'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +nameFieldHtml
-    +'<div class="field" style="margin:0"><label>Valor</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
+    +'<div class="field" style="margin:0"><label>Valor</label><input id="g-p" type="text" inputmode="numeric" value="'+moneyInputFmt(e.presupuesto)+'" oninput="maskMoneyInput(this)"></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
-    +'<div class="field" style="margin:0"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
+    +'<div class="field" style="margin:0"><label>Valor real pagado (opcional)</label><input id="g-r" type="text" inputmode="numeric" value="'+moneyInputFmt(e.pagado_real)+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="field" style="margin:0"><label>Forma de pago</label><select id="g-m">'+opts+'</select>'
     +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Nueva forma de pago</button></div>'
     +'</div>'
@@ -2410,6 +2444,52 @@ function toggleGrupoLinkedField(){
     }
     metodoSel.value=tarjetaMetodo.nombre;
   }
+  // El nombre del gasto se autocompleta con "Tarjeta {MARCA}-{últimos 4}" mientras esté
+  // vinculado a una tarjeta, y se bloquea igual que al usar una plantilla del catálogo.
+  if(chk.checked){ applyTCNombreGasto(); } else { unlockTCNombreGasto(); }
+}
+// Arma el nombre a partir de la tarjeta seleccionada: "Tarjeta VISA-9537" si hay marca y
+// últimos 4 dígitos, o variantes más cortas si falta alguno de los dos datos.
+function tcDisplayName(card){
+  var marca=card.info&&card.info.marca;
+  var ult4=card.info&&card.info.ultimos4;
+  if(marca&&ult4) return 'Tarjeta '+marca.toUpperCase()+'-'+ult4;
+  if(marca) return 'Tarjeta '+marca.toUpperCase();
+  if(ult4) return 'Tarjeta '+card.nombre+'-'+ult4;
+  return 'Tarjeta '+card.nombre;
+}
+function applyTCNombreGasto(){
+  const cardSel=document.getElementById('g-grp-card');
+  const nEl=document.getElementById('g-n');
+  if(!cardSel||!nEl) return;
+  const card=getM().tarjetas[cardSel.value];
+  if(!card) return;
+  // Si el nombre venía vinculado a una plantilla del catálogo de Gastos, se desvincula:
+  // ahora el nombre lo define la tarjeta, no la plantilla.
+  nEl.dataset.catTipoId='';
+  const plantillaNote=document.getElementById('g-n-note');
+  if(plantillaNote) plantillaNote.remove();
+  nEl.value=tcDisplayName(card);
+  nEl.readOnly=true;
+  nEl.style.opacity='.7';
+  nEl.style.cursor='not-allowed';
+  let note=document.getElementById('g-n-note-tc');
+  if(!note){
+    note=document.createElement('div');
+    note.id='g-n-note-tc';
+    note.style.cssText='font-size:11px;color:var(--acc);margin-top:4px';
+    nEl.parentElement.appendChild(note);
+  }
+  note.textContent='Nombre asignado automáticamente según la tarjeta vinculada.';
+}
+function unlockTCNombreGasto(){
+  const nEl=document.getElementById('g-n');
+  if(!nEl) return;
+  nEl.readOnly=false;
+  nEl.style.opacity='1';
+  nEl.style.cursor='text';
+  const note=document.getElementById('g-n-note-tc');
+  if(note) note.remove();
 }
 function toggleCreditoField(){
   const chk=document.getElementById('g-escredito');
@@ -2446,7 +2526,7 @@ function aplicarPlantillaGasto(){
   nEl.style.opacity='.7';
   nEl.style.cursor='not-allowed';
   nEl.dataset.catTipoId=item.id;
-  if(pEl&&item.presupuesto) pEl.value=item.presupuesto;
+  if(pEl&&item.presupuesto) setMoneyValue(pEl,item.presupuesto);
   if(mEl&&item.metodo) mEl.value=item.metodo;
   if(ctEl&&item.cuotas_total){
     ctEl.value=item.cuotas_total;
@@ -2504,8 +2584,8 @@ function saveG(id,which,parentId){
   const nEl=document.getElementById('g-n');
   const nombre=nEl.value.trim();
   const catTipoIdSel=nEl.dataset.catTipoId||null;
-  const presup=parseFloat(document.getElementById('g-p').value)||0;
-  const real=parseFloat(document.getElementById('g-r').value)||null;
+  const presup=moneyVal('g-p');
+  const real=moneyVal('g-r')||null;
   const metodo=document.getElementById('g-m').value;
   const paid=document.getElementById('g-pd').checked;
   const manejaCuotas=document.getElementById('g-esCuotas')?.checked||false;
@@ -2711,7 +2791,7 @@ function openPagoModal(g,which){
     +'<p style="font-size:13px;color:var(--mut);margin-bottom:10px">'+esc(nombreGasto(g))+' · '+cop(g.presupuesto)+'</p>'
     +cuotaInfo
     +'<div class="field"><label>Valor pagado</label>'
-    +'<input id="pg-val" type="number" value="'+(g.pagado_real||g.presupuesto||'')+'" placeholder="'+cop(g.presupuesto)+'"></div>'
+    +'<input id="pg-val" type="text" inputmode="numeric" value="'+moneyInputFmt(g.pagado_real||g.presupuesto)+'" placeholder="'+cop(g.presupuesto)+'" oninput="maskMoneyInput(this)"></div>'
     +mensField
     +'<div class="field"><label>Fecha de pago</label>'
     +'<input id="pg-fecha" type="date" value="'+(g.fecha_pago||hoy)+'"></div>'
@@ -2727,7 +2807,7 @@ function confirmarPago(id,which){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
   const g=list.find(x=>x.id===id);
   if(!g) return;
-  const val=parseFloat(document.getElementById('pg-val').value)||null;
+  const val=moneyVal('pg-val')||null;
   const fecha=document.getElementById('pg-fecha').value||null;
   const comp=document.getElementById('pg-comp').value.trim()||null;
   const mensEl=document.getElementById('pg-mens');
@@ -2772,8 +2852,10 @@ function openTCModal(tc){
   tcTipo=t.tipo;
   const eid=isE?t.id:'';
   const cCls=t.tipo==='Compra'?' sc':'', aCls=t.tipo==='Abono'?' sa':'';
-  const valStr=Math.abs(t.valor||0)||'';
-  const saldoStr=t.saldo!=null?t.saldo:'';
+  const valStr=moneyInputFmt(Math.abs(t.valor||0));
+  // A diferencia de los demás campos, aquí el 0 es un saldo resultante válido y distinto de
+  // "vacío" (sin definir), así que no se usa moneyInputFmt (que trata 0 como vacío).
+  const saldoStr=t.saldo!=null?Math.round(t.saldo).toLocaleString('es-CO'):'';
   const delBtn=isE?'<button class="bdel" onclick="delTC(\''+eid+'\')">Eliminar movimiento</button>':'';
   openModal('<div class="mtitle">'+(isE?'Editar movimiento':'Nuevo movimiento')+'</div>'
     +'<div class="trow2">'
@@ -2781,9 +2863,9 @@ function openTCModal(tc){
     +'<button class="topt'+aCls+'" id="oa" onclick="setTC(\'Abono\')">↓ Abono</button>'
     +'</div>'
     +'<div class="field"><label>Descripción</label><input id="tc-d" value="'+esc(t.descripcion)+'" placeholder="Gasolina, UNE..."></div>'
-    +'<div class="field"><label>Valor</label><input id="tc-v" type="number" value="'+valStr+'"></div>'
+    +'<div class="field"><label>Valor</label><input id="tc-v" type="text" inputmode="numeric" value="'+valStr+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="field"><label>Fecha</label><input id="tc-f" type="date" value="'+t.fecha+'"></div>'
-    +'<div class="field"><label>Saldo resultante (opcional)</label><input id="tc-s" type="number" value="'+saldoStr+'"></div>'
+    +'<div class="field"><label>Saldo resultante (opcional)</label><input id="tc-s" type="text" inputmode="numeric" value="'+saldoStr+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveTC(\''+eid+'\')">Guardar</button></div>'
     +delBtn);
@@ -2860,15 +2942,17 @@ function toggleTCInfo(){
 }
 
 function editTCInfo(){
-  const m=getM(), t=getTC(m), info=t.info||{fechaCorte:null,fechaPago:null,cupo:null,marca:null};
+  const m=getM(), t=getTC(m), info=t.info||{fechaCorte:null,fechaPago:null,cupo:null,marca:null,ultimos4:null};
   const marcaActual=info.marca||'Ninguna';
   const marcaOpts=TC_MARCAS.map(function(mk){return '<option value="'+mk+'"'+(mk===marcaActual?' selected':'')+'>'+mk+'</option>';}).join('');
   openModal('<div class="mtitle">Editar tarjeta</div>'
     +'<div class="field"><label>Nombre de la tarjeta</label>'
     +'<input id="tci-nombre" value="'+esc(t.nombre)+'" placeholder="Ej: BBVA, Falabella..."></div>'
     +'<div class="field"><label>Marca (opcional)</label><select id="tci-marca">'+marcaOpts+'</select></div>'
+    +'<div class="field"><label>Últimos 4 dígitos (opcional)</label>'
+    +'<input id="tci-ultimos4" maxlength="4" inputmode="numeric" value="'+(info.ultimos4||'')+'" placeholder="Ej: 9537"></div>'
     +'<div class="field"><label>Cupo total</label>'
-    +'<input id="tci-cupo" type="number" value="'+(info.cupo||'')+'" placeholder="Ej: 5000000"></div>'
+    +'<input id="tci-cupo" type="text" inputmode="numeric" value="'+moneyInputFmt(info.cupo)+'" placeholder="Ej: 5.000.000" oninput="maskMoneyInput(this)"></div>'
     +'<div class="field"><label>Fecha de corte</label>'
     +'<input id="tci-corte" type="date" value="'+(info.fechaCorte||'')+'"></div>'
     +'<div class="field"><label>Fecha de pago</label>'
@@ -2886,7 +2970,8 @@ function saveTCInfo(){
   if(nombre) t.nombre=nombre;
   const marcaSel=document.getElementById('tci-marca');
   t.info.marca=marcaSel&&marcaSel.value!=='Ninguna'?marcaSel.value:null;
-  t.info.cupo=parseFloat(document.getElementById('tci-cupo').value)||null;
+  t.info.ultimos4=(document.getElementById('tci-ultimos4').value||'').trim().replace(/\D/g,'').slice(-4)||null;
+  t.info.cupo=moneyVal('tci-cupo')||null;
   t.info.fechaCorte=document.getElementById('tci-corte').value||null;
   t.info.fechaPago=document.getElementById('tci-pago').value||null;
   save();closeModal();render();toast('Tarjeta actualizada');
@@ -2937,7 +3022,7 @@ function syncTCGrupo(m){
 function getTC(m, tcId){
   tcId = tcId || curTC || 'tc1';
   if(!m.tarjetas) m.tarjetas = {};
-  if(!m.tarjetas[tcId]) m.tarjetas[tcId] = {id:tcId, nombre:'Tarjeta', movimientos:[], info:{fechaCorte:null,fechaPago:null,cupo:null,marca:null}};
+  if(!m.tarjetas[tcId]) m.tarjetas[tcId] = {id:tcId, nombre:'Tarjeta', movimientos:[], info:{fechaCorte:null,fechaPago:null,cupo:null,marca:null,ultimos4:null}};
   return m.tarjetas[tcId];
 }
 function listTCIds(m){
@@ -2946,9 +3031,9 @@ function listTCIds(m){
 function saveTC(id){
   const m=getM(); const t=getTC(m);
   const desc=document.getElementById('tc-d').value.trim();
-  const val=parseFloat(document.getElementById('tc-v').value)||0;
+  const val=moneyVal('tc-v');
   const fecha=document.getElementById('tc-f').value;
-  const saldo=document.getElementById('tc-s').value!==''?parseFloat(document.getElementById('tc-s').value):null;
+  const saldo=document.getElementById('tc-s').value!==''?moneyVal('tc-s'):null;
   if(!desc){showAlert('Escribe una descripción');return;}
   const valor=tcTipo==='Abono'?-Math.abs(val):Math.abs(val);
   if(id){const mv=t.movimientos.find(x=>x.id===id);if(mv){mv.descripcion=desc;mv.tipo=tcTipo;mv.valor=valor;mv.fecha=fecha;mv.saldo=saldo;}}
@@ -2979,16 +3064,16 @@ function editBasico(){
     +'Ingresa los valores <b style="color:var(--txt)">totales del mes</b>. Los bonos son solo informativos.<br><br>'
     +'<b style="color:var(--txt)">'+infoTxt+'</b></p>'
     +'<div class="field"><label>Básico total mes</label>'
-    +'<input id="b-bt" type="number" value="'+(n.basico_total||'')+'"></div>'
+    +'<input id="b-bt" type="text" inputmode="numeric" value="'+moneyInputFmt(n.basico_total)+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="field"><label>Bonos total mes (solo informativo)</label>'
-    +'<input id="b-bon" type="number" value="'+(n.bonos_total||'')+'"></div>'
+    +'<input id="b-bon" type="text" inputmode="numeric" value="'+moneyInputFmt(n.bonos_total)+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveBasico()">Guardar</button></div>');
 }
 function saveBasico(){
   const m=getM(),n=m.nomina;
-  const bt =parseFloat(document.getElementById('b-bt').value)||0;
-  const bon=parseFloat(document.getElementById('b-bon').value)||0;
+  const bt =moneyVal('b-bt');
+  const bon=moneyVal('b-bon');
   n.basico_total=bt; n.bonos_total=bon;
   // Q1 y Q2 se calculan automáticamente con la fórmula
   n.basico_q1=basicoQ1({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
@@ -3016,7 +3101,7 @@ function editDed(e,lbl,i){
     +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001" value="'+(d.porcentaje||'')+'"></div>'
-    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="number" value="'+(d.valor_fijo||'')+'"></div>'
+    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" value="'+moneyInputFmt(d.valor_fijo)+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveDed(\''+lbl+'\','+i+')">Guardar</button></div>'
     +'<button class="bdel" onclick="delDed(\''+lbl+'\','+i+')">Eliminar deducción</button>');
@@ -3030,7 +3115,7 @@ function addDed(lbl){
     +'<button class="topt" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001"></div>'
-    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="number"></div>'
+    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" oninput="maskMoneyInput(this)"></div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveDed(\''+lbl+'\',-1)">Agregar</button></div>');
 }
@@ -3045,7 +3130,7 @@ function saveDed(lbl,i){
   const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2;
   const nombre=document.getElementById('d-n').value.trim();
   const pct=parseFloat(document.getElementById('d-p').value)||null;
-  const vf=parseFloat(document.getElementById('d-v').value)||null;
+  const vf=moneyVal('d-v')||null;
   if(!nombre){showAlert('Escribe un nombre');return;}
   const entry={nombre,porcentaje:pct,valor_fijo:vf,tipo:_dedTipo};
   if(i===-1)deds.push(entry);
@@ -3252,7 +3337,7 @@ function gastoTemplateForm(item){
     return '<option'+(item.metodo===m.nombre?' selected':'')+'>'+esc(m.nombre)+'</option>';
   }).join('');
   return '<div class="field"><label>Nombre</label><input id="gt-nombre" value="'+esc(item.nombre)+'" placeholder="Ej: Arriendo, Mercado..."></div>'
-    +'<div class="field"><label>Presupuesto (opcional)</label><input id="gt-presupuesto" type="number" value="'+(item.presupuesto||'')+'" placeholder="Ej: 950000"></div>'
+    +'<div class="field"><label>Presupuesto (opcional)</label><input id="gt-presupuesto" type="text" inputmode="numeric" value="'+moneyInputFmt(item.presupuesto)+'" placeholder="Ej: 950.000" oninput="maskMoneyInput(this)"></div>'
     +'<div class="field"><label>Forma de pago asociada (opcional)</label><select id="gt-metodo">'+metodoOpts+'</select></div>'
     +'<div class="field"><label>Cuotas (opcional)</label><input id="gt-cuotas" type="number" min="0" value="'+(item.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
     +'<div class="cbx-row"><input type="checkbox" id="gt-mens"'+(item.esMensualidad?' checked':'')+'>'
@@ -3277,7 +3362,7 @@ function saveNewGastoTemplate(){
   catTipos.push({
     id:uid(),
     nombre:nombre,
-    presupuesto:parseFloat(document.getElementById('gt-presupuesto').value)||null,
+    presupuesto:moneyVal('gt-presupuesto')||null,
     metodo:document.getElementById('gt-metodo').value||null,
     cuotas_total:parseInt(document.getElementById('gt-cuotas').value)||0,
     esMensualidad:document.getElementById('gt-mens').checked
@@ -3302,7 +3387,7 @@ function saveEditGastoTemplate(id){
   const nuevoNombre=document.getElementById('gt-nombre').value.trim();
   if(!nuevoNombre){showAlert('Escribe un nombre');return;}
   item.nombre=nuevoNombre;
-  item.presupuesto=parseFloat(document.getElementById('gt-presupuesto').value)||null;
+  item.presupuesto=moneyVal('gt-presupuesto')||null;
   item.metodo=document.getElementById('gt-metodo').value||null;
   item.cuotas_total=parseInt(document.getElementById('gt-cuotas').value)||0;
   item.esMensualidad=document.getElementById('gt-mens').checked;
