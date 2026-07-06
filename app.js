@@ -1021,13 +1021,19 @@ function parsePlanoImportado(jsonObj){
     rows:rows
   };
 }
+function normalizarJSONPlano(text){
+  // Corrige artefactos comunes al compartir/copiar el archivo (BOM de móviles,
+  // o una llave "{" duplicada al inicio) que de otro modo rompen JSON.parse
+  // aunque el contenido real del plano esté correcto.
+  return text.replace(/^﻿/,'').replace(/^(\s*\{\s*){2,}/,'{').trim();
+}
 function importCreditoPlan(input){
   const file=input.files[0];
   if(!file) return;
   const reader=new FileReader();
   reader.onload=function(e){
     try{
-      const parsed=JSON.parse(e.target.result);
+      const parsed=JSON.parse(normalizarJSONPlano(e.target.result));
       const plano=parsePlanoImportado(parsed);
       if(!plano){ showAlert('El archivo no tiene el formato esperado (falta "planPagos").'); input.value=''; return; }
       window._importedPlano=plano;
