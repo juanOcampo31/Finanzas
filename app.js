@@ -799,6 +799,20 @@ function generarFechasCredito(fechaInicioStr, cuotas, frecuencia){
 }
 
 function calcAmortizacion(cred){
+  // Si el crédito trae un plan de pagos IMPORTADO (montos exactos de un banco/entidad), se usa
+  // tal cual en vez de recalcularlo con la fórmula PMT interna — así el redondeo, seguro y
+  // demás conceptos propios del banco no se desalinean con el cálculo genérico de esta app.
+  if(cred.planImportado && cred.planImportado.length){
+    const rows=cred.planImportado;
+    // "valorCuota" representativo = el monto que más se repite (la mayoría de créditos reales
+    // tienen una cuota "de crucero" constante, con la primera/última ligeramente distintas).
+    const freq={};
+    rows.forEach(function(r){ freq[r.valorCuota]=(freq[r.valorCuota]||0)+1; });
+    var modaValor=rows[0].valorCuota, modaCount=0;
+    Object.keys(freq).forEach(function(v){ if(freq[v]>modaCount){ modaCount=freq[v]; modaValor=Number(v); } });
+    const totalCapital=rows.reduce(function(a,r){return a+(r.capital||0);},0);
+    return {cuotaPMT:modaValor, valorCuota:modaValor, aval:0, total:cred.valorPrestamo||totalCapital, rows:rows};
+  }
   const valorPrestamo=cred.valorPrestamo||0;
   const aval=Math.round(valorPrestamo*((cred.pctAval||0)/100));
   const total=valorPrestamo+aval;
@@ -861,9 +875,26 @@ function openCreditosMenu(){
     +'</div>');
 }
 
-function openNewCredito(){
+function openNewCredito(modo){
+  modo = modo==='importar' ? 'importar' : 'manual';
+  const pillsHtml='<div class="trow2" style="margin-bottom:14px">'
+    +'<button class="topt'+(modo==='manual'?' sc':'')+'" onclick="openNewCredito(\'manual\')">Manual</button>'
+    +'<button class="topt'+(modo==='importar'?' sa':'')+'" onclick="openNewCredito(\'importar\')">📥 Importar</button>'
+    +'</div>';
+
+  if(modo==='importar'){
+    openModal('<div class="mtitle">Nuevo crédito</div>'
+      +pillsHtml
+      +formatoPlanoCreditoHtml()
+      +'<input type="file" id="cr-import-file" accept=".json" style="display:none" onchange="importCreditoPlan(this)">'
+      +'<button class="bpri" style="width:100%;margin-top:10px" onclick="document.getElementById(\'cr-import-file\').click()">📥 Elegir archivo JSON</button>'
+      +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="openCreditosMenu()">Cancelar</button></div>');
+    return;
+  }
+
   const hoy=new Date().toISOString().slice(0,10);
   openModal('<div class="mtitle">Nuevo crédito</div>'
+    +pillsHtml
     +'<div class="field"><label>Nombre</label><input id="cr-nombre" placeholder="Ej: Crédito electrodomésticos"></div>'
     +'<div class="field"><label>Valor del préstamo</label><input id="cr-valor" type="text" inputmode="numeric" placeholder="Ej: 3.050.000" oninput="maskMoneyInput(this);updateCuotaSugerida()"></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
@@ -925,6 +956,109 @@ function saveNewCredito(){
     valorCuotaManual:cuotaManual, pagos:[]
   };
   save();closeModal();openCreditosMenu();toast('Crédito creado');
+}
+
+// HTML con un ejemplo del JSON aceptado, para estandarizar cómo se prepara/exporta el archivo
+// antes de importarlo (formato fijo: cliente.nombre, planPagos[], totales.capital). Se muestra
+// inline dentro de la pastilla "Importar" de "Nuevo crédito", no como modal aparte.
+function formatoPlanoCreditoHtml(){
+  const ejemplo=`{
+  "cliente": { "nombre": "Nombre del titular" },
+  "planPagos": [
+    { "cuota": 1, "fecha": "2026-28-02", "abonoCapital": 102536, "abonoInteres": 76734,
+      "seguroVida": 856, "otrosConceptos": 0, "capitalizacion": 0,
+      "valorCuota": 180126, "saldoParcial": 7897464 },
+    { "cuota": 2, "fecha": "2026-15-03", "abonoCapital": 103415, "abonoInteres": 66838,
+      "seguroVida": 845, "otrosConceptos": 0, "capitalizacion": 0,
+      "valorCuota": 171098, "saldoParcial": 7794049 }
+  ],
+  "totales": { "capital": 8000000 }
+}`;
+  const ejemploHtml=ejemplo.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return '<p style="font-size:12px;color:var(--mut);line-height:1.6;margin-bottom:10px">'
+    +'El archivo debe tener esta forma. Las filas con <b style="color:var(--txt)">cuota -1 o 0</b> (desembolso) se ignoran automáticamente. '
+    +'La <b style="color:var(--txt)">fecha</b> se espera como "AAAA-DD-MM" (día antes que mes, como suelen venir estos extractos), no como fecha ISO estándar.</p>'
+    +'<pre style="background:var(--bg);border:1px solid var(--brd);border-radius:var(--r2);padding:10px;font-size:11px;color:var(--txt);white-space:pre;overflow:auto;max-height:280px">'+ejemploHtml+'</pre>';
+}
+
+// ── Importar plan de pagos de un crédito (JSON exacto de un banco/entidad) ──────
+// Formato esperado: {cliente:{nombre}, planPagos:[{cuota, fecha, abonoCapital, abonoInteres,
+// seguroVida, otrosConceptos, capitalizacion, valorCuota, saldoParcial}], totales:{capital,...}}
+// Ojo: la "fecha" del banco viene como "AAAA-DD-MM" (día antes que mes), no ISO estándar.
+function convertirFechaPlanoBanco(fechaStr){
+  const partes=(fechaStr||'').split('-');
+  if(partes.length!==3) return null;
+  const anio=partes[0], dia=partes[1], mes=partes[2];
+  return anio+'-'+mes+'-'+dia;
+}
+function parsePlanoImportado(jsonObj){
+  if(!jsonObj||!Array.isArray(jsonObj.planPagos)) return null;
+  const rows=jsonObj.planPagos
+    .filter(function(p){ return p.cuota>=1; }) // excluye filas de desembolso (cuota -1, 0)
+    .map(function(p){
+      // El seguro, otros conceptos y la capitalización se suman al bucket "intereses" para
+      // que capital+intereses siga siendo igual al valor real de la cuota (mismo criterio que
+      // usa el cálculo interno de esta app, que no desglosa seguro por separado).
+      const intereses=Math.round(((p.abonoInteres||0)+(p.seguroVida||0)+(p.otrosConceptos||0)+(p.capitalizacion||0))*100)/100;
+      return {
+        numero:p.cuota,
+        fecha:convertirFechaPlanoBanco(p.fecha),
+        valorCuota:p.valorCuota||0,
+        capital:p.abonoCapital||0,
+        intereses:intereses,
+        saldo:p.saldoParcial||0
+      };
+    })
+    .sort(function(a,b){ return a.numero-b.numero; });
+  if(!rows.length) return null;
+  const totales=jsonObj.totales||{};
+  const capitalTotal=totales.capital||rows.reduce(function(a,r){return a+r.capital;},0);
+  return {
+    nombreSugerido:(jsonObj.cliente&&jsonObj.cliente.nombre)?jsonObj.cliente.nombre:'',
+    valorPrestamo:capitalTotal,
+    cuotas:rows.length,
+    fechaInicio:rows[0].fecha,
+    rows:rows
+  };
+}
+function importCreditoPlan(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const parsed=JSON.parse(e.target.result);
+      const plano=parsePlanoImportado(parsed);
+      if(!plano){ showAlert('El archivo no tiene el formato esperado (falta "planPagos").'); input.value=''; return; }
+      window._importedPlano=plano;
+      openModal('<div class="mtitle">Importar plan de pagos</div>'
+        +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
+        +'Se encontraron <b style="color:var(--txt)">'+plano.rows.length+' cuotas</b>, capital '+cop(plano.valorPrestamo)+'.<br>'
+        +'Los montos de cada cuota (capital, interés, saldo) se usarán exactamente como vienen en el archivo, sin recalcularlos.</p>'
+        +'<div class="field"><label>Nombre del crédito</label>'
+        +'<input id="cip-nombre" value="'+esc(plano.nombreSugerido||'')+'" placeholder="Ej: Crédito Bancolombia"></div>'
+        +'<div class="macts"><button class="bcnl" onclick="openNewCredito(\'importar\')">Cancelar</button>'
+        +'<button class="bpri" onclick="confirmImportCreditoPlan()">Importar</button></div>');
+    }catch(err){
+      showAlert('Error al leer el archivo: '+err.message);
+    }
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+function confirmImportCreditoPlan(){
+  const plano=window._importedPlano;
+  if(!plano) return;
+  const nombre=(document.getElementById('cip-nombre').value||'').trim();
+  if(!nombre){ showAlert('Escribe un nombre'); return; }
+  const id='cr_'+Date.now();
+  creditos[id]={
+    id:id, nombre:nombre, valorPrestamo:plano.valorPrestamo, pctAval:0,
+    cuotas:plano.cuotas, tasa:0, fechaInicio:plano.fechaInicio, frecuencia:'quincenal',
+    valorCuotaManual:null, pagos:[], planImportado:plano.rows
+  };
+  save();closeModal();openCreditosMenu();toast('Plan de pagos importado ✓');
+  window._importedPlano=null;
 }
 
 let creditoOcultarPagadas=true;
@@ -2070,10 +2204,11 @@ function renderNom(m) {
       const display = isSuma ? val : -val;
       const cls = isSuma ? 'g' : 'r';
       const sign = isSuma ? '+' : '-';
+      const credBadge=(d.creditoId&&creditos[d.creditoId])?`<span class="npct" style="color:var(--acc)">🏦 Cuota ${d.numCuota}/${creditos[d.creditoId].cuotas}</span>`:'';
       return `<div class="nrow">
         <span class="nlbl">
           <span style="font-size:11px;font-weight:700;color:var(--${isSuma?'grn':'red'})">${sign}</span>
-          ${d.nombre}${d.porcentaje?`<span class="npct">${(d.porcentaje*100).toFixed(0)}%</span>`:''}
+          ${d.nombre}${d.porcentaje?`<span class="npct">${(d.porcentaje*100).toFixed(0)}%</span>`:''}${credBadge}
           <button class="nedit" onclick="editDed(event,'${lbl}',${i})">✎</button>
         </span>
         <span class="nval ${cls}">${isSuma?'+':''}${cop(display)}</span>
@@ -3088,6 +3223,52 @@ function toggleNomDed(key){
   document.getElementById('scroll').innerHTML=renderNom(getM());
 }
 
+// Selector opcional "crédito por deducción de nómina" (ej. libranzas tipo "PrestaFE"): al
+// elegir un crédito, sugiere (sin bloquear) el valor de su próxima cuota pendiente.
+function dedCreditoFieldHtml(selectedId){
+  const ids=Object.keys(creditos);
+  if(!ids.length) return '';
+  const opts='<option value="">— Ninguno —</option>'+ids.map(function(cid){
+    var cr=creditos[cid];
+    return '<option value="'+cid+'"'+(selectedId===cid?' selected':'')+'>'+esc(cr.nombre)+'</option>';
+  }).join('');
+  return '<div class="field"><label>¿Es cuota de un crédito por nómina? (opcional)</label>'
+    +'<select id="d-credito" onchange="sugerirValorDedCredito()">'+opts+'</select></div>';
+}
+function sugerirValorDedCredito(){
+  const sel=document.getElementById('d-credito');
+  if(!sel||!sel.value) return;
+  const cr=creditos[sel.value]; if(!cr) return;
+  const amort=calcAmortizacion(cr);
+  const pagos=cr.pagos||[];
+  var idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
+  if(idx===-1) idx=amort.rows.length-1;
+  const row=amort.rows[idx];
+  const vEl=document.getElementById('d-v');
+  if(vEl) setMoneyValue(vEl,row.valorCuota);
+  const nEl=document.getElementById('d-n');
+  if(nEl && !nEl.value.trim()) nEl.value=cr.nombre;
+}
+// Encuentra la cuota libre más próxima de un crédito para vincularla a una deducción de
+// nómina, sin chocar con OTRA deducción del mismo mes ya vinculada al mismo crédito (caso de
+// un crédito quincenal con una deducción en Q1 y otra en Q2, cada una en su propia cuota).
+function siguienteCuotaLibreCredito(creditoId, nom, which, excludeIdx){
+  const cr=creditos[creditoId]; if(!cr) return null;
+  const amort=calcAmortizacion(cr);
+  const pagos=cr.pagos||[];
+  const usadas={};
+  ['ded_q1','ded_q2'].forEach(function(key){
+    (nom[key]||[]).forEach(function(d,idx){
+      if(key===(which==='q1'?'ded_q1':'ded_q2') && idx===excludeIdx) return; // es la misma deducción que se está guardando
+      if(d.creditoId===creditoId && d.numCuota) usadas[d.numCuota]=true;
+    });
+  });
+  for(var k=0;k<amort.rows.length;k++){
+    var numero=amort.rows[k].numero;
+    if(!pagos[k] && !usadas[numero]) return numero;
+  }
+  return amort.rows.length?amort.rows[amort.rows.length-1].numero:null;
+}
 function editDed(e,lbl,i){
   e.stopPropagation();
   const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2,d=deds[i];
@@ -3102,6 +3283,7 @@ function editDed(e,lbl,i){
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001" value="'+(d.porcentaje||'')+'"></div>'
     +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" value="'+moneyInputFmt(d.valor_fijo)+'" oninput="maskMoneyInput(this)"></div>'
+    +dedCreditoFieldHtml(d.creditoId||null)
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveDed(\''+lbl+'\','+i+')">Guardar</button></div>'
     +'<button class="bdel" onclick="delDed(\''+lbl+'\','+i+')">Eliminar deducción</button>');
@@ -3116,6 +3298,7 @@ function addDed(lbl){
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001"></div>'
     +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" oninput="maskMoneyInput(this)"></div>'
+    +dedCreditoFieldHtml(null)
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveDed(\''+lbl+'\',-1)">Agregar</button></div>');
 }
@@ -3133,6 +3316,18 @@ function saveDed(lbl,i){
   const vf=moneyVal('d-v')||null;
   if(!nombre){showAlert('Escribe un nombre');return;}
   const entry={nombre,porcentaje:pct,valor_fijo:vf,tipo:_dedTipo};
+  const credSel=document.getElementById('d-credito');
+  const creditoId=credSel&&credSel.value?credSel.value:null;
+  if(creditoId){
+    entry.creditoId=creditoId;
+    entry.numCuota=siguienteCuotaLibreCredito(creditoId, n, lbl.includes('Q1')?'q1':'q2', i);
+    // Es una deducción de nómina: se paga sola cada periodo, no requiere confirmación manual
+    // como un gasto — así que la cuota que le corresponde se marca pagada de una vez.
+    if(entry.numCuota){
+      const cr=creditos[creditoId];
+      if(cr){ if(!cr.pagos) cr.pagos=[]; cr.pagos[entry.numCuota-1]=true; }
+    }
+  }
   if(i===-1)deds.push(entry);
   else deds[i]=entry;
   save();closeModal();render();toast('Guardado');
@@ -3813,8 +4008,41 @@ function buildDraftMonth(){
 
   generarGastosCredito(nm);
   syncTCGrupo(nm);
+  avanzarDeduccionesCredito(nm);
 
   return {nk:nk, nm:nm};
+}
+
+// Créditos por deducción de nómina (ej. libranzas tipo "PrestaFE"): una deducción con
+// creditoId+numCuota representa la cuota de un crédito descontada directo de la nómina.
+// Al crear el mes siguiente, la cuota del mes que se cierra se da por descontada (se marca
+// pagada en el crédito) y la deducción avanza a la siguiente cuota automáticamente. Si el
+// crédito ya se terminó de pagar, la deducción se retira sola (ya no aplica ese descuento).
+function avanzarDeduccionesCredito(nm){
+  const nom=nm.nomina; if(!nom) return;
+  ['ded_q1','ded_q2'].forEach(function(key){
+    const list=nom[key]||[];
+    for(var idx=list.length-1; idx>=0; idx--){
+      var d=list[idx];
+      if(!d.creditoId || !d.numCuota) continue;
+      var cr=creditos[d.creditoId];
+      if(!cr) continue; // el crédito fue eliminado: se deja la deducción tal cual, sin poder avanzarla
+      if(!cr.pagos) cr.pagos=[];
+      cr.pagos[d.numCuota-1]=true;
+      var siguiente=d.numCuota+1;
+      if(siguiente>(cr.cuotas||0)){
+        list.splice(idx,1);
+        continue;
+      }
+      var amort=calcAmortizacion(cr);
+      var row=amort.rows.find(function(r){return r.numero===siguiente;});
+      d.numCuota=siguiente;
+      if(row) d.valor_fijo=row.valorCuota;
+      // La nueva cuota asignada también se da por pagada de una vez (deducción de nómina
+      // automática), consistente con lo que ya hace saveDed() al crear el vínculo.
+      cr.pagos[siguiente-1]=true;
+    }
+  });
 }
 
 function createMonth(){
