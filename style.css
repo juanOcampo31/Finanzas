@@ -35,7 +35,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 
 .pdias{font-size:11px}
 .du{color:var(--red)}.ds{color:var(--amb)}.do{color:var(--grn)}
-.summary{background:var(--surf);padding:10px 14px;border-bottom:1px solid var(--brd);display:grid;grid-template-columns:repeat(4,1fr);gap:5px;flex-shrink:0}
+.summary{background:var(--surf);padding:10px 14px;border-bottom:1px solid var(--brd);display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex-shrink:0}
 .stat{background:var(--bg);border-radius:var(--r2);padding:7px 6px}
 .slbl{font-size:9px;color:var(--mut);margin-bottom:2px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sval{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

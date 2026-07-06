@@ -345,7 +345,6 @@ function lockImportBackup(input){
       creditos=importedPayload.creditos||{};
       catMetodos=importedPayload.catMetodos||[];
       catTipos=importedPayload.catTipos||[];
-      catCategorias=importedPayload.catCategorias||[];
       perfilTelefono=importedPayload.telefono||'';
       // Esta ruta genera una data key COMPLETAMENTE NUEVA (la anterior se da por perdida), así
       // que cualquier número de recuperación configurado con la data key vieja ya no sirve.
@@ -597,7 +596,6 @@ function migrateMonth(m) {
 let creditos={}; // {id: {nombre, valorPrestamo, pctAval, cuotas, tasa, fechaInicio, frecuencia}}
 let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
 let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
-let catCategorias=[]; // [{id, nombre}] catálogo de categorías de gasto
 let perfilTelefono=''; // número de celular para recuperación (ver Seguridad); viaja cifrado junto al resto de los datos
 let db=null; // se puebla en loadAppData(), después de desbloquear con el PIN — nunca antes
 let sessionDataKey=null; // CryptoKey AES-256 en memoria; nunca se persiste. Cifra/descifra fin26_enc.
@@ -630,10 +628,6 @@ function loadLegacyPlaintext(){
     const rawCT = localStorage.getItem('fin26_cat_tipos');
     catTipos = rawCT ? JSON.parse(rawCT) : [];
   } catch(e) { catTipos = []; }
-  try {
-    const rawCC = localStorage.getItem('fin26_cat_categorias');
-    catCategorias = rawCC ? JSON.parse(rawCC) : [];
-  } catch(e) { catCategorias = []; }
 }
 
 // Genera la clave AES-256 que cifra los datos financieros en reposo (fin26_enc).
@@ -708,7 +702,7 @@ async function loadAppData(){
   const encRaw = localStorage.getItem('fin26_enc');
   if(encRaw){
     const payload = await decryptPayload(JSON.parse(encRaw)); // lanza si la clave no coincide
-    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; catCategorias = payload.catCategorias||[]; perfilTelefono = payload.telefono||'';
+    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||'';
   } else {
     loadLegacyPlaintext();
   }
@@ -724,12 +718,13 @@ let curM   = parseInt(localStorage.getItem('fin26m') || '0');
 let gFiltro = {'q1':'todos','q2':'todos'}; // filtro por método en Q1/Q2
 let gSort      = {'q1':'orden','q2':'orden'};  // orden activo en Q1/Q2
 let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
-let gGroupByCat= {'q1':false,'q2':false};   // vista agrupada por categoría (estilo tarjetas)
 let gGroupOpen  = {};  // group open state: {groupId: bool}
-let gCatGroupOpen = {}; // estado abierto/cerrado de los grupos de categoría en Q1/Q2: {'q1_catId': bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
 let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
+// Desgloses expandibles de cada bloque del Resumen del mes — todos colapsados por defecto.
+let statBreakdownOpen = {tarjeta:false, neto:false, gastos:false, dispQ1:false, dispQ2:false};
+const STAT_BREAKDOWN_DOM_IDS = {tarjeta:'tcBreakdown', neto:'netoBreakdown', gastos:'gastosBreakdown', dispQ1:'dispQ1Breakdown', dispQ2:'dispQ2Breakdown'};
 let lastCreatedId = null;                         // id del último gasto creado, para animación de entrada
 let nomDedOpen  = {'q1':false,'q2':false};      // deducciones nómina expandidas
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -739,7 +734,7 @@ let tcTipo = 'Compra';
 function save(){
   saveChain = saveChain.then(async function(){
     if(!sessionDataKey) return; // no debería pasar: save() solo se usa después de desbloquear
-    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, catCategorias:catCategorias, telefono:perfilTelefono});
+    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono});
     localStorage.setItem('fin26_enc', JSON.stringify(envelope));
   }).catch(function(e){ console.error('Error guardando datos cifrados', e); });
   return saveChain;
@@ -1322,6 +1317,38 @@ function calcNeto(bq, deds) {
 function netoQ1(m) { return calcNeto(basicoQ1(m), getNom(m).ded_q1); }
 function netoQ2(m) { return calcNeto(basicoQ2(m), getNom(m).ded_q2); }
 
+// Total de gastos activos (no "sin pagar") de una quincena, consciente de grupos: si el grupo
+// tiene base propia (vinculado a tarjeta o monto manual) se usa esa; si no, se suman sus subgastos.
+// Compartido entre renderGastos() y calcDisponibleQuincena() para no duplicar esta lógica.
+function calcTotalGrupoAware(activos, subMap){
+  return activos.reduce(function(a,x){
+    if(x.esGrupo){
+      var base=x.presupuesto&&x.presupuesto>0?x.presupuesto:0;
+      if(base>0) return a+base;
+      return a+(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
+    }
+    return a+Math.abs(x.presupuesto||0);
+  },0);
+}
+// Total de gastos activos de una quincena completa (mismo criterio consciente de grupos que
+// calcTotalGrupoAware). Compartido entre el Resumen del mes (Gastos Q1/Q2) y calcDisponibleQuincena.
+function calcTotalQuincena(m, which){
+  const gastos=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
+  const subMap={};
+  const topGastosAll=[];
+  for(const g of gastos){
+    if(g.parentId){ if(!subMap[g.parentId]) subMap[g.parentId]=[]; subMap[g.parentId].push(g); }
+    else topGastosAll.push(g);
+  }
+  const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
+  return calcTotalGrupoAware(activos, subMap);
+}
+// Disponible de una quincena = neto de nómina de esa quincena menos el total de gastos activos.
+function calcDisponibleQuincena(m, which){
+  const netoQ=which==='q1'?netoQ1(m):netoQ2(m);
+  return netoQ-calcTotalQuincena(m,which);
+}
+
 // ── Render principal ──────────────────────────────────────────────────────────
 function render() {
   const m=getM();
@@ -1335,20 +1362,98 @@ function render() {
 
   const nom = getNom(m);
   const n1=netoQ1(m), n2=netoQ2(m), tNom=n1+n2;
-  const tGas=[...(m.q1_gastos||[]).filter(x=>!x.sinpagar),...(m.q2_gastos||[]).filter(x=>!x.sinpagar)].reduce((a,x)=>a+Math.abs(x.presupuesto||0),0);
+  const gastosQ1=calcTotalQuincena(m,'q1');
+  const gastosQ2=calcTotalQuincena(m,'q2');
+  const tGas=gastosQ1+gastosQ2;
   const tc=Object.values(m.tarjetas||{}).flatMap(function(t){return t.movimientos||[];});
   const tcSaldo=tc.filter(x=>x.tipo==='Compra').reduce((a,x)=>a+Math.abs(x.valor||0),0)
               -tc.filter(x=>x.tipo==='Abono').reduce((a,x)=>a+Math.abs(x.valor||0),0);
+  // El disponible por quincena vive también en el Resumen del mes (siempre visible, sin
+  // importar la pestaña activa) además del badge "Disp" dentro de cada pestaña Q1/Q2.
+  const dispQ1=calcDisponibleQuincena(m,'q1');
+  const dispQ2=calcDisponibleQuincena(m,'q2');
+  const dispQ1Cls=dispQ1>=0?'sg':'sr';
+  const dispQ2Cls=dispQ2>=0?'sg':'sr';
+  // Chevrons de cada bloque expandible del resumen (▲ abierto / ▼ cerrado).
+  const chv=function(key){ return statBreakdownOpen[key]?'▲':'▼'; };
 
   document.getElementById('summary').innerHTML=`
     <div class="stat"><div class="slbl">Básico mes</div><div class="sval sb">${cop(nom.basico_total)}</div></div>
-    <div class="stat"><div class="slbl">Neto mes</div><div class="sval sg">${cop(tNom)}</div></div>
-    <div class="stat"><div class="slbl">Gastos</div><div class="sval sr">${cop(tGas)}</div></div>
-    <div class="stat"><div class="slbl">Tarjeta</div><div class="sval sa">${cop(tcSaldo)}</div></div>`;
+    <div class="stat" onclick="toggleStatBreakdown('neto')" style="cursor:pointer">
+      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Neto mes<span style="font-size:8px">${chv('neto')}</span></div>
+      <div class="sval sg">${cop(tNom)}</div>
+    </div>
+    <div class="stat" onclick="toggleStatBreakdown('gastos')" style="cursor:pointer">
+      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Gastos<span style="font-size:8px">${chv('gastos')}</span></div>
+      <div class="sval sr">${cop(tGas)}</div>
+    </div>
+    <div class="stat" onclick="toggleStatBreakdown('tarjeta')" style="cursor:pointer">
+      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Tarjeta<span style="font-size:8px">${chv('tarjeta')}</span></div>
+      <div class="sval sa">${cop(tcSaldo)}</div>
+    </div>
+    <div class="stat" onclick="toggleStatBreakdown('dispQ1')" style="cursor:pointer">
+      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Disponible Q1<span style="font-size:8px">${chv('dispQ1')}</span></div>
+      <div class="sval ${dispQ1Cls}">${dispQ1<0?'-':''}${cop(Math.abs(dispQ1))}</div>
+    </div>
+    <div class="stat" onclick="toggleStatBreakdown('dispQ2')" style="cursor:pointer">
+      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Disponible Q2<span style="font-size:8px">${chv('dispQ2')}</span></div>
+      <div class="sval ${dispQ2Cls}">${dispQ2<0?'-':''}${cop(Math.abs(dispQ2))}</div>
+    </div>`;
 
   document.getElementById('summary').style.display = summaryOpen ? 'grid' : 'none';
   const chevEl = document.getElementById('summary-chevron');
   if (chevEl) chevEl.textContent = summaryOpen ? '▲' : '▼';
+
+  // Fila simple de 2 líneas (label izq. / valor der.) para los desgloses de Neto, Gastos y
+  // Disponible — mismo estándar visual .trow/.tlbl/.tval que ya usa el resto de la app.
+  function breakdownRow(label, value, color, borderBottom){
+    return '<div class="trow" style="background:none;padding:6px 0;'+(borderBottom?'border-bottom:1px solid var(--brd)':'')+'">'
+      +'<span class="tlbl">'+label+'</span>'
+      +'<span class="tval" style="font-size:13px;color:'+color+'">'+value+'</span></div>';
+  }
+  const netoBreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Neto Q2',cop(n2),'var(--grn)',false);
+  const gastosBreakdownHtml=breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',false);
+  const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',false);
+  const dispQ2BreakdownHtml=breakdownRow('Neto Q2',cop(n2),'var(--grn)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',false);
+  [['neto',netoBreakdownHtml],['gastos',gastosBreakdownHtml],['dispQ1',dispQ1BreakdownHtml],['dispQ2',dispQ2BreakdownHtml]].forEach(function(pair){
+    var key=pair[0], html=pair[1];
+    var el=document.getElementById(STAT_BREAKDOWN_DOM_IDS[key]);
+    if(el){
+      el.innerHTML=html;
+      el.style.display=(summaryOpen&&statBreakdownOpen[key])?'block':'none';
+    }
+  });
+
+  // Carrusel de tarjetas (pendiente + disponible de cada una), oculto por defecto y
+  // desplegado al tocar el bloque "Tarjeta" del resumen — evita saturar la vista compacta.
+  const tcIdsAll=listTCIds(m);
+  const tcBreakdownHtml=tcIdsAll.length?(
+    '<div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Tarjetas</div>'
+    +'<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch">'
+    +tcIdsAll.map(function(tid){
+      var card=m.tarjetas[tid];
+      var saldoTc=calcTCSaldo(m,tid);
+      var marca=card.info&&card.info.marca;
+      var cupo=card.info&&card.info.cupo;
+      var dispTc=cupo?cupo-saldoTc:null;
+      var showDisp=!!cupo;
+      var lbl=showDisp?'Disponible':'Pendiente';
+      var val=showDisp?dispTc:saldoTc;
+      var valColor=showDisp?(val>=0?'var(--grn)':'var(--red)'):'var(--red)';
+      return '<div onclick="goToTarjeta(\''+tid+'\')" style="flex-shrink:0;width:136px;background:var(--surf2);border-radius:12px;padding:10px 12px;border-left:3px solid '+tcBrandColor(marca)+';cursor:pointer">'
+        +'<div style="min-height:16px;margin-bottom:12px">'+tcBrandBadgeHtml(marca)+'</div>'
+        +'<div style="font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px">'+esc(card.nombre)+'</div>'
+        +'<div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em">'+lbl+'</div>'
+        +'<div style="font-size:13px;font-weight:700;color:'+valColor+'">'+(val<0?'-':'')+cop(Math.abs(val))+'</div>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+  ):'<div style="padding:8px 0;font-size:12px;color:var(--mut)">Sin tarjetas</div>';
+  const tcBreakdownEl=document.getElementById('tcBreakdown');
+  if(tcBreakdownEl){
+    tcBreakdownEl.innerHTML=tcBreakdownHtml;
+    tcBreakdownEl.style.display=(summaryOpen&&statBreakdownOpen.tarjeta)?'block':'none';
+  }
 
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===curTab));
   // If month picker modal is open, refresh its content
@@ -1369,24 +1474,6 @@ function toggleGFilter(which){
   gFilterOpen[which]=!gFilterOpen[which];
   var m=getM();
   document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
-}
-
-function toggleGGroupByCat(which){
-  gGroupByCat[which]=!gGroupByCat[which];
-  var m=getM();
-  document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
-}
-
-function toggleGCatGroup(which,cid){
-  var key=which+'_'+cid;
-  gCatGroupOpen[key]=!gCatGroupOpen[key];
-  const wrap=document.getElementById('gcatd-'+key);
-  const chev=document.getElementById('gcatc-'+key);
-  if(!wrap||!chev) return;
-  const open=gCatGroupOpen[key];
-  wrap.style.display=open?'block':'none';
-  chev.style.transform=open?'rotate(90deg)':'rotate(0deg)';
-  chev.style.color=open?'var(--acc)':'var(--mut)';
 }
 
 function setGSort(which,s){
@@ -1456,15 +1543,7 @@ function renderGastos(gastos,which) {
   const topGastos=sortGastos(topGastosFiltered,which);
 
   const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
-  const total=activos.reduce(function(a,x){
-    if(x.esGrupo){
-      // Si tiene base propia (saldo tarjeta), usar esa; sino sumar subgastos
-      var base=x.presupuesto&&x.presupuesto>0?x.presupuesto:0;
-      if(base>0) return a+base;
-      return a+(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
-    }
-    return a+Math.abs(x.presupuesto||0);
-  },0);
+  const total=calcTotalGrupoAware(activos, subMap);
   const pagado=activos.reduce(function(a,x){
     if(x.esGrupo){
       var base=x.presupuesto&&x.presupuesto>0?x.presupuesto:0;
@@ -1498,7 +1577,7 @@ function renderGastos(gastos,which) {
       +'</div>'
   }
 
-  var gastoRowGiCounter=0; // índice único para ids de DOM (gg-/gc-), incremental sin importar si la vista está agrupada por categoría
+  var gastoRowGiCounter=0; // índice único para ids de DOM (gg-/gc-)
   function buildGastoRowHtml(g){
     var gi=gastoRowGiCounter++;
     if(g.esGrupo){
@@ -1564,65 +1643,7 @@ function renderGastos(gastos,which) {
       +'</div>';
   }
 
-  // Total "gastable" de un top-level gasto (grupo o simple), usado para el subtotal por categoría
-  function totalGastoTopLevel(g){
-    if(g.esGrupo){
-      var base=g.presupuesto&&g.presupuesto>0?g.presupuesto:0;
-      if(base>0) return base;
-      return (subMap[g.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
-    }
-    return Math.abs(g.presupuesto||0);
-  }
-  // Cuánto de un top-level gasto (grupo o simple) ya está pagado, usado para el subtotal por categoría
-  function pagadoGastoTopLevel(g){
-    if(g.esGrupo){
-      return (subMap[g.id]||[]).filter(function(s){return !s.sinpagar&&s.pagado_flag;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
-    }
-    return g.pagado_flag?Math.abs(g.presupuesto||0):0;
-  }
-
-  var rows;
-  if(gGroupByCat[which] && topGastos.length){
-    var catBuckets={}, catOrder=[];
-    topGastos.forEach(function(g){
-      var cid=g.categoriaId||'__sin__';
-      if(!catBuckets[cid]){ catBuckets[cid]=[]; catOrder.push(cid); }
-      catBuckets[cid].push(g);
-    });
-    // "Sin categoría" siempre al final; el resto ordenado por total descendente
-    catOrder.sort(function(a,b){
-      if(a==='__sin__') return 1;
-      if(b==='__sin__') return -1;
-      var ta=catBuckets[a].reduce(function(s,g){return s+totalGastoTopLevel(g);},0);
-      var tb=catBuckets[b].reduce(function(s,g){return s+totalGastoTopLevel(g);},0);
-      return tb-ta;
-    });
-    rows=catOrder.map(function(cid){
-      var items=catBuckets[cid];
-      var catItem=cid==='__sin__'?null:catCategorias.find(function(c){return c.id===cid;});
-      var catNombre=catItem?esc(catItem.nombre):'Sin categoría';
-      var catTotal=items.reduce(function(s,g){return s+totalGastoTopLevel(g);},0);
-      var catPagado=items.reduce(function(s,g){return s+pagadoGastoTopLevel(g);},0);
-      var catPagadoHtml=catPagado>0?'<div style="font-size:10px;color:var(--grn);margin-top:1px">Pag: '+cop(catPagado)+'</div>':'';
-      var countBadge=items.length>1?'<span class="tc-count">'+items.length+'</span>':'';
-      var itemsHtml=items.map(function(g){return buildGastoRowHtml(g);}).join('');
-      var gkey=which+'_'+cid;
-      var isOpenCat=!!gCatGroupOpen[gkey];
-      return '<div class="tc-group" id="gcatg-'+gkey+'">'
-        +'<div class="tc-group-head" onclick="toggleGCatGroup(\''+which+'\',\''+cid+'\')">'
-        +'<div class="tcic" style="background:var(--pur-d);color:var(--pur)">🏷</div>'
-        +'<div style="flex:1;min-width:0"><div class="tcdesc">'+catNombre+countBadge+'</div></div>'
-        +'<div style="text-align:right;display:flex;align-items:center;gap:8px">'
-        +'<div><div class="tcval" style="color:var(--txt)">'+cop(catTotal)+'</div>'+catPagadoHtml+'</div>'
-        +'<div class="tc-chevron" id="gcatc-'+gkey+'" style="'+(isOpenCat?'transform:rotate(90deg);color:var(--acc)':'')+'">›</div>'
-        +'</div>'
-        +'</div>'
-        +'<div class="tc-detail-wrap" id="gcatd-'+gkey+'" style="display:'+(isOpenCat?'block':'none')+'">'+itemsHtml+'</div>'
-        +'</div>';
-    }).join('');
-  } else {
-    rows=topGastos.map(function(g){ return buildGastoRowHtml(g); }).join('');
-  }
+  var rows=topGastos.map(function(g){ return buildGastoRowHtml(g); }).join('');
 
   var spNote=sinPagarTotal>0?'<span style="color:var(--amb);font-size:11px;font-weight:500;margin-left:6px">· '+cop(sinPagarTotal)+' sin pagar</span>':'';
   var dispColor=disp>=0?'grn':'red';
@@ -1684,7 +1705,6 @@ function renderGastos(gastos,which) {
     +'<span style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Progreso de pagos</span>'
     +'<div style="display:flex;align-items:center;gap:8px">'
     +'<span style="font-size:11px;font-weight:700;color:var(--txt)">'+pct+'%</span>'
-    +(catCategorias.length?'<button onclick="toggleGGroupByCat(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:'+(gGroupByCat[which]?'var(--acc)':'var(--mut)')+';display:flex;align-items:center;gap:4px">'+(gGroupByCat[which]?'🏷 Agrupado':'🏷 Agrupar')+'</button>':'')
     +'<button onclick="toggleGFilter(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px">'
     +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
     +'Filtrar '+(isOpen?'▲':'▼')
@@ -1734,7 +1754,7 @@ function convertirGrupo(id,which){
     +' onchange="var f=document.getElementById(\'grp-base-field\');var c=document.getElementById(\'grp-card-field\');'
     +'f.style.opacity=this.checked?\'0.4\':\'1\';f.style.pointerEvents=this.checked?\'none\':\'auto\';'
     +'c.style.opacity=this.checked?\'1\':\'0.4\';c.style.pointerEvents=this.checked?\'auto\':\'none\';">'
-    +'<label for="grp-linked" style="font-size:13px;color:var(--acc)">Vincular al saldo de una tarjeta</label></div>'
+    +'<label for="grp-linked" style="font-size:13px;color:var(--acc)">Asociar a saldo de tarjeta</label></div>'
     +'<div class="field" id="grp-card-field" style="'+cardOptStyle+'">'
     +'<label>Tarjeta vinculada</label>'
     +'<select id="grp-card">'+cardOpts+'</select></div>'
@@ -1803,6 +1823,19 @@ function renderTC(m) {
     +'<button onclick="openNewCard()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>'
     +'</div>';
 
+  // Disponible de tarjeta (agregado): suma de (cupo - saldo) de las tarjetas con cupo configurado.
+  // Si ninguna tarjeta tiene cupo definido, no se muestra nada (no hay límite con qué calcularlo).
+  const tarjetasConCupo=tcIds.filter(function(tid){return m.tarjetas[tid].info&&m.tarjetas[tid].info.cupo;});
+  const tcDisponibleTotal=tarjetasConCupo.length
+    ?tarjetasConCupo.reduce(function(a,tid){return a+(m.tarjetas[tid].info.cupo-calcTCSaldo(m,tid));},0)
+    :null;
+  const dispTotalRow=tcDisponibleTotal===null?'':(
+    '<div style="padding:0 14px 10px;display:flex;justify-content:space-between;align-items:center">'
+    +'<span style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Disponible tarjeta</span>'
+    +'<span style="font-size:13px;font-weight:700;color:var(--'+(tcDisponibleTotal>=0?'grn':'red')+')">'+(tcDisponibleTotal<0?'-':'')+cop(Math.abs(tcDisponibleTotal))+'</span>'
+    +'</div>'
+  );
+
   const compras=tc.filter(function(x){return x.tipo==='Compra';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
   const abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
   const saldo=compras-abonos;
@@ -1835,7 +1868,7 @@ function renderTC(m) {
     +infoBody
     +'</div>';
 
-  if(!tc.length) return cardPills+infoCard+'<div class="empty"><div class="eic">💳</div><p>Sin movimientos. Toca + para agregar.</p></div>';
+  if(!tc.length) return cardPills+dispTotalRow+infoCard+'<div class="empty"><div class="eic">💳</div><p>Sin movimientos. Toca + para agregar.</p></div>';
 
   var grupos={};
   var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
@@ -1878,7 +1911,7 @@ function renderTC(m) {
       +'</div>';
   }).join('');
 
-  return cardPills+infoCard+'<div class="card">'
+  return cardPills+dispTotalRow+infoCard+'<div class="card">'
     +'<div class="chead">'
     +'<span class="ctitle">'+esc(t.nombre)+'</span>'
     +'<div style="display:flex;gap:8px;align-items:center">'
@@ -1897,10 +1930,14 @@ function selectTC(tid){
   document.getElementById('scroll').innerHTML=renderTC(getM());
 }
 
+// Marcas disponibles para el "logo" simple mostrado en el carrusel de tarjetas del resumen.
+const TC_MARCAS=['Ninguna','Visa','Mastercard','Amex'];
 function openNewCard(){
+  const marcaOpts=TC_MARCAS.map(function(mk){return '<option value="'+mk+'">'+mk+'</option>';}).join('');
   openModal('<div class="mtitle">Nueva tarjeta</div>'
     +'<div class="field"><label>Nombre de la tarjeta</label>'
     +'<input id="newcard-nombre" placeholder="Ej: BBVA, Falabella, Visa..."></div>'
+    +'<div class="field"><label>Marca (opcional)</label><select id="newcard-marca">'+marcaOpts+'</select></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCard()">Crear</button>'
@@ -1909,10 +1946,12 @@ function openNewCard(){
 function saveNewCard(){
   const nombre=document.getElementById('newcard-nombre').value.trim();
   if(!nombre){showAlert('Escribe un nombre');return;}
+  const marcaSel=document.getElementById('newcard-marca');
+  const marca=marcaSel&&marcaSel.value!=='Ninguna'?marcaSel.value:null;
   const m=getM();
   const tid='tc'+(Object.keys(m.tarjetas||{}).length+1)+'_'+Date.now();
   if(!m.tarjetas) m.tarjetas={};
-  m.tarjetas[tid]={id:tid,nombre:nombre,movimientos:[],info:{fechaCorte:null,fechaPago:null,cupo:null}};
+  m.tarjetas[tid]={id:tid,nombre:nombre,movimientos:[],info:{fechaCorte:null,fechaPago:null,cupo:null,marca:marca}};
   curTC=tid;
   save();closeModal();render();toast('Tarjeta creada');
 }
@@ -2134,7 +2173,7 @@ function openGasto(g,which,parentId){
   const eid=isE?e.id:'';
   const wh=which||'q1';
 
-  const spLabel=wh==='q1'?'Sin pagar (mover a Q2)':'Sin pagar (solo recordatorio)';
+  const spLabel=wh==='q1'?'Mover a Q2':'Sin pagar (recordatorio)';
   const spChecked=e.sinpagar?' checked':'';
   const pdChecked=e.pagado_flag?' checked':'';
   var defaultMetodo=e.metodo||(catMetodos[0]?catMetodos[0].nombre:'');
@@ -2154,37 +2193,35 @@ function openGasto(g,which,parentId){
   }
 
   const opts=catMetodos.map(function(x){return '<option'+(defaultMetodo===x.nombre?' selected':'')+'>'+esc(x.nombre)+'</option>';}).join('');
-  const catOpts='<option value="">— Sin categoría —</option>'+catCategorias.map(function(c){
-    return '<option value="'+c.id+'"'+(e.categoriaId===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>';
-  }).join('');
 
-  // Selector opcional de plantilla de gasto (catálogo de Gastos) — solo en creación, no edición ni subgastos
+  // Selector opcional de plantilla de gasto (catálogo de Gastos) — en creación, incluidos subgastos de un grupo
   var templateField='';
-  if(!isE && !pid && catTipos.length>0){
+  if(!isE && catTipos.length>0){
     var tplOpts='<option value="">— Escribir libremente —</option>'+catTipos.map(function(t){
       return '<option value="'+t.id+'">'+esc(t.nombre)+'</option>';
     }).join('');
-    templateField='<div class="field" style="margin:0"><label>Usar gasto guardado (opcional)</label>'
+    templateField='<div class="field" style="margin-bottom:0"><label>Usar gasto guardado</label>'
       +'<select id="g-template" onchange="aplicarPlantillaGasto()">'+tplOpts+'</select></div>';
   }
 
-  // Checks con su lista/campo mostrado DEBAJO del checkbox (no en línea) — dentro de columnas
-  // angostas (Información adicional queda a la mitad del ancho) un select al lado no cabía bien.
+  // Checks con su lista/campo mostrado DEBAJO del checkbox (no en línea).
   var creditoField='';
   const creditoIds=Object.keys(creditos);
-  if(!isE && !pid && creditoIds.length>0){
+  if(!isE && creditoIds.length>0){
     var creditoOpts='<option value="">— Selecciona un crédito —</option>'+creditoIds.map(function(cid){
       var cr=creditos[cid];
       return '<option value="'+cid+'">'+esc(cr.nombre)+'</option>';
     }).join('');
     creditoField='<div class="cbx-row"><input type="checkbox" id="g-escredito" onchange="toggleCreditoField()">'
-      +'<label for="g-escredito" style="font-size:13px;color:var(--txt)">Es cuota de un crédito</label></div>'
+      +'<label for="g-escredito" style="font-size:13px;color:var(--txt)">Crédito</label></div>'
       +'<div class="field" id="g-credito-field" style="display:none;margin:-2px 0 10px">'
       +'<select id="g-credito" onchange="sugerirCuotaCredito()">'+creditoOpts+'</select></div>';
   }
 
   // Crear directamente como grupo desplegable (antes había que crear el gasto, editarlo y
   // luego "Convertir en grupo desplegable" en un tercer modal — esto lo colapsa a un solo paso).
+  // "Vincular saldo de tarjeta" y la tarjeta misma quedan indentadas para reflejar
+  // que dependen de "Agrupar subgastos" (jerarquía visual: check → sub-check → select).
   var grupoCreacionField='';
   if(!isE && !pid){
     const mNow=getM();
@@ -2195,12 +2232,12 @@ function openGasto(g,which,parentId){
       return '<option value="'+tid+'">'+esc(card.nombre)+' ('+cop(saldo)+')</option>';
     }).join('');
     grupoCreacionField='<div class="cbx-row"><input type="checkbox" id="g-esgrupo" onchange="toggleGrupoCreacionField()">'
-      +'<label for="g-esgrupo" style="font-size:13px;color:var(--acc)">Crear como grupo desplegable</label></div>'
+      +'<label for="g-esgrupo" style="font-size:13px;color:var(--acc)">Agrupar subgastos</label></div>'
       +(tcIdsNow.length>0
-        ?('<div class="cbx-row" id="g-grp-linked-row" style="display:none">'
+        ?('<div class="cbx-row" id="g-grp-linked-row" style="display:none;padding-left:24px">'
           +'<input type="checkbox" id="g-grp-linked" onchange="toggleGrupoLinkedField()">'
-          +'<label for="g-grp-linked" style="font-size:13px;color:var(--acc)">Vincular al saldo de una tarjeta</label></div>'
-          +'<div class="field" id="g-grp-card-field" style="display:none;margin:-2px 0 10px">'
+          +'<label for="g-grp-linked" style="font-size:13px;color:var(--acc)">Vincular saldo de tarjeta</label></div>'
+          +'<div class="field" id="g-grp-card-field" style="display:none;margin:-2px 0 10px;padding-left:48px">'
           +'<select id="g-grp-card">'+cardOptsNow+'</select></div>')
         :'');
   }
@@ -2227,63 +2264,82 @@ function openGasto(g,which,parentId){
   } else {
     nameFieldHtml = '<div class="field" style="margin:0"><label>Nombre</label><input id="g-n" value="'+esc(e.nombre)+'" data-cat-tipo-id="" placeholder="Arriendo, Mercado, Luz..."></div>';
   }
-  // "Usar gasto guardado" y "Nombre" van en la misma fila cuando existe la plantilla; si no
-  // existe (edición, subgastos, o sin catálogo), el Nombre ocupa toda la fila solo.
-  const nameRowHtml=templateField
-    ?('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+templateField+nameFieldHtml+'</div>')
-    :('<div style="margin-bottom:12px">'+nameFieldHtml+'</div>');
 
-  // "¿Maneja cuotas?": antes "Total cuotas"/"Cuota actual" se mostraban siempre; ahora quedan
-  // ocultas detrás de este check, igual que el resto de los checks de Información adicional.
+  // "Maneja cuotas": antes "Total cuotas"/"Cuota actual" se mostraban siempre; ahora quedan
+  // ocultas detrás de este check, igual que el resto de los checks de Características.
   const manejaCuotasChecked=e.cuotas_total>0;
   const cuotasField='<div class="cbx-row"><input type="checkbox" id="g-esCuotas"'+(manejaCuotasChecked?' checked':'')+' onchange="toggleCuotasField()">'
-    +'<label for="g-esCuotas" style="font-size:13px;color:var(--txt)">¿Maneja cuotas?</label></div>'
+    +'<label for="g-esCuotas" style="font-size:13px;color:var(--txt)">Maneja cuotas</label></div>'
     +'<div id="g-cuotas-row" style="display:'+(manejaCuotasChecked?'grid':'none')+';grid-template-columns:1fr 1fr;gap:8px;margin:-4px 0 8px">'
     +'<div class="field" style="margin:0"><label>Total cuotas</label><input id="g-ct" type="number" min="0" value="'+(e.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
     +'<div class="field" style="margin:0"><label>Cuota actual</label><input id="g-ca" type="number" min="1" value="'+( suggestedCuota||'')+'" placeholder="Auto"></div>'
     +'</div>';
 
-  // Sección "Información del gasto": nombre + presupuesto/valor real.
-  const infoGastoCard='<div class="card" style="margin-bottom:12px">'
-    +'<div class="chead"><span class="ctitle">Información del gasto</span></div>'
-    +'<div style="padding:4px 14px 12px">'
-    +nameRowHtml
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-    +'<div class="field" style="margin:0"><label>Presupuesto</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
-    +'<div class="field" style="margin:0"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
-    +'</div></div></div>';
+  // Ícono pequeño en el encabezado de cada tarjeta, referente a su contenido.
+  function cheadIcon(emoji, titulo){
+    return '<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
+      +'<div class="tcic" style="width:26px;height:26px;font-size:13px;background:var(--acc-d);color:var(--acc)">'+emoji+'</div>'
+      +'<span class="ctitle">'+titulo+'</span></div></div>';
+  }
 
-  // Sección "Clasificación": forma de pago + categoría.
-  const clasificacionCard='<div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box">'
-    +'<div class="chead"><span class="ctitle">Clasificación</span></div>'
+  // Sección "Información del gasto": Nombre/Valor y Valor real/Forma de pago en 2 columnas;
+  // "Usar gasto guardado" queda como última fila, de ancho completo.
+  const infoGastoCard='<div class="card" style="margin-bottom:12px">'
+    +cheadIcon('📄','Información del gasto')
     +'<div style="padding:4px 14px 12px">'
-    +'<div class="field"><label>F. Pago</label><select id="g-m">'+opts+'</select>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+    +nameFieldHtml
+    +'<div class="field" style="margin:0"><label>Valor</label><input id="g-p" type="number" value="'+(e.presupuesto||'')+'"></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+    +'<div class="field" style="margin:0"><label>Valor real pagado (opcional)</label><input id="g-r" type="number" value="'+(e.pagado_real||'')+'"></div>'
+    +'<div class="field" style="margin:0"><label>Forma de pago</label><select id="g-m">'+opts+'</select>'
     +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Nueva forma de pago</button></div>'
-    +'<div class="field" style="margin-bottom:0"><label>Categoría (opcional)</label><select id="g-cat">'+catOpts+'</select>'
-    +'<button onclick="event.preventDefault();openNewCategoriaInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Nueva categoría</button></div>'
+    +'</div>'
+    +templateField
     +'</div></div>';
 
-  // Sección "Información adicional": todos los checks (crédito, mensualidad, cuotas, grupo,
-  // pagado, sin pagar), al lado de Clasificación — mismo estándar visual .card/.chead.
-  const infoAdicionalCard='<div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box">'
-    +'<div class="chead"><span class="ctitle">Información adicional</span></div>'
-    +'<div style="padding:4px 14px 12px">'
+  // Sección "Características del gasto": crédito, mensualidad, cuotas.
+  const caracteristicasInner='<div style="padding:4px 14px 12px">'
     +creditoField
     +'<div class="cbx-row"><input type="checkbox" id="g-esmens"'+(e.mensualidad?' checked':'')+' onchange="toggleMensField()">'
-    +'<label for="g-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad</label></div>'
+    +'<label for="g-esmens" style="font-size:13px;color:var(--txt)">Mensualidad</label></div>'
     +'<div class="field" id="g-mens-field" style="'+(e.mensualidad?'':'display:none;')+'margin:-2px 0 10px">'
     +'<input id="g-mens" type="month" value="'+(e.mensualidad||'')+'"></div>'
     +cuotasField
-    +grupoCreacionField
-    +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Marcado como pagado</label></div>'
+    +'</div>';
+
+  // Sección "Organización del gasto": agrupar en un grupo desplegable (solo al crear un gasto
+  // de nivel superior). Se omite por completo si no aplica (edición, subgastos).
+  const showOrganizacion=!!grupoCreacionField;
+  const organizacionInner=showOrganizacion?('<div style="padding:4px 14px 12px">'+grupoCreacionField+'</div>'):'';
+
+  // Características y Organización van lado a lado; si Organización no aplica, Características
+  // ocupa el ancho completo en vez de dejar una columna vacía.
+  const caracteristicasCard='<div class="card" style="'+(showOrganizacion?'margin-bottom:0;height:100%;box-sizing:border-box':'margin-bottom:12px')+'">'
+    +cheadIcon('⚙️','Características del gasto')
+    +caracteristicasInner+'</div>';
+  const organizacionCard=showOrganizacion?(
+    '<div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box">'
+    +cheadIcon('📁','Organización del gasto')
+    +organizacionInner+'</div>'
+  ):'';
+  const caracOrgRow=showOrganizacion
+    ?('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;align-items:stretch">'+caracteristicasCard+organizacionCard+'</div>')
+    :caracteristicasCard;
+
+  // Sección "Estado del gasto": pagado / sin pagar.
+  const estadoCard='<div class="card" style="margin-bottom:12px">'
+    +cheadIcon('🚩','Estado del gasto')
+    +'<div style="padding:4px 14px 12px">'
+    +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Pagado</label></div>'
     +'<div class="cbx-row"><input type="checkbox" id="g-sp"'+spChecked+'><label for="g-sp" style="font-size:13px;color:var(--amb)">'+spLabel+'</label></div>'
     +'</div></div>';
 
   const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
     +infoGastoCard
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;align-items:stretch">'
-    +clasificacionCard+infoAdicionalCard
-    +'</div>'
+    +caracOrgRow
+    +estadoCard
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
     +delBtn+grpBtn;
@@ -2323,8 +2379,8 @@ function toggleGrupoLinkedField(){
   const cardField=document.getElementById('g-grp-card-field');
   if(!chk) return;
   if(cardField) cardField.style.display=chk.checked?'block':'none';
-  // Si se vincula a una tarjeta, el presupuesto lo calcula el saldo de la tarjeta —
-  // el campo "Presupuesto" de arriba se ignora al guardar, así que se atenúa visualmente.
+  // Si se vincula a una tarjeta, el valor lo calcula el saldo de la tarjeta —
+  // el campo "Valor" de arriba se ignora al guardar, así que se atenúa visualmente.
   const presupField=document.getElementById('g-p')?document.getElementById('g-p').closest('.field'):null;
   if(presupField){
     presupField.style.opacity=chk.checked?'.4':'1';
@@ -2384,7 +2440,6 @@ function aplicarPlantillaGasto(){
   if(!item) return;
   const pEl=document.getElementById('g-p');
   const mEl=document.getElementById('g-m');
-  const catEl=document.getElementById('g-cat');
   const ctEl=document.getElementById('g-ct');
   nEl.value=item.nombre;
   nEl.readOnly=true;
@@ -2393,8 +2448,11 @@ function aplicarPlantillaGasto(){
   nEl.dataset.catTipoId=item.id;
   if(pEl&&item.presupuesto) pEl.value=item.presupuesto;
   if(mEl&&item.metodo) mEl.value=item.metodo;
-  if(catEl&&item.categoriaId) catEl.value=item.categoriaId;
-  if(ctEl&&item.cuotas_total) ctEl.value=item.cuotas_total;
+  if(ctEl&&item.cuotas_total){
+    ctEl.value=item.cuotas_total;
+    const cuotasChk=document.getElementById('g-esCuotas');
+    if(cuotasChk){ cuotasChk.checked=true; toggleCuotasField(); }
+  }
   if(item.esMensualidad){
     document.getElementById('g-esmens').checked=true;
     toggleMensField();
@@ -2441,29 +2499,6 @@ function saveNewMetodoInline(){
   toast('Agregado. Vuelve a abrir el formulario para usarlo.');
 }
 
-function openNewCategoriaInline(){
-  openModal('<div class="mtitle">Nueva categoría</div>'
-    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Alimentación, Transporte..."></div>'
-    +'<div class="macts">'
-    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="saveNewCategoriaInline()">Guardar</button>'
-    +'</div>');
-}
-
-function saveNewCategoriaInline(){
-  const nombre=document.getElementById('cat-nombre').value.trim();
-  if(!nombre){showAlert('Escribe un nombre');return;}
-  if(catCategorias.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
-    showAlert('Ya existe esa categoría');return;
-  }
-  catCategorias.push({id:uid(),nombre:nombre});
-  save();
-  closeModal();
-  toast('Agregada. Vuelve a abrir el formulario para usarla.');
-}
-
-
-
 function saveG(id,which,parentId){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
   const nEl=document.getElementById('g-n');
@@ -2472,7 +2507,6 @@ function saveG(id,which,parentId){
   const presup=parseFloat(document.getElementById('g-p').value)||0;
   const real=parseFloat(document.getElementById('g-r').value)||null;
   const metodo=document.getElementById('g-m').value;
-  const categoriaId=document.getElementById('g-cat')?.value||null;
   const paid=document.getElementById('g-pd').checked;
   const manejaCuotas=document.getElementById('g-esCuotas')?.checked||false;
   const cuotas_total=manejaCuotas?(parseInt(document.getElementById('g-ct').value)||0):0;
@@ -2485,7 +2519,7 @@ function saveG(id,which,parentId){
   let gasto;
   if(id){
     gasto=list.find(x=>x.id===id);
-    if(gasto){gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.categoriaId=categoriaId;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;
+    if(gasto){gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;
       gasto.cuotas_total=cuotas_total||0;
       gasto.cuota_actual=cuota_actual_input||gasto.cuota_actual||0;
       gasto.fecha_pago=document.getElementById('g-fp')?.value||gasto.fecha_pago||null;
@@ -2511,13 +2545,13 @@ function saveG(id,which,parentId){
         else cuota_auto=1;
       } else { cuota_auto=1; }
     }
-    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0,mensualidad:mensualidad||null,categoriaId:categoriaId};
+    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0,mensualidad:mensualidad||null};
     if(catTipoIdSel){ gasto.catTipoId=catTipoIdSel; }
     if(creditoIdSel){
       gasto.creditoId=creditoIdSel;
       gasto.numCuota=cuota_auto||cuotas_total;
     }
-    // Crear directamente como grupo desplegable (checkbox "Crear como grupo desplegable" en
+    // Crear directamente como grupo desplegable (checkbox "Asociar a grupo desplegable" en
     // el propio formulario de creación), en vez de tener que crear el gasto, editarlo y luego
     // usar "Convertir en grupo desplegable" en un modal aparte.
     const esGrupoChk=document.getElementById('g-esgrupo');
@@ -2560,7 +2594,7 @@ function copiarGastoQ2(id) {
   const m=getM();
   const g=m.q1_gastos.find(x=>x.id===id);
   if(!g){closeModal();return;}
-  const copia={id:uid(),nombre:g.nombre,catTipoId:g.catTipoId||null,categoriaId:g.categoriaId||null,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,pagado_flag:false,sinpagar:false};
+  const copia={id:uid(),nombre:g.nombre,catTipoId:g.catTipoId||null,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,pagado_flag:false,sinpagar:false};
   m.q2_gastos.push(copia);
   save(); closeModal(); render(); toast('Copiado a Q2');
 }
@@ -2790,6 +2824,34 @@ function toggleSummary(){
   summaryOpen=!summaryOpen;
   document.getElementById('summary').style.display = summaryOpen ? 'grid' : 'none';
   document.getElementById('summary-chevron').textContent = summaryOpen ? '▲' : '▼';
+  Object.keys(STAT_BREAKDOWN_DOM_IDS).forEach(function(key){
+    var el=document.getElementById(STAT_BREAKDOWN_DOM_IDS[key]);
+    if(el) el.style.display=(summaryOpen&&statBreakdownOpen[key])?'block':'none';
+  });
+}
+function toggleStatBreakdown(key){
+  statBreakdownOpen[key]=!statBreakdownOpen[key];
+  render();
+}
+// Selecciona la tarjeta tocada en el carrusel del resumen y salta directo a la pestaña Tarjeta.
+function goToTarjeta(tid){
+  curTC=tid;
+  sw(2);
+}
+// "Logo" simple (sin imágenes externas, todo CSS/texto) para cada marca de tarjeta.
+function tcBrandBadgeHtml(marca){
+  if(marca==='Visa') return '<div style="font-style:italic;font-weight:800;font-size:14px;color:#fff;letter-spacing:.3px">VISA</div>';
+  if(marca==='Mastercard') return '<div style="display:flex;align-items:center">'
+    +'<div style="width:16px;height:16px;border-radius:50%;background:#EB001B"></div>'
+    +'<div style="width:16px;height:16px;border-radius:50%;background:#F79E1B;margin-left:-7px;opacity:.85"></div></div>';
+  if(marca==='Amex') return '<div style="display:inline-block;background:#2E77BC;color:#fff;font-weight:700;font-size:9px;padding:2px 5px;border-radius:3px;letter-spacing:.3px">AMEX</div>';
+  return '';
+}
+function tcBrandColor(marca){
+  if(marca==='Visa') return '#3B5FE0';
+  if(marca==='Mastercard') return '#F79E1B';
+  if(marca==='Amex') return '#2E77BC';
+  return 'var(--acc)';
 }
 
 function toggleTCInfo(){
@@ -2798,10 +2860,13 @@ function toggleTCInfo(){
 }
 
 function editTCInfo(){
-  const m=getM(), t=getTC(m), info=t.info||{fechaCorte:null,fechaPago:null,cupo:null};
+  const m=getM(), t=getTC(m), info=t.info||{fechaCorte:null,fechaPago:null,cupo:null,marca:null};
+  const marcaActual=info.marca||'Ninguna';
+  const marcaOpts=TC_MARCAS.map(function(mk){return '<option value="'+mk+'"'+(mk===marcaActual?' selected':'')+'>'+mk+'</option>';}).join('');
   openModal('<div class="mtitle">Editar tarjeta</div>'
     +'<div class="field"><label>Nombre de la tarjeta</label>'
     +'<input id="tci-nombre" value="'+esc(t.nombre)+'" placeholder="Ej: BBVA, Falabella..."></div>'
+    +'<div class="field"><label>Marca (opcional)</label><select id="tci-marca">'+marcaOpts+'</select></div>'
     +'<div class="field"><label>Cupo total</label>'
     +'<input id="tci-cupo" type="number" value="'+(info.cupo||'')+'" placeholder="Ej: 5000000"></div>'
     +'<div class="field"><label>Fecha de corte</label>'
@@ -2819,6 +2884,8 @@ function saveTCInfo(){
   const m=getM(); const t=getTC(m);
   const nombre=document.getElementById('tci-nombre').value.trim();
   if(nombre) t.nombre=nombre;
+  const marcaSel=document.getElementById('tci-marca');
+  t.info.marca=marcaSel&&marcaSel.value!=='Ninguna'?marcaSel.value:null;
   t.info.cupo=parseFloat(document.getElementById('tci-cupo').value)||null;
   t.info.fechaCorte=document.getElementById('tci-corte').value||null;
   t.info.fechaPago=document.getElementById('tci-pago').value||null;
@@ -2833,24 +2900,36 @@ function calcTCSaldo(m, tcId){
   var abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
   return Math.round((compras-abonos)*100)/100;
 }
+// Sincroniza TODOS los grupos vinculados a cualquier tarjeta (en Q1 y en Q2, si existen en
+// ambas). El "Abono TC" (el pago real) solo se crea/actualiza en Q2, porque la fecha sugerida
+// de pago siempre cae ahí (ver calcFechaSugerida: siempre es el último día del mes). Si el
+// mismo grupo también existe en Q1 (por ejemplo para llevar el seguimiento del saldo ahí),
+// su presupuesto se sigue sincronizando, pero no genera su propio "Abono TC" — y si quedó uno
+// de una versión anterior de la app (que sí los creaba en ambas quincenas), se elimina.
 function syncTCGrupo(m){
-  // Sincronizar TODOS los grupos vinculados a CUALQUIER tarjeta
-  [m.q1_gastos||[],m.q2_gastos||[]].forEach(function(list){
-    list.forEach(function(g){
-      if(g.esGrupo&&g.tcCardId){
-        var saldo=calcTCSaldo(m, g.tcCardId);
-        g.presupuesto=saldo;
-        var abonoGasto=list.find(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
-        if(abonoGasto){
-          if(!abonoGasto.pagado_flag) abonoGasto.presupuesto=saldo;
-        } else {
-          list.push({
-            id:uid(),nombre:'Abono TC',presupuesto:saldo,
-            metodo:g.metodo||'BBVA',pagado_real:null,pagado_flag:false,
-            sinpagar:false,parentId:g.id,esGrupo:false,tcLinked:false,
-            cuotas_total:0,cuota_actual:0
-          });
-        }
+  [{which:'q1',list:m.q1_gastos||[]},{which:'q2',list:m.q2_gastos||[]}].forEach(function(entry){
+    var which=entry.which, list=entry.list;
+    var gruposLigados=list.filter(function(g){return g.esGrupo&&g.tcCardId;});
+    if(which==='q1'){
+      gruposLigados.forEach(function(g){
+        var idx=list.findIndex(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
+        if(idx>=0) list.splice(idx,1);
+      });
+    }
+    gruposLigados.forEach(function(g){
+      var saldo=calcTCSaldo(m, g.tcCardId);
+      g.presupuesto=saldo;
+      if(which!=='q2') return;
+      var abonoGasto=list.find(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
+      if(abonoGasto){
+        if(!abonoGasto.pagado_flag) abonoGasto.presupuesto=saldo;
+      } else {
+        list.push({
+          id:uid(),nombre:'Abono TC',presupuesto:saldo,
+          metodo:g.metodo||'BBVA',pagado_real:null,pagado_flag:false,
+          sinpagar:false,parentId:g.id,esGrupo:false,tcLinked:false,
+          cuotas_total:0,cuota_actual:0
+        });
       }
     });
   });
@@ -2858,7 +2937,7 @@ function syncTCGrupo(m){
 function getTC(m, tcId){
   tcId = tcId || curTC || 'tc1';
   if(!m.tarjetas) m.tarjetas = {};
-  if(!m.tarjetas[tcId]) m.tarjetas[tcId] = {id:tcId, nombre:'Tarjeta', movimientos:[], info:{fechaCorte:null,fechaPago:null,cupo:null}};
+  if(!m.tarjetas[tcId]) m.tarjetas[tcId] = {id:tcId, nombre:'Tarjeta', movimientos:[], info:{fechaCorte:null,fechaPago:null,cupo:null,marca:null}};
   return m.tarjetas[tcId];
 }
 function listTCIds(m){
@@ -2988,19 +3067,16 @@ function openCatalogosMenu(){
     +'<div onclick="openGastoTemplates()" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer">'
     +'<span style="font-size:14px;color:var(--txt)">Gastos</span>'
     +'<span style="font-size:11px;color:var(--mut)">'+catTipos.length+' ítem(s) ›</span></div>'
-    +'<div onclick="openCatList(\'metodos\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer">'
+    +'<div onclick="openCatList(\'metodos\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer">'
     +'<span style="font-size:14px;color:var(--txt)">Formas de pago</span>'
     +'<span style="font-size:11px;color:var(--mut)">'+catMetodos.length+' ítem(s) ›</span></div>'
-    +'<div onclick="openCatList(\'categorias\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer">'
-    +'<span style="font-size:14px;color:var(--txt)">Categorías</span>'
-    +'<span style="font-size:11px;color:var(--mut)">'+catCategorias.length+' ítem(s) ›</span></div>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
 }
 
-function getCat(tipo){ return tipo==='tipos'?catTipos:tipo==='categorias'?catCategorias:catMetodos; }
-function setCat(tipo,arr){ if(tipo==='tipos') catTipos=arr; else if(tipo==='categorias') catCategorias=arr; else catMetodos=arr; }
-function catLabel(tipo){ return tipo==='tipos'?'Gasto':tipo==='categorias'?'Categoría':'Forma de pago'; }
+function getCat(tipo){ return tipo==='tipos'?catTipos:catMetodos; }
+function setCat(tipo,arr){ if(tipo==='tipos') catTipos=arr; else catMetodos=arr; }
+function catLabel(tipo){ return tipo==='tipos'?'Gasto':'Forma de pago'; }
 
 // ── Catálogo de Formas de pago (simple: solo nombre) ──────────────────────────
 function openCatList(tipo){
@@ -3074,8 +3150,8 @@ function saveEditCatItem(tipo,id){
       });
     });
   }
-  // 'categorias' y 'tipos' se referencian por id (categoriaId/catTipoId), así que
-  // renombrar el catálogo no requiere tocar los gastos existentes.
+  // 'tipos' se referencia por id (catTipoId), así que renombrar el catálogo no requiere
+  // tocar los gastos existentes.
   save();render();openCatList(tipo);toast('Actualizado');
 }
 
@@ -3093,15 +3169,6 @@ function deleteCatItem(tipo,id){
         });
       });
       save();render();openGastoTemplates();toast('Eliminado');
-    } else if(tipo==='categorias'){
-      // Los gastos que tenían esta categoría quedan sin categoría (no eliminados).
-      Object.keys(db).forEach(function(k){
-        var mes=db[k];
-        [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
-          list.forEach(function(g){ if(g.categoriaId===id){ g.categoriaId=null; } });
-        });
-      });
-      save();render();openCatList(tipo);toast('Eliminado');
     } else {
       save();openCatList(tipo);toast('Eliminado');
     }
@@ -3135,7 +3202,6 @@ function seedGastosDesdeUltimoMes(){
       nombre:g.nombre,
       presupuesto:g.presupuesto||null,
       metodo:g.metodo||null,
-      categoriaId:g.categoriaId||null,
       cuotas_total:0, // no copiamos cuotas: cada plantilla es genérica, no atada a un avance específico
       esMensualidad:!!g.mensualidad
     });
@@ -3155,10 +3221,6 @@ function openGastoTemplates(){
     var detalle=[];
     if(item.presupuesto) detalle.push(cop(item.presupuesto));
     if(item.metodo) detalle.push(esc(item.metodo));
-    if(item.categoriaId){
-      var itemCat=catCategorias.find(function(c){return c.id===item.categoriaId;});
-      if(itemCat) detalle.push('🏷 '+esc(itemCat.nombre));
-    }
     if(item.cuotas_total>0) detalle.push(item.cuotas_total+' cuotas');
     if(item.esMensualidad) detalle.push('mensualidad');
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
@@ -3185,18 +3247,13 @@ function openGastoTemplates(){
 }
 
 function gastoTemplateForm(item){
-  item = item || {nombre:'',presupuesto:'',metodo:'',cuotas_total:'',esMensualidad:false,categoriaId:null};
+  item = item || {nombre:'',presupuesto:'',metodo:'',cuotas_total:'',esMensualidad:false};
   const metodoOpts='<option value="">— Ninguna —</option>'+catMetodos.map(function(m){
     return '<option'+(item.metodo===m.nombre?' selected':'')+'>'+esc(m.nombre)+'</option>';
-  }).join('');
-  const categoriaOpts='<option value="">— Sin categoría —</option>'+catCategorias.map(function(c){
-    return '<option value="'+c.id+'"'+(item.categoriaId===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>';
   }).join('');
   return '<div class="field"><label>Nombre</label><input id="gt-nombre" value="'+esc(item.nombre)+'" placeholder="Ej: Arriendo, Mercado..."></div>'
     +'<div class="field"><label>Presupuesto (opcional)</label><input id="gt-presupuesto" type="number" value="'+(item.presupuesto||'')+'" placeholder="Ej: 950000"></div>'
     +'<div class="field"><label>Forma de pago asociada (opcional)</label><select id="gt-metodo">'+metodoOpts+'</select></div>'
-    +'<div class="field"><label>Categoría (opcional)</label><select id="gt-categoria">'+categoriaOpts+'</select>'
-    +'<button onclick="event.preventDefault();openNewCategoriaInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Crear nueva categoría</button></div>'
     +'<div class="field"><label>Cuotas (opcional)</label><input id="gt-cuotas" type="number" min="0" value="'+(item.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
     +'<div class="cbx-row"><input type="checkbox" id="gt-mens"'+(item.esMensualidad?' checked':'')+'>'
     +'<label for="gt-mens" style="font-size:13px;color:var(--txt)">Es una mensualidad (pago adelantado al mes siguiente)</label></div>';
@@ -3222,7 +3279,6 @@ function saveNewGastoTemplate(){
     nombre:nombre,
     presupuesto:parseFloat(document.getElementById('gt-presupuesto').value)||null,
     metodo:document.getElementById('gt-metodo').value||null,
-    categoriaId:document.getElementById('gt-categoria').value||null,
     cuotas_total:parseInt(document.getElementById('gt-cuotas').value)||0,
     esMensualidad:document.getElementById('gt-mens').checked
   });
@@ -3248,7 +3304,6 @@ function saveEditGastoTemplate(id){
   item.nombre=nuevoNombre;
   item.presupuesto=parseFloat(document.getElementById('gt-presupuesto').value)||null;
   item.metodo=document.getElementById('gt-metodo').value||null;
-  item.categoriaId=document.getElementById('gt-categoria').value||null;
   item.cuotas_total=parseInt(document.getElementById('gt-cuotas').value)||0;
   item.esMensualidad=document.getElementById('gt-mens').checked;
   // Integridad estricta: solo se actualizan los gastos VINCULADOS a esta plantilla
@@ -3808,7 +3863,7 @@ function openBackupMenu(){
 
 async function exportJSON(){
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,catCategorias:catCategorias,telefono:perfilTelefono});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono});
   let pin=sessionPIN;
   if(!pin){
     pin=await promptPINModal('Confirma tu PIN para cifrar el backup');
@@ -3891,7 +3946,6 @@ function importJSON(input){
         creditos: importedPayload.creditos||null,
         catMetodos: importedPayload.catMetodos||null,
         catTipos: importedPayload.catTipos||null,
-        catCategorias: importedPayload.catCategorias||null,
         telefono: importedPayload.telefono||null
       };
       openModal('<div class="mtitle">Importar backup</div>'
@@ -3920,7 +3974,6 @@ function confirmImport(){
     if(window._importedExtra.creditos) creditos=window._importedExtra.creditos;
     if(window._importedExtra.catMetodos) catMetodos=window._importedExtra.catMetodos;
     if(window._importedExtra.catTipos) catTipos=window._importedExtra.catTipos;
-    if(window._importedExtra.catCategorias) catCategorias=window._importedExtra.catCategorias;
     if(window._importedExtra.telefono) perfilTelefono=window._importedExtra.telefono;
   }
   // Reset navigation
