@@ -1,9 +1,17 @@
 // Sube este número cada vez que despliegues cambios en index.html/CSS/JS.
 // Si lo olvidas, los usuarios seguirán viendo la versión anterior offline
 // hasta que haya red disponible para revalidar.
-const CACHE_VERSION = 'v39';
+const CACHE_VERSION = '1.1';
 const CACHE = 'finanzas-' + CACHE_VERSION;
-const FILES = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const FILES = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './fonts/roboto-latin.woff2'];
+
+// La pantalla de login pregunta la versión por postMessage para mostrarla —
+// así el número en pantalla siempre coincide con la caché activa.
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'GET_VERSION' && e.source) {
+    e.source.postMessage({ type: 'VERSION', version: CACHE_VERSION });
+  }
+});
 
 self.addEventListener('install', e => {
   e.waitUntil(

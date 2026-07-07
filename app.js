@@ -1080,11 +1080,15 @@ function openCreditoDetalle(id){
   var proximaIdx=amort.rows.findIndex(function(r,i){return !pagos[i];});
   if(proximaIdx===-1) proximaIdx=amort.rows.length-1;
 
+  var cuotasPendientes=Math.max(cr.cuotas-pagadas,0);
+  var pctProgreso=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
+  var fechaFinFmt=amort.rows.length?new Date(amort.rows[amort.rows.length-1].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}):'';
+
   var rowsHtml=amort.rows.map(function(r,i){
     var pagado=!!pagos[i];
     if(ocultar && pagado) return '';
     var esProxima=(i===proximaIdx);
-    var fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
+    var fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
     return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'background:var(--acc-d)':'')+'">'
       +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:24px;height:24px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;font-size:13px">✓</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
       +'<div style="flex:1;min-width:0">'
@@ -1110,6 +1114,15 @@ function openCreditoDetalle(id){
     +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Cuota</div><div style="font-size:14px;font-weight:700;color:var(--acc)">'+cop(amort.valorCuota)+'</div></div>'
     +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div></div>'
     +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Progreso</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+pagadas+'/'+cr.cuotas+'</div></div>'
+    +'</div>'
+    +'<div style="margin-bottom:10px">'
+    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-bottom:4px">'
+    +'<span>'+(cuotasPendientes>0?cuotasPendientes+' cuotas pendientes':'Crédito pagado')+'</span>'
+    +(cuotasPendientes>0?'<span>Termina '+fechaFinFmt+'</span>':'')
+    +'</div>'
+    +'<div style="height:6px;background:var(--brd);border-radius:4px;overflow:hidden">'
+    +'<div style="height:100%;width:'+pctProgreso+'%;background:var(--acc);border-radius:4px"></div>'
+    +'</div>'
     +'</div>'
     +'<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
     +'<button onclick="toggleOcultarPagadas(\''+id+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--mut);cursor:pointer">'
@@ -1330,7 +1343,7 @@ function diasStatus(dias){
   return           {cls:'ok',     dcls:'do',txt:'en '+dias+' días'};
 }
 
-function renderPagosBanner(q1dt,q2dt){
+function renderPagosBanner(q1dt,q2dt,mInfo){
   const d1=diasHasta(q1dt), d2=diasHasta(q2dt);
   const s1=diasStatus(d1), s2=diasStatus(d2);
   const f1=q1dt.toLocaleDateString('es-CO',{day:'numeric',month:'short'});
@@ -1340,7 +1353,8 @@ function renderPagosBanner(q1dt,q2dt){
   const icInfo='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
   const icCal='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
-  // Créditos: suma de la próxima cuota pendiente de CADA crédito activo
+  // Créditos: suma de las cuotas pendientes cuya fecha cae en el mes visible.
+  // Un crédito quincenal aporta sus 2 cuotas del mes; uno mensual, solo 1.
   var creditoIds=Object.keys(creditos);
   var credLinea2='Sin créditos';
   if(creditoIds.length>0){
@@ -1349,11 +1363,14 @@ function renderPagosBanner(q1dt,q2dt){
       var cr=creditos[cid];
       var amort=calcAmortizacion(cr);
       var pagos=cr.pagos||[];
-      var idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
-      if(idx!==-1){
-        sumaCuotas += amort.rows[idx].valorCuota;
-        hayPendientes=true;
-      }
+      amort.rows.forEach(function(row,i){
+        if(pagos[i]) return;
+        var fecha=new Date(row.fecha+'T12:00:00');
+        if(mInfo && fecha.getFullYear()===mInfo.año && fecha.getMonth()===mInfo.mes){
+          sumaCuotas += row.valorCuota;
+          hayPendientes=true;
+        }
+      });
     });
     credLinea2 = hayPendientes ? cop(sumaCuotas) : 'Al día';
   }
@@ -1528,7 +1545,7 @@ function render() {
 
   const mi = MESES.indexOf(m.nombre);
   const {q1,q2} = getPago(m.año, mi>=0?mi:0);
-  document.getElementById('pbanner').innerHTML = renderPagosBanner(q1,q2);
+  document.getElementById('pbanner').innerHTML = renderPagosBanner(q1,q2,{año:m.año,mes:mi>=0?mi:0});
 
   const nom = getNom(m);
   const n1=netoQ1(m), n2=netoQ2(m), tNom=n1+n2;
@@ -4326,4 +4343,13 @@ initApp();
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.addEventListener('message', function(e){
+    if(e.data && e.data.type==='VERSION'){
+      var el=document.getElementById('lockVersion');
+      if(el) el.textContent='V '+e.data.version+' • Powered by Felipe Ocampo';
+    }
+  });
+  navigator.serviceWorker.ready.then(function(reg){
+    if(reg.active) reg.active.postMessage({type:'GET_VERSION'});
+  }).catch(function(){});
 }

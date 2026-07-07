@@ -1,6 +1,7 @@
+@font-face{font-family:"Roboto";src:url("fonts/roboto-latin.woff2") format("woff2-variations"),url("fonts/roboto-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 :root{--bg:#0F172A;--surf:#1E293B;--surf2:#253347;--brd:rgba(148,163,184,.12);--brd2:rgba(148,163,184,.22);--txt:#F1F5F9;--mut:#94A3B8;--acc:#22D3EE;--acc-d:rgba(34,211,238,.12);--grn:#34D399;--grn-d:rgba(52,211,153,.12);--red:#F87171;--red-d:rgba(248,113,113,.12);--amb:#FBBF24;--amb-d:rgba(251,191,36,.12);--pur:#A78BFA;--pur-d:rgba(167,139,250,.12);--r:12px;--r2:8px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:"Roboto",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px}
 #app{height:100%;display:flex;flex-direction:column;max-width:430px;margin:0 auto}
 .topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:10px 16px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding-top:max(10px,env(safe-area-inset-top))}
 .topbar-left{display:flex;align-items:center;gap:6px}
@@ -208,3 +209,4 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 @keyframes lock-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
 .lock-link{width:100%;margin-top:14px;padding:6px;font-size:12px;font-weight:600;color:var(--mut);background:none;border:none;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .lock-link:active{color:var(--acc)}
+.lock-version{margin-top:16px;font-size:10px;font-weight:600;color:var(--mut);opacity:.55;letter-spacing:.03em}
