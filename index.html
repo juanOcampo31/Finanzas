@@ -65,7 +65,10 @@
     <div id="lockKeypad"></div>
     <input type="file" id="lock-imp-file" accept=".json,.txt" style="display:none" onchange="lockImportBackup(this)">
     <button class="lock-link" id="lockRecoveryLink" style="display:none" onclick="showRecoveryOptions()">¿Problemas para ingresar?</button>
-    <div class="lock-version" id="lockVersion">V 1.1 &bull; Powered by Felipe Ocampo</div>
+    <!-- Texto de respaldo: debe coincidir con CACHE_VERSION en sw.js. app.js lo actualiza
+         en cuanto el service worker responde el postMessage GET_VERSION; esto es solo lo
+         que se ve mientras esa respuesta no ha llegado (o si falla). -->
+    <div class="lock-version" id="lockVersion">V 1.4 &bull; Powered by Felipe Ocampo</div>
   </div>
 </div>
 

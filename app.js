@@ -1353,26 +1353,27 @@ function renderPagosBanner(q1dt,q2dt,mInfo){
   const icInfo='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
   const icCal='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
-  // Créditos: suma de las cuotas pendientes cuya fecha cae en el mes visible.
+  // Créditos: suma de TODAS las cuotas cuya fecha cae en el mes visible, sin filtrar
+  // por "pagado". Las cuotas de deducción de nómina se marcan pagadas de inmediato al
+  // crear/avanzar la deducción (ver saveDed/avanzarDeduccionesCredito), así que filtrar
+  // por pagos[] las dejaba fuera del total aunque sí correspondan a este mes.
   // Un crédito quincenal aporta sus 2 cuotas del mes; uno mensual, solo 1.
   var creditoIds=Object.keys(creditos);
   var credLinea2='Sin créditos';
   if(creditoIds.length>0){
-    var sumaCuotas=0, hayPendientes=false;
+    var sumaCuotas=0, hayCuotasMes=false;
     creditoIds.forEach(function(cid){
       var cr=creditos[cid];
       var amort=calcAmortizacion(cr);
-      var pagos=cr.pagos||[];
-      amort.rows.forEach(function(row,i){
-        if(pagos[i]) return;
+      amort.rows.forEach(function(row){
         var fecha=new Date(row.fecha+'T12:00:00');
         if(mInfo && fecha.getFullYear()===mInfo.año && fecha.getMonth()===mInfo.mes){
           sumaCuotas += row.valorCuota;
-          hayPendientes=true;
+          hayCuotasMes=true;
         }
       });
     });
-    credLinea2 = hayPendientes ? cop(sumaCuotas) : 'Al día';
+    credLinea2 = hayCuotasMes ? cop(sumaCuotas) : 'Al día';
   }
 
   function miniCard(icon,label,fecha,sub,onclick,dcls){
@@ -4342,7 +4343,24 @@ function exportCSV(){
 initApp();
 
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  // En PWA instalada (standalone) el navegador no siempre revisa si hay un sw.js
+  // nuevo por su cuenta, y aunque lo detecte, la pestaña ya abierta no se refresca
+  // sola — por eso forzamos reg.update() al abrir/enfocar la app y recargamos una
+  // sola vez cuando el nuevo service worker toma control.
+  var swRefrescando=false;
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if(swRefrescando) return;
+    swRefrescando=true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register('sw.js').then(function(reg){
+    reg.update();
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState==='visible') reg.update();
+    });
+  }).catch(()=>{});
+
   navigator.serviceWorker.addEventListener('message', function(e){
     if(e.data && e.data.type==='VERSION'){
       var el=document.getElementById('lockVersion');
