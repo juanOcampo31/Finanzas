@@ -1,12 +1,12 @@
-// Sube este número cada vez que despliegues cambios en index.html/CSS/JS.
-// Si lo olvidas, los usuarios seguirán viendo la versión anterior offline
+﻿// Sube este n�mero cada vez que despliegues cambios en index.html/CSS/JS.
+// Si lo olvidas, los usuarios seguir�n viendo la versi�n anterior offline
 // hasta que haya red disponible para revalidar.
-const CACHE_VERSION = '1.4';
+const CACHE_VERSION = '1.5';
 const CACHE = 'finanzas-' + CACHE_VERSION;
 const FILES = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './fonts/roboto-latin.woff2'];
 
-// La pantalla de login pregunta la versión por postMessage para mostrarla —
-// así el número en pantalla siempre coincide con la caché activa.
+// La pantalla de login pregunta la versi�n por postMessage para mostrarla �
+// as� el n�mero en pantalla siempre coincide con la cach� activa.
 self.addEventListener('message', e => {
   if (e.data && e.data.type === 'GET_VERSION' && e.source) {
     e.source.postMessage({ type: 'VERSION', version: CACHE_VERSION });
@@ -29,9 +29,9 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Estrategia: cache-first con revalidación en segundo plano (stale-while-revalidate).
-// Sirve al instante desde caché (app shell) y actualiza el caché con la respuesta
-// de red para la próxima vez, sin bloquear la carga actual.
+// Estrategia: cache-first con revalidaci�n en segundo plano (stale-while-revalidate).
+// Sirve al instante desde cach� (app shell) y actualiza el cach� con la respuesta
+// de red para la pr�xima vez, sin bloquear la carga actual.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
 
@@ -45,7 +45,7 @@ self.addEventListener('fetch', e => {
           }
           return response;
         })
-        .catch(() => cached); // sin red: si había caché, ya se devolvió abajo
+        .catch(() => cached); // sin red: si hab�a cach�, ya se devolvi� abajo
 
       return cached || networkFetch;
     })
