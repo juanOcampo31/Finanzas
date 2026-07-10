@@ -560,6 +560,19 @@ function migrateMonth(m) {
   if (!Array.isArray(m.q1_gastos)) m.q1_gastos = [];
   if (!Array.isArray(m.q2_gastos)) m.q2_gastos = [];
 
+  // ── Ingresos adicionales (aparte de la nómina), asociados a Q1 o Q2 ──────────
+  if (!m.ingresos) m.ingresos = {q1:[], q2:[]};
+  if (!Array.isArray(m.ingresos.q1)) m.ingresos.q1 = [];
+  if (!Array.isArray(m.ingresos.q2)) m.ingresos.q2 = [];
+  // Migrar deducciones antiguas (una por cada ingreso, vinculadas por ingresoId) al esquema
+  // actual de una sola deducción agrupada por quincena, y recalcular su total.
+  if (m.nomina) {
+    ['ded_q1','ded_q2'].forEach(function(key){
+      if (Array.isArray(m.nomina[key])) m.nomina[key] = m.nomina[key].filter(function(d){return !d.ingresoId;});
+    });
+  }
+  ['q1','q2'].forEach(function(which){ syncIngresosDed(m, which); });
+
   // ── Migración a múltiples tarjetas ────────────────────────────────────────
   if (!m.tarjetas) {
     m.tarjetas = {};
@@ -721,6 +734,7 @@ let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
 let gGroupOpen  = {};  // group open state: {groupId: bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
+let curIngQ = 'q1'; // quincena seleccionada actualmente en la pestaña Ingresos
 let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
 // Desgloses expandibles de cada bloque del Resumen del mes — todos colapsados por defecto.
 let statBreakdownOpen = {tarjeta:false, neto:false, gastos:false, dispQ1:false, dispQ2:false};
@@ -1531,10 +1545,36 @@ function calcTotalQuincena(m, which){
   const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
   return calcTotalGrupoAware(activos, subMap, which==='q1');
 }
-// Disponible de una quincena = neto de nómina de esa quincena menos el total de gastos activos.
+// Total de ingresos adicionales (aparte de la nómina) registrados en la pestaña Ingresos
+// para una quincena dada. El total vive también como UNA sola deducción tipo "Suma" bloqueada
+// en ded_q1/ded_q2 (ver syncIngresosDed), agrupando todos los ingresos de esa quincena en un
+// único renglón — así ya está incluido en netoQ1()/netoQ2() y no se vuelve a sumar en
+// calcDisponibleQuincena (evitaría contarlo dos veces).
+function calcIngresosQuincena(m, which){
+  const lista=(m.ingresos&&m.ingresos[which])||[];
+  return lista.reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+}
+// Disponible de una quincena = neto de nómina (ya incluye los ingresos adicionales vía su
+// deducción tipo Suma) menos el total de gastos activos.
 function calcDisponibleQuincena(m, which){
   const netoQ=which==='q1'?netoQ1(m):netoQ2(m);
   return netoQ-calcTotalQuincena(m,which);
+}
+// Crea, actualiza o elimina la ÚNICA deducción tipo "Suma" en Nómina que agrupa el total de
+// todos los ingresos de una quincena (en vez de una deducción por cada ingreso). Se llama
+// cada vez que se guarda o borra un ingreso.
+function syncIngresosDed(m, which){
+  const nom=getNom(m);
+  const key=which==='q1'?'ded_q1':'ded_q2';
+  const list=nom[key]||(nom[key]=[]);
+  const idx=list.findIndex(function(d){return d.esIngresos;});
+  const total=calcIngresosQuincena(m,which);
+  if(total>0){
+    const entry={nombre:'Ingresos',porcentaje:null,valor_fijo:total,tipo:'suma',esIngresos:true};
+    if(idx>=0) list[idx]=entry; else list.push(entry);
+  } else if(idx>=0){
+    list.splice(idx,1);
+  }
 }
 
 // ── Render principal ──────────────────────────────────────────────────────────
@@ -1654,7 +1694,8 @@ function render() {
   if      (curTab===0) el.innerHTML=renderGastos(m.q1_gastos||[],'q1');
   else if (curTab===1) el.innerHTML=renderGastos(m.q2_gastos||[],'q2');
   else if (curTab===2) el.innerHTML=renderTC(m);
-  else                 el.innerHTML=renderNom(m);
+  else if (curTab===3) el.innerHTML=renderNom(m);
+  else                 el.innerHTML=renderIngresos(m);
 }
 
 // ── Gastos ───────────────────────────────────────────────────────────────────
@@ -2184,6 +2225,96 @@ function toggleTCG(gi) {
   chev.style.color=open?'var(--acc)':'var(--mut)';
 }
 
+// ── Ingresos adicionales ─────────────────────────────────────────────────────
+// Dos cuentas fijas (Q1 y Q2, una por quincena) donde se registran ingresos aparte de la
+// nómina (ej. freelance, ventas, arriendo). El total de cada quincena se agrupa en una sola
+// deducción tipo "Suma" bloqueada en Nómina (ver syncIngresosDed), así que ya queda incluido
+// en el Neto y el Disponible de esa quincena sin sumarlo dos veces.
+function renderIngresos(m){
+  const lista=(m.ingresos&&m.ingresos[curIngQ])||[];
+  const total=lista.reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  const qLabel=curIngQ==='q1'?'Q1':'Q2';
+
+  var pills='<div style="display:flex;gap:6px;overflow-x:auto;padding:10px 14px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch">'
+    +['q1','q2'].map(function(which){
+      var active=which===curIngQ;
+      var wTotal=calcIngresosQuincena(m,which);
+      return '<button onclick="selectIngQ(\''+which+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;'
+        +'background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'
+        +(which==='q1'?'Q1':'Q2')+' <span style="opacity:.75">'+cop(wTotal)+'</span></button>';
+    }).join('')
+    +'</div>';
+
+  var noteRow='<div style="padding:0 14px 10px;font-size:11px;color:var(--mut)">Se suma automáticamente al Disponible '+qLabel+' (como deducción de Nómina, no editable ahí).</div>';
+
+  if(!lista.length){
+    return pills+noteRow+'<div class="empty"><div class="eic">💰</div><p>Sin ingresos en '+qLabel+'. Toca + para agregar.</p></div>';
+  }
+
+  var sorted=[...lista].sort(function(a,b){return (b.fecha||'')>(a.fecha||'')?1:-1;});
+  var rows=sorted.map(function(x){
+    return '<div class="grow" onclick="editIngreso(\''+x.id+'\',\''+curIngQ+'\')">'
+      +'<div class="ginfo"><div class="gname">'+esc(x.nombre)+'</div><div class="gmeta">'+fmtD(x.fecha)+'</div></div>'
+      +'<div style="text-align:right"><div class="gamt" style="color:var(--grn)">+'+cop(x.valor)+'</div></div>'
+      +'</div>';
+  }).join('');
+
+  return pills+noteRow+'<div class="card">'
+    +'<div class="chead"><span class="ctitle">Ingresos '+qLabel+'</span>'
+    +'<span class="badge bg">'+cop(total)+'</span></div>'
+    +rows
+    +'</div>';
+}
+function selectIngQ(which){
+  curIngQ=which;
+  document.getElementById('scroll').innerHTML=renderIngresos(getM());
+}
+function openIngresoModal(g,which){
+  const isE=!!g;
+  const eid=isE?g.id:'';
+  const wh=which||curIngQ;
+  const hoy=new Date().toISOString().slice(0,10);
+  openModal('<div class="mtitle">'+(isE?'Editar ingreso':'Nuevo ingreso')+'</div>'
+    +'<div class="field"><label>Nombre</label><input id="ing-n" value="'+(isE?esc(g.nombre):'')+'" placeholder="Freelance, Venta, Arriendo..."></div>'
+    +'<div class="field"><label>Valor</label><input id="ing-v" type="text" inputmode="numeric" value="'+moneyInputFmt(isE?g.valor:0)+'" oninput="maskMoneyInput(this)"></div>'
+    +'<div class="field"><label>Fecha</label><input id="ing-f" type="date" value="'+(isE?(g.fecha||hoy):hoy)+'"></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="saveIngreso(\''+eid+'\',\''+wh+'\')">Guardar</button></div>'
+    +(isE?'<button class="bdel" onclick="delIngreso(\''+eid+'\',\''+wh+'\')">Eliminar ingreso</button>':''));
+}
+function saveIngreso(id,which){
+  const m=getM();
+  if(!m.ingresos) m.ingresos={q1:[],q2:[]};
+  const list=m.ingresos[which];
+  const nombre=document.getElementById('ing-n').value.trim();
+  const valor=moneyVal('ing-v');
+  const fecha=document.getElementById('ing-f').value||new Date().toISOString().slice(0,10);
+  if(!nombre){showAlert('Escribe un nombre');return;}
+  let ing;
+  if(id){
+    ing=list.find(function(x){return x.id===id;});
+    if(ing){ing.nombre=nombre;ing.valor=valor;ing.fecha=fecha;}
+  } else {
+    ing={id:uid(),nombre,valor,fecha};
+    list.push(ing);
+  }
+  syncIngresosDed(m,which);
+  save();closeModal();render();toast(id?'Ingreso actualizado':'Ingreso agregado');
+}
+function editIngreso(id,which){
+  const m=getM();
+  const g=(m.ingresos&&m.ingresos[which]||[]).find(function(x){return x.id===id;});
+  if(g) openIngresoModal(g,which);
+}
+function delIngreso(id,which){
+  showConfirm('¿Eliminar este ingreso?',function(){
+    const m=getM();
+    m.ingresos[which]=(m.ingresos[which]||[]).filter(function(x){return x.id!==id;});
+    syncIngresosDed(m,which);
+    save();closeModal();render();toast('Ingreso eliminado');
+  });
+}
+
 // ── Nómina ───────────────────────────────────────────────────────────────────
 function syncPrimaDed(m){
   const mi=MESES.indexOf(m.nombre);
@@ -2229,11 +2360,13 @@ function renderNom(m) {
       const cls = isSuma ? 'g' : 'r';
       const sign = isSuma ? '+' : '-';
       const credBadge=(d.creditoId&&creditos[d.creditoId])?`<span class="npct" style="color:var(--acc)">🏦 Cuota ${d.numCuota}/${creditos[d.creditoId].cuotas}</span>`:'';
+      const ingBadge=d.esIngresos?`<span class="npct" style="color:var(--grn);cursor:pointer" onclick="event.stopPropagation();goToIngresos('${dedKey}')">🔒 Ver detalle ›</span>`:'';
+      const editBtn=d.esIngresos?'':`<button class="nedit" onclick="editDed(event,'${lbl}',${i})">✎</button>`;
       return `<div class="nrow">
         <span class="nlbl">
           <span style="font-size:11px;font-weight:700;color:var(--${isSuma?'grn':'red'})">${sign}</span>
-          ${d.nombre}${d.porcentaje?`<span class="npct">${(d.porcentaje*100).toFixed(0)}%</span>`:''}${credBadge}
-          <button class="nedit" onclick="editDed(event,'${lbl}',${i})">✎</button>
+          ${d.nombre}${d.porcentaje?`<span class="npct">${(d.porcentaje*100).toFixed(0)}%</span>`:''}${credBadge}${ingBadge}
+          ${editBtn}
         </span>
         <span class="nval ${cls}">${isSuma?'+':''}${cop(display)}</span>
       </div>`;
@@ -2329,7 +2462,8 @@ function onFab(){
   if(curTab===0)openGasto(null,'q1');
   else if(curTab===1)openGasto(null,'q2');
   else if(curTab===2)openTCModal(null);
-  else addDed('Nómina Q1');
+  else if(curTab===3)addDed('Nómina Q1');
+  else openIngresoModal(null,curIngQ);
 }
 
 // ── CRUD Gastos ───────────────────────────────────────────────────────────────
@@ -2395,6 +2529,21 @@ function openGasto(g,which,parentId){
     }).join('');
     templateField='<div class="field" style="margin-bottom:0"><label>Usar gasto guardado</label>'
       +'<select id="g-template" onchange="aplicarPlantillaGasto()">'+tplOpts+'</select></div>';
+  }
+
+  // Mover un gasto existente (independiente o de otro grupo) a un grupo desplegable ya
+  // creado, sin tener que borrarlo y volver a crearlo como subgasto. No aplica al editar
+  // el grupo mismo (no se puede anidar un grupo dentro de otro).
+  var moverGrupoField='';
+  if(isE && !e.esGrupo){
+    const listNow2=wh==='q1'?(getM().q1_gastos||[]):(getM().q2_gastos||[]);
+    const gruposNow=listNow2.filter(function(x){return x.esGrupo&&x.id!==eid;});
+    if(gruposNow.length>0||e.parentId){
+      var grupoOpts='<option value="">— Gasto independiente (sin grupo) —</option>'+gruposNow.map(function(gr){
+        return '<option value="'+gr.id+'"'+(e.parentId===gr.id?' selected':'')+'>'+esc(nombreGasto(gr))+'</option>';
+      }).join('');
+      moverGrupoField='<div class="field"><label>Grupo</label><select id="g-grupo-destino">'+grupoOpts+'</select></div>';
+    }
   }
 
   // Checks con su lista/campo mostrado DEBAJO del checkbox (no en línea).
@@ -2494,6 +2643,7 @@ function openGasto(g,which,parentId){
 
   // Sección "Características del gasto": crédito, mensualidad, cuotas.
   const caracteristicasInner='<div style="padding:4px 14px 12px">'
+    +moverGrupoField
     +creditoField
     +'<div class="cbx-row"><input type="checkbox" id="g-esmens"'+(e.mensualidad?' checked':'')+' onchange="toggleMensField()">'
     +'<label for="g-esmens" style="font-size:13px;color:var(--txt)">Mensualidad</label></div>'
@@ -2764,6 +2914,8 @@ function saveG(id,which,parentId){
       gasto.fecha_pago=document.getElementById('g-fp')?.value||gasto.fecha_pago||null;
       gasto.comprobante=document.getElementById('g-cmp')?.value.trim()||gasto.comprobante||null;
       gasto.mensualidad=mensualidad;
+      const grupoDestinoEl=document.getElementById('g-grupo-destino');
+      if(grupoDestinoEl) gasto.parentId=grupoDestinoEl.value||null;
     }
   } else {
     // If this is a subgasto, inherit parent group's metodo
@@ -3079,6 +3231,10 @@ function goToTarjeta(tid){
   curTC=tid;
   sw(2);
 }
+function goToIngresos(which){
+  curIngQ=which;
+  sw(4);
+}
 // "Logo" simple (sin imágenes externas, todo CSS/texto) para cada marca de tarjeta.
 function tcBrandBadgeHtml(marca){
   if(marca==='Visa') return '<div style="font-style:italic;font-weight:800;font-size:14px;color:#fff;letter-spacing:.3px">VISA</div>';
@@ -3296,6 +3452,7 @@ function siguienteCuotaLibreCredito(creditoId, nom, which, excludeIdx){
 function editDed(e,lbl,i){
   e.stopPropagation();
   const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2,d=deds[i];
+  if(d.esIngresos){ toast('Los ingresos se editan desde la pestaña Ingresos'); return; }
   _dedTipo=d.tipo||'resta';
   const isSuma=d.tipo==='suma';
   const rCls=!isSuma?' sc':'', sCls=isSuma?' sa':'';
@@ -4354,11 +4511,12 @@ if('serviceWorker' in navigator){
     window.location.reload();
   });
 
-  navigator.serviceWorker.register('sw.js').then(function(reg){
+  navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(function(reg){
     reg.update();
     document.addEventListener('visibilitychange', function(){
       if(document.visibilityState==='visible') reg.update();
     });
+    window.addEventListener('pageshow', function(){ reg.update(); });
   }).catch(()=>{});
 
   navigator.serviceWorker.addEventListener('message', function(e){
