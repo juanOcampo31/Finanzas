@@ -812,6 +812,12 @@ function generarFechasCredito(fechaInicioStr, cuotas, frecuencia){
   return fechas;
 }
 
+// Los gastos ligados a un crédito se nombran/etiquetan como "Mensualidad {nombre}" en vez de
+// "Crédito {nombre}" cuando el crédito está marcado como mensualidad (colegio, transporte,
+// suscripción...), para que la descripción coincida con lo que realmente es.
+function prefijoCredito(cred){ return cred.esMensualidad?'Mensualidad ':'Crédito '; }
+function etiquetaCredito(cred){ return cred.esMensualidad?'de la mensualidad':'del crédito'; }
+
 function calcAmortizacion(cred){
   // Si el crédito trae un plan de pagos IMPORTADO (montos exactos de un banco/entidad), se usa
   // tal cual en vez de recalcularlo con la fórmula PMT interna — así el redondeo, seguro y
@@ -859,29 +865,77 @@ function calcAmortizacion(cred){
 }
 
 function openCreditosMenu(){
+  creditoDesdeGastoCtx=null; // se entra aquí por la vía normal, no desde "+ Crear crédito nuevo" de un gasto
   const ids=Object.keys(creditos);
-  var listHtml=ids.length?ids.map(function(id){
+  const ringColors=['var(--acc)','var(--pur)','var(--grn)','var(--amb)'];
+
+  var infos=ids.map(function(id,i){
     var cr=creditos[id];
     var amort=calcAmortizacion(cr);
-    var pagadas=(cr.pagos||[]).filter(function(p){return p;}).length;
-    var saldoActual=amort.rows.length?amort.rows[Math.min(pagadas,amort.rows.length-1)].saldo:0;
-    if(pagadas>=cr.cuotas) saldoActual=0;
+    var pagos=cr.pagos||[];
+    var pagadas=pagos.filter(function(p){return p;}).length;
+    // saldo actual = saldo tras la última cuota PAGADA (no la próxima a pagar)
+    var saldoActual=pagadas>=amort.rows.length?0:(pagadas>0?amort.rows[pagadas-1].saldo:amort.total);
+    var proximaIdx=amort.rows.findIndex(function(r,j){return !pagos[j];});
+    var activo=proximaIdx!==-1;
     var pct=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
-    return '<div onclick="openCreditoDetalle(\''+id+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--brd);cursor:pointer">'
-      +'<div style="flex:1">'
-      +'<div style="font-size:14px;font-weight:600;color:var(--txt)">'+esc(cr.nombre)+'</div>'
-      +'<div style="font-size:11px;color:var(--mut);margin-top:2px">'+pagadas+'/'+cr.cuotas+' cuotas · '+cop(amort.valorCuota)+' c/u</div>'
-      +'<div style="height:4px;background:var(--brd);border-radius:4px;margin-top:6px;overflow:hidden;width:200px">'
-      +'<div style="height:100%;width:'+pct+'%;background:var(--acc);border-radius:4px"></div></div>'
+    var cuotasFaltantes=Math.max(cr.cuotas-pagadas,0);
+    return {id:id,cr:cr,amort:amort,pagadas:pagadas,saldoActual:saldoActual,proximaIdx:proximaIdx,activo:activo,pct:pct,cuotasFaltantes:cuotasFaltantes,color:ringColors[i%ringColors.length]};
+  });
+
+  var activos=infos.filter(function(x){return x.activo;});
+  var saldoTotal=activos.reduce(function(a,x){return a+x.saldoActual;},0);
+  var proximo=activos.reduce(function(best,x){
+    var f=x.amort.rows[x.proximaIdx].fecha;
+    return (!best||f<best.fecha)?{fecha:f,nombre:x.cr.nombre}:best;
+  },null);
+  var proximoFmt=proximo?new Date(proximo.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
+
+  var headerHtml='<div class="summary" style="border-radius:var(--r2);margin-bottom:14px">'
+    +'<div class="stat"><div class="slbl">Activos</div><div class="sval sb">'+activos.length+'</div></div>'
+    +'<div class="stat"><div class="slbl">Saldo total</div><div class="sval">'+cop(saldoTotal)+'</div></div>'
+    +'<div class="stat"><div class="slbl">Próximo pago</div><div class="sval sb">'+proximoFmt+'</div>'+(proximo?'<div style="font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(proximo.nombre)+'</div>':'')+'</div>'
+    +'</div>';
+
+  var listHtml=infos.length?infos.map(function(x){
+    var cr=x.cr,amort=x.amort;
+    var proximaFecha=x.proximaIdx!==-1?new Date(amort.rows[x.proximaIdx].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
+    var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
+    var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
+    var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
+    return '<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:14px;margin-bottom:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+      +'<div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+esc(cr.nombre)+mensPill+'</div>'
+      +'<div style="font-size:11px;color:var(--mut);margin-top:2px">'+frecLbl+'</div></div>'
+      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;'+(x.activo?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(x.activo?'Activo':'Pagado')+'</div>'
       +'</div>'
-      +'<div style="text-align:right">'
-      +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div>'
-      +'<div style="font-size:10px;color:var(--mut)">saldo</div>'
+      +'<div style="display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--brd)">'
+      +'<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
+      +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+x.color+' '+(x.pct*3.6)+'deg,var(--brd) 0deg)"></div>'
+      +'<div style="position:absolute;inset:7px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
+      +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
+      +'<div style="font-size:8px;color:var(--mut)">Completado</div>'
+      +'</div></div>'
+      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0">'
+      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(x.saldoActual)+'</div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Próximo pago</div><div style="font-size:14px;font-weight:700;color:'+x.color+'">'+proximaFecha+'</div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
       +'</div>'
+      +'</div>'
+      +'<div style="margin-top:10px">'
+      +'<div style="height:4px;background:var(--brd);border-radius:4px;overflow:hidden">'
+      +'<div style="height:100%;width:'+x.pct+'%;background:'+x.color+';border-radius:4px"></div></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:5px">'
+      +'<span>'+x.pagadas+' / '+cr.cuotas+' cuotas pagadas</span>'
+      +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
+      +'</div></div>'
+      +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut)">›</span></button>'
       +'</div>';
   }).join(''):'<div class="empty"><div class="eic">💵</div><p>Sin créditos. Crea uno nuevo.</p></div>';
 
   openModal('<div class="mtitle">Créditos</div>'
+    +(infos.length?headerHtml:'')
     +listHtml
     +'<div class="macts" style="margin-top:14px">'
     +'<button class="bcnl" onclick="closeModal()">Cerrar</button>'
@@ -897,6 +951,9 @@ function openNewCredito(modo){
     +'</div>';
 
   if(modo==='importar'){
+    // El flujo de importar plan de banco es independiente del de "crear crédito desde un
+    // gasto" (ese solo aplica al alta manual) — se limpia el contexto para no dejarlo colgado.
+    creditoDesdeGastoCtx=null;
     openModal('<div class="mtitle">Nuevo crédito</div>'
       +pillsHtml
       +formatoPlanoCreditoHtml()
@@ -925,8 +982,10 @@ function openNewCredito(modo){
     +'<input id="cr-cuota-manual" type="text" inputmode="numeric" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this)">'
     +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
     +'</div>'
+    +'<div class="cbx-row"><input type="checkbox" id="cr-esmens"'+(creditoDesdeGastoCtx?' checked':'')+'>'
+    +'<label for="cr-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad (colegio, transporte, suscripción...)</label></div>'
     +'<div class="macts">'
-    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bcnl" onclick="creditoDesdeGastoCtx=null;closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCredito()">Crear</button>'
     +'</div>');
 }
@@ -955,21 +1014,38 @@ function updateCuotaSugerida(){
 
 function saveNewCredito(){
   const nombre=document.getElementById('cr-nombre').value.trim();
-  const valorPrestamo=moneyVal('cr-valor');
+  var valorPrestamo=moneyVal('cr-valor');
   const pctAval=parseFloat(document.getElementById('cr-aval').value)||0;
   const cuotas=parseInt(document.getElementById('cr-cuotas').value)||1;
   const tasa=parseFloat(document.getElementById('cr-tasa').value)||0;
   const fechaInicio=document.getElementById('cr-fecha').value;
   const frecuencia=document.getElementById('cr-frec').value;
   const cuotaManual=moneyVal('cr-cuota-manual')||null;
-  if(!nombre||!valorPrestamo||!cuotas||!fechaInicio){showAlert('Completa nombre, valor, cuotas y fecha de inicio');return;}
+  const esMensualidad=document.getElementById('cr-esmens')?.checked||false;
+  // Si no se indicó el valor total del préstamo pero sí la cuota fija, se calcula el valor
+  // total a partir de la cuota (cuota × cuotas, descontando el AVAL) — así basta con conocer
+  // uno de los dos para crear el crédito (ej. gastos a cuotas fijas donde solo se sabe la cuota).
+  if(!valorPrestamo && cuotaManual && cuotas){
+    valorPrestamo=Math.round(cuotaManual*cuotas/(1+pctAval/100));
+  }
+  if(!nombre||!valorPrestamo||!cuotas||!fechaInicio){showAlert('Completa nombre, valor o cuota, y fecha de inicio');return;}
   const id='cr_'+Date.now();
   creditos[id]={
     id:id, nombre:nombre, valorPrestamo:valorPrestamo, pctAval:pctAval,
     cuotas:cuotas, tasa:tasa, fechaInicio:fechaInicio, frecuencia:frecuencia,
-    valorCuotaManual:cuotaManual, pagos:[]
+    valorCuotaManual:cuotaManual, esMensualidad:esMensualidad, pagos:[]
   };
-  save();closeModal();openCreditosMenu();toast('Crédito creado');
+  // Si el crédito se creó desde "+ Crear crédito nuevo" en un gasto, se le agrega ahí mismo
+  // el gasto de la primera cuota ya vinculado, en vez de mandar al usuario a la sección de
+  // Créditos y hacerlo volver a asociarlo manualmente.
+  if(creditoDesdeGastoCtx){
+    const ctx=creditoDesdeGastoCtx; creditoDesdeGastoCtx=null;
+    crearGastoDesdeCredito(id,ctx);
+    save();closeModal();render();
+    toast('Crédito creado y gasto agregado');
+  } else {
+    save();closeModal();openCreditosMenu();toast('Crédito creado');
+  }
 }
 
 // HTML con un ejemplo del JSON aceptado, para estandarizar cómo se prepara/exporta el archivo
@@ -1174,8 +1250,8 @@ function saveNombreCredito(id){
     var mes=db[k];
     [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
       list.forEach(function(g){
-        if(g.creditoId===id && g.nombre==='Crédito '+nombreViejo){
-          g.nombre='Crédito '+nuevoNombre;
+        if(g.creditoId===id && g.nombre===prefijoCredito(cr)+nombreViejo){
+          g.nombre=prefijoCredito(cr)+nuevoNombre;
         }
       });
     });
@@ -1858,7 +1934,18 @@ function renderGastos(gastos,which) {
     var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px">🧾 '+esc(g.comprobante)+'</span>':'';
     if(g.cuotas_total>0&&g.cuota_actual>0){
       var cuotaColor=g.pagado_flag?'var(--grn)':'var(--amb)';
-      cuotaBadge='<span style="font-size:10px;font-weight:600;background:var(--surf2);color:'+cuotaColor+';padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+g.cuota_actual+'/'+g.cuotas_total+'</span>';
+      var cuotaLbl=g.cuota_actual+'/'+g.cuotas_total;
+      // Para gastos ligados a un crédito, se le agrega el mes exacto de esa cuota (según su
+      // fecha real de amortización) — así queda claro a qué mes corresponde sin tener que
+      // abrir el detalle del crédito.
+      if(g.creditoId && creditos[g.creditoId]){
+        var rowRef=calcAmortizacion(creditos[g.creditoId]).rows[g.numCuota-1];
+        if(rowRef){
+          var mesesAbrev=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+          cuotaLbl+=' · '+mesesAbrev[new Date(rowRef.fecha+'T12:00:00').getMonth()];
+        }
+      }
+      cuotaBadge='<span style="font-size:10px;font-weight:600;background:var(--surf2);color:'+cuotaColor+';padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+cuotaLbl+'</span>';
     }
     var chkCls=p?'paid':tras?'nopag':'';
     var namCls=p?'pd':tras?'np':'';
@@ -2472,7 +2559,8 @@ function sugerirCuotaCredito(){
   if(!sel) return;
   const crId=sel.value;
   if(!crId){
-    // "Ninguno" seleccionado: limpiar marcas pero dejar lo que el usuario ya escribió
+    // "Ninguno" seleccionado: limpiar la cuota sugerida y dejar lo que el usuario ya escribió
+    sel.dataset.cuota='';
     return;
   }
   const cr=creditos[crId]; if(!cr) return;
@@ -2482,15 +2570,15 @@ function sugerirCuotaCredito(){
   var idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
   if(idx===-1) idx=amort.rows.length-1; // todas pagadas: sugerir la última
   const row=amort.rows[idx];
+  // La cuota sugerida se guarda en el propio <select> (data-cuota): el formulario de gasto
+  // nuevo ya no tiene los campos "Total cuotas"/"Cuota actual" (eso ahora lo controla el
+  // crédito), así que saveG() la lee de aquí en vez de esos inputs.
+  sel.dataset.cuota=row.numero;
 
   const nEl=document.getElementById('g-n');
   const pEl=document.getElementById('g-p');
-  const ctEl=document.getElementById('g-ct');
-  const caEl=document.getElementById('g-ca');
-  if(nEl) nEl.value='Crédito '+cr.nombre;
+  if(nEl) nEl.value=prefijoCredito(cr)+cr.nombre;
   if(pEl) setMoneyValue(pEl,row.valorCuota);
-  if(ctEl) ctEl.value=cr.cuotas;
-  if(caEl) caEl.value=row.numero;
 }
 
 function openGasto(g,which,parentId){
@@ -2555,7 +2643,7 @@ function openGasto(g,which,parentId){
       return '<option value="'+cid+'">'+esc(cr.nombre)+'</option>';
     }).join('');
     creditoField='<div class="cbx-row"><input type="checkbox" id="g-escredito" onchange="toggleCreditoField()">'
-      +'<label for="g-escredito" style="font-size:13px;color:var(--txt)">Crédito</label></div>'
+      +'<label for="g-escredito" style="font-size:13px;color:var(--txt)">Asociar a crédito</label></div>'
       +'<div class="field" id="g-credito-field" style="display:none;margin:-2px 0 10px">'
       +'<select id="g-credito" onchange="sugerirCuotaCredito()">'+creditoOpts+'</select></div>';
   }
@@ -2607,15 +2695,34 @@ function openGasto(g,which,parentId){
     nameFieldHtml = '<div class="field" style="margin:0"><label>Nombre</label><input id="g-n" value="'+esc(e.nombre)+'" data-cat-tipo-id="" placeholder="Arriendo, Mercado, Luz..."></div>';
   }
 
-  // "Maneja cuotas": antes "Total cuotas"/"Cuota actual" se mostraban siempre; ahora quedan
-  // ocultas detrás de este check, igual que el resto de los checks de Características.
-  const manejaCuotasChecked=e.cuotas_total>0;
-  const cuotasField='<div class="cbx-row"><input type="checkbox" id="g-esCuotas"'+(manejaCuotasChecked?' checked':'')+' onchange="toggleCuotasField()">'
-    +'<label for="g-esCuotas" style="font-size:13px;color:var(--txt)">Maneja cuotas</label></div>'
-    +'<div id="g-cuotas-row" style="display:'+(manejaCuotasChecked?'grid':'none')+';grid-template-columns:1fr 1fr;gap:8px;margin:-4px 0 8px">'
-    +'<div class="field" style="margin:0"><label>Total cuotas</label><input id="g-ct" type="number" min="0" value="'+(e.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
-    +'<div class="field" style="margin:0"><label>Cuota actual</label><input id="g-ca" type="number" min="1" value="'+( suggestedCuota||'')+'" placeholder="Auto"></div>'
-    +'</div>';
+  // "Crear crédito nuevo": un gasto a cuotas fijas se maneja como un crédito interno con tasa 0
+  // (cuota fija, sin interés) — reutiliza todo el motor de amortización/generación mensual de
+  // créditos en vez del contador manual cuotas_total/cuota_actual de antes. Es un enlace (no un
+  // check, porque no es un estado del gasto sino una acción: navega directo a Créditos para
+  // crearlo ahí (con su plazo, frecuencia y fecha reales) y, al guardar el crédito, este mismo
+  // gasto (en la Q en la que se estaba creando) se agrega automáticamente ya vinculado — no hay
+  // que volver a este formulario. Vive en "Información del gasto" junto a nombre/valor porque
+  // es sobre ESE gasto puntual, no una característica adicional. El enlace "Ver detalle del
+  // crédito" (para gastos YA vinculados) sí va en "Características del gasto", porque describe
+  // una característica del gasto (está atado a un crédito), no un dato propio suyo. Los gastos
+  // legacy (con cuotas_total pero sin creditoId) conservan el editor manual de siempre.
+  var cuotasField='';
+  var crearCreditoLinkHtml='';
+  var verCreditoDetalleHtml='';
+  if(e.creditoId && creditos[e.creditoId]){
+    verCreditoDetalleHtml='<button onclick="event.preventDefault();closeModal();openCreditoDetalle(\''+e.creditoId+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-bottom:10px">🏦 Ver detalle '+etiquetaCredito(creditos[e.creditoId])+' · '+esc(creditos[e.creditoId].nombre)+'</button>';
+  } else if(!isE){
+    crearCreditoLinkHtml='<button onclick="event.preventDefault();irCrearCreditoDesdeGasto(\''+wh+'\',\''+pid+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-top:4px">+ Crear crédito nuevo (cuotas fijas)</button>';
+  } else {
+    // Gasto legacy con cuotas_total>0 (creado antes de la migración): se conserva editable.
+    const manejaCuotasChecked=e.cuotas_total>0;
+    cuotasField='<div class="cbx-row"><input type="checkbox" id="g-esCuotas"'+(manejaCuotasChecked?' checked':'')+' onchange="toggleCuotasField()">'
+      +'<label for="g-esCuotas" style="font-size:13px;color:var(--txt)">Maneja cuotas</label></div>'
+      +'<div id="g-cuotas-row" data-disp="grid" style="display:'+(manejaCuotasChecked?'grid':'none')+';grid-template-columns:1fr 1fr;gap:8px;margin:-4px 0 8px">'
+      +'<div class="field" style="margin:0"><label>Total cuotas</label><input id="g-ct" type="number" min="0" value="'+(e.cuotas_total||'')+'" placeholder="Ej: 10"></div>'
+      +'<div class="field" style="margin:0"><label>Cuota actual</label><input id="g-ca" type="number" min="1" value="'+( suggestedCuota||'')+'" placeholder="Auto"></div>'
+      +'</div>';
+  }
 
   // Ícono pequeño en el encabezado de cada tarjeta, referente a su contenido.
   function cheadIcon(emoji, titulo){
@@ -2639,16 +2746,14 @@ function openGasto(g,which,parentId){
     +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Nueva forma de pago</button></div>'
     +'</div>'
     +templateField
+    +crearCreditoLinkHtml
     +'</div></div>';
 
-  // Sección "Características del gasto": crédito, mensualidad, cuotas.
+  // Sección "Características del gasto": crédito, cuotas.
   const caracteristicasInner='<div style="padding:4px 14px 12px">'
     +moverGrupoField
     +creditoField
-    +'<div class="cbx-row"><input type="checkbox" id="g-esmens"'+(e.mensualidad?' checked':'')+' onchange="toggleMensField()">'
-    +'<label for="g-esmens" style="font-size:13px;color:var(--txt)">Mensualidad</label></div>'
-    +'<div class="field" id="g-mens-field" style="'+(e.mensualidad?'':'display:none;')+'margin:-2px 0 10px">'
-    +'<input id="g-mens" type="month" value="'+(e.mensualidad||'')+'"></div>'
+    +verCreditoDetalleHtml
     +cuotasField
     +'</div>';
 
@@ -2693,22 +2798,46 @@ function toggleCuotasField(){
   const chk=document.getElementById('g-esCuotas');
   const row=document.getElementById('g-cuotas-row');
   if(!chk||!row) return;
-  row.style.display=chk.checked?'grid':'none';
+  row.style.display=chk.checked?(row.dataset.disp||'grid'):'none';
 }
 
-function toggleMensField(){
-  const chk=document.getElementById('g-esmens');
-  const wrap=document.getElementById('g-mens-field');
-  const field=document.getElementById('g-mens');
-  if(!chk||!wrap||!field) return;
-  wrap.style.display=chk.checked?'block':'none';
-  if(chk.checked && !field.value){
-    var now=new Date();
-    var y=now.getFullYear(), m=now.getMonth()+2;
-    if(m>12){m=1;y++;}
-    field.value=y+'-'+(m<10?'0':'')+m;
-  }
+// Al marcar "Crear crédito nuevo" en un gasto nuevo, se abandona este formulario y se abre
+// directamente "Nuevo crédito" (con nombre y cuota precargados si ya se habían escrito), para
+// que el crédito se cree con sus datos reales (plazo, frecuencia, fecha) en vez de un mini-form
+// aparte dentro del gasto. Se guarda en qué Q (y grupo, si aplica) se estaba creando el gasto
+// para que, al guardar el crédito, saveNewCredito() cree ahí mismo el gasto ya vinculado —
+// el usuario no tiene que volver a este formulario ni usar "Asociar a crédito" manualmente.
+let creditoDesdeGastoCtx=null;
+function irCrearCreditoDesdeGasto(which,parentId){
+  const nombreVal=document.getElementById('g-n')?.value.trim()||'';
+  const valorVal=moneyVal('g-p');
+  const metodoVal=document.getElementById('g-m')?.value||'';
+  creditoDesdeGastoCtx={which:which||'q1',parentId:parentId||null,metodo:metodoVal};
+  openNewCredito('manual');
+  const crNombre=document.getElementById('cr-nombre');
+  if(crNombre&&nombreVal) crNombre.value=nombreVal;
+  const crCuotaManual=document.getElementById('cr-cuota-manual');
+  if(crCuotaManual&&valorVal>0) setMoneyValue(crCuotaManual,valorVal);
 }
+
+// Crea el gasto de la primera cuota de un crédito recién creado, ya vinculado (creditoId/
+// numCuota), en la Q donde el usuario venía trabajando — mismo shape que genera
+// generarGastosCredito() para los meses siguientes, así el badge "N/M · mes" es consistente.
+function crearGastoDesdeCredito(creditoId,ctx){
+  const cr=creditos[creditoId]; if(!cr) return;
+  const amort=calcAmortizacion(cr);
+  const row=amort.rows[0];
+  const m=getM(),list=ctx.which==='q1'?m.q1_gastos:m.q2_gastos;
+  const gasto={
+    id:uid(),nombre:prefijoCredito(cr)+cr.nombre,presupuesto:row.valorCuota,
+    metodo:ctx.metodo||(catMetodos[0]?catMetodos[0].nombre:''),
+    pagado_real:null,pagado_flag:false,sinpagar:false,parentId:ctx.parentId||null,
+    cuotas_total:cr.cuotas,cuota_actual:1,creditoId:creditoId,numCuota:1,mensualidad:null
+  };
+  list.push(gasto);
+  lastCreatedId=gasto.id;
+}
+
 
 function toggleGrupoCreacionField(){
   const chk=document.getElementById('g-esgrupo');
@@ -2842,10 +2971,6 @@ function aplicarPlantillaGasto(){
     const cuotasChk=document.getElementById('g-esCuotas');
     if(cuotasChk){ cuotasChk.checked=true; toggleCuotasField(); }
   }
-  if(item.esMensualidad){
-    document.getElementById('g-esmens').checked=true;
-    toggleMensField();
-  }
   let note=document.getElementById('g-n-note-dyn');
   if(!note){
     note=document.createElement('div');
@@ -2898,9 +3023,8 @@ function saveG(id,which,parentId){
   const metodo=document.getElementById('g-m').value;
   const paid=document.getElementById('g-pd').checked;
   const manejaCuotas=document.getElementById('g-esCuotas')?.checked||false;
-  const cuotas_total=manejaCuotas?(parseInt(document.getElementById('g-ct').value)||0):0;
-  const cuota_actual_input=manejaCuotas?(parseInt(document.getElementById('g-ca').value)||0):0;
-  const mensualidad=document.getElementById('g-mens')?.value||null;
+  const cuotas_total=manejaCuotas?(parseInt(document.getElementById('g-ct')?.value)||0):0;
+  const cuota_actual_input=manejaCuotas?(parseInt(document.getElementById('g-ca')?.value)||0):0;
   const sinpagar=document.getElementById('g-sp')?.checked||false;
   const creditoSel=document.getElementById('g-credito');
   const creditoIdSel=creditoSel?creditoSel.value||null:null;
@@ -2909,11 +3033,15 @@ function saveG(id,which,parentId){
   if(id){
     gasto=list.find(x=>x.id===id);
     if(gasto){gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;
-      gasto.cuotas_total=cuotas_total||0;
-      gasto.cuota_actual=cuota_actual_input||gasto.cuota_actual||0;
+      // El editor de "Total cuotas"/"Cuota actual" solo existe en el formulario para gastos
+      // legacy sin creditoId — si el gasto está ligado a un crédito ese bloque ni se renderiza,
+      // así que no hay que tocar cuotas_total/cuota_actual (los controla el crédito).
+      if(document.getElementById('g-esCuotas')){
+        gasto.cuotas_total=cuotas_total||0;
+        gasto.cuota_actual=cuota_actual_input||gasto.cuota_actual||0;
+      }
       gasto.fecha_pago=document.getElementById('g-fp')?.value||gasto.fecha_pago||null;
       gasto.comprobante=document.getElementById('g-cmp')?.value.trim()||gasto.comprobante||null;
-      gasto.mensualidad=mensualidad;
       const grupoDestinoEl=document.getElementById('g-grupo-destino');
       if(grupoDestinoEl) gasto.parentId=grupoDestinoEl.value||null;
     }
@@ -2936,11 +3064,20 @@ function saveG(id,which,parentId){
         else cuota_auto=1;
       } else { cuota_auto=1; }
     }
-    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0,mensualidad:mensualidad||null};
+    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0};
     if(catTipoIdSel){ gasto.catTipoId=catTipoIdSel; }
     if(creditoIdSel){
       gasto.creditoId=creditoIdSel;
-      gasto.numCuota=cuota_auto||cuotas_total;
+      // sugerirCuotaCredito() guarda la cuota sugerida en el <select> (data-cuota) al elegir
+      // el crédito; si por algo no quedó (ej. el usuario nunca disparó el onchange), se cae
+      // al viejo cálculo por cuotas_total como respaldo.
+      const cuotaDesdeSel=parseInt(creditoSel?.dataset.cuota)||0;
+      gasto.numCuota=cuotaDesdeSel||cuota_auto||cuotas_total||1;
+      // cuotas_total/cuota_actual también se completan aquí (aunque el gasto no "maneje
+      // cuotas" por sí mismo) para que la fila muestre el badge "N/M · mes" igual que los
+      // gastos que genera generarGastosCredito() automáticamente los meses siguientes.
+      var crAsoc=creditos[creditoIdSel];
+      if(crAsoc){ gasto.cuotas_total=crAsoc.cuotas; gasto.cuota_actual=gasto.numCuota; }
     }
     // Crear directamente como grupo desplegable (checkbox "Asociar a grupo desplegable" en
     // el propio formulario de creación), en vez de tener que crear el gasto, editarlo y luego
@@ -4078,7 +4215,7 @@ function generarGastosCredito(nm){
         if(!yaExiste){
           list.push({
             id:uid(),
-            nombre:'Crédito '+cr.nombre,
+            nombre:prefijoCredito(cr)+cr.nombre,
             presupuesto:row.valorCuota,
             metodo:'Nequi',
             pagado_real:null,
