@@ -392,11 +392,21 @@ function executeWipeAll(){
   location.reload();
 }
 
-// Vuelve a bloquear la app al pasar a segundo plano; al volver, exige el PIN de nuevo.
+// Punto medio: NO se bloquea al instante al pasar a segundo plano (cambiar de app, apagar
+// pantalla, etc.), pero sí se vuelve a pedir el PIN si al regresar ya pasaron 5+ minutos
+// en segundo plano. Menos de 5 min → sigue desbloqueada tal cual la dejaste.
+const AUTO_LOCK_MS = 5*60*1000;
+let bgHiddenAt = null;
 document.addEventListener('visibilitychange', function(){
   if(document.hidden){
-    if(appUnlocked) appUnlocked=false;
-  } else if(!appUnlocked && pinIsConfigured()){
+    bgHiddenAt = Date.now();
+    return;
+  }
+  if(appUnlocked && bgHiddenAt!=null && (Date.now()-bgHiddenAt) >= AUTO_LOCK_MS){
+    appUnlocked=false; sessionPIN=null;
+  }
+  bgHiddenAt = null;
+  if(!appUnlocked && pinIsConfigured()){
     showLockOverlay('unlock');
   }
 });
