@@ -737,8 +737,9 @@ let tcInfoOpen  = false;                        // info tarjeta expandida
 let curIngQ = 'q1'; // quincena seleccionada actualmente en la pestaña Ingresos
 let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
 // Desgloses expandibles de cada bloque del Resumen del mes — todos colapsados por defecto.
-let statBreakdownOpen = {tarjeta:false, neto:false, gastos:false, dispQ1:false, dispQ2:false};
-const STAT_BREAKDOWN_DOM_IDS = {tarjeta:'tcBreakdown', neto:'netoBreakdown', gastos:'gastosBreakdown', dispQ1:'dispQ1Breakdown', dispQ2:'dispQ2Breakdown'};
+// Cada pill además navega a su pestaña correspondiente al seleccionarse (ver selectStat()).
+let statBreakdownOpen = {basico:false, ingresos:false, gastos:false, tarjeta:false, dispQ1:false, dispQ2:false};
+const STAT_BREAKDOWN_DOM_IDS = {basico:'basicoBreakdown', ingresos:'netoBreakdown', gastos:'gastosBreakdown', tarjeta:'tcBreakdown', dispQ1:'dispQ1Breakdown', dispQ2:'dispQ2Breakdown'};
 let lastCreatedId = null;                         // id del último gasto creado, para animación de entrada
 let nomDedOpen  = {'q1':false,'q2':false};      // deducciones nómina expandidas
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -891,11 +892,48 @@ function openCreditosMenu(){
   },null);
   var proximoFmt=proximo?new Date(proximo.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
 
-  var headerHtml='<div class="summary" style="border-radius:var(--r2);margin-bottom:14px">'
+  // Próximo pago (pill expandible): colapsado muestra cantidad de créditos con pago
+  // pendiente + la fecha más cercana; expandido lista cada crédito con su próxima
+  // cuota, ordenados priorizando el estado (vencido/urgente primero) y, dentro del
+  // mismo estado, por % completado descendente (más avanzados primero, los que
+  // recién empiezan / con más tiempo por delante al final).
+  var proximoPagoList=activos.map(function(x){
+    var row=x.amort.rows[x.proximaIdx];
+    var dias=diasHasta(row.fecha+'T12:00:00');
+    // diasStatus() asume que una fecha pasada ya fue pagada (válido para Q1/Q2 de
+    // nómina), pero acá solo llegan cuotas SIN marcar como pagadas (pagos[i] false),
+    // así que si la fecha ya pasó, la cuota está vencida, no pagada.
+    var st=diasStatus(dias);
+    if(dias<0) st=Object.assign({},st,{txt:'Vencido'});
+    return {id:x.id,nombre:x.cr.nombre,fecha:row.fecha,valorCuota:row.valorCuota,pct:x.pct,st:st};
+  });
+  var CRED_ESTADO_ORDEN={urgent:0,soon:1,ok:2};
+  proximoPagoList.sort(function(a,b){
+    var oa=CRED_ESTADO_ORDEN[a.st.cls], ob=CRED_ESTADO_ORDEN[b.st.cls];
+    if(oa!==ob) return oa-ob;
+    return b.pct-a.pct;
+  });
+  var proximoPagoExpandHtml=proximoPagoList.map(function(p){
+    var f=new Date(p.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
+    return '<div class="cal-event" onclick="closeModal();openCreditoDetalle(\''+p.id+'\')">'
+      +'<div class="cal-ev-left">'
+      +'<div class="cal-ev-dot" style="background:var(--'+(p.st.dcls==='du'?'red':p.st.dcls==='ds'?'amb':'grn')+')"></div>'
+      +'<div>'
+      +'<div class="cal-ev-name">'+esc(p.nombre)+'</div>'
+      +'<div class="cal-ev-sub">'+f+' · '+p.pct+'% completado</div>'
+      +'</div></div>'
+      +'<div class="cal-ev-right">'
+      +'<div class="cal-ev-amt">'+cop(p.valorCuota)+'</div>'
+      +'<div class="cal-ev-status '+p.st.dcls+'">'+p.st.txt+'</div>'
+      +'</div></div>';
+  }).join('');
+
+  var headerHtml='<div class="summary" style="border-radius:var(--r2);margin-bottom:'+(activos.length?'0':'14px')+'">'
     +'<div class="stat"><div class="slbl">Activos</div><div class="sval sb">'+activos.length+'</div></div>'
     +'<div class="stat"><div class="slbl">Saldo total</div><div class="sval">'+cop(saldoTotal)+'</div></div>'
-    +'<div class="stat"><div class="slbl">Próximo pago</div><div class="sval sb">'+proximoFmt+'</div>'+(proximo?'<div style="font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(proximo.nombre)+'</div>':'')+'</div>'
-    +'</div>';
+    +'<div class="stat" style="cursor:pointer" onclick="toggleCredProxPago()"><div class="slbl">Próximo pago</div><div class="sval sb">'+proximoFmt+'</div>'+(activos.length?'<div style="font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+activos.length+(activos.length===1?' crédito ▾':' créditos ▾')+'</div>':'')+'</div>'
+    +'</div>'
+    +(activos.length?'<div class="cal-event-list" id="credpp-expand" style="display:none;margin:0 0 14px">'+proximoPagoExpandHtml+'</div>':'');
 
   var listHtml=infos.length?infos.map(function(x){
     var cr=x.cr,amort=x.amort;
@@ -941,6 +979,12 @@ function openCreditosMenu(){
     +'<button class="bcnl" onclick="closeModal()">Cerrar</button>'
     +'<button class="bpri" onclick="openNewCredito()">＋ Nuevo crédito</button>'
     +'</div>');
+}
+
+function toggleCredProxPago(){
+  const el=document.getElementById('credpp-expand');
+  if(!el) return;
+  el.style.display=el.style.display==='none'?'block':'none';
 }
 
 function openNewCredito(modo){
@@ -1636,6 +1680,26 @@ function calcDisponibleQuincena(m, which){
   const netoQ=which==='q1'?netoQ1(m):netoQ2(m);
   return netoQ-calcTotalQuincena(m,which);
 }
+// Cuotas de crédito vencidas dentro de una quincena: gastos ligados a un crédito, sin
+// marcar como pagados ni "sin pagar" (movidos a la otra quincena), cuya propia fecha de
+// amortización ya pasó. Se evalúa por la fecha de CADA cuota, no por si es "la próxima
+// pendiente" del crédito según cr.pagos (ese cruce puede desincronizarse y hacía que una
+// cuota con fecha futura, ej. 31 de julio, apareciera vencida solo por depender del
+// estado de otra cuota del mismo crédito).
+function calcVencidosQuincena(m, which){
+  const gastos=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
+  const out=[];
+  gastos.forEach(function(g){
+    if(!g.creditoId || !creditos[g.creditoId]) return;
+    if(g.pagado_flag || g.sinpagar) return;
+    var cr=creditos[g.creditoId];
+    var rowRef=calcAmortizacion(cr).rows[g.numCuota-1];
+    if(!rowRef) return;
+    if(diasHasta(rowRef.fecha+'T12:00:00')>=0) return;
+    out.push({id:g.id,nombre:g.nombre,valorCuota:rowRef.valorCuota,numCuota:g.numCuota,cuotasTotal:g.cuotas_total||cr.cuotas});
+  });
+  return out;
+}
 // Crea, actualiza o elimina la ÚNICA deducción tipo "Suma" en Nómina que agrupa el total de
 // todos los ingresos de una quincena (en vez de una deducción por cada ingreso). Se llama
 // cada vez que se guarda o borra un ingreso.
@@ -1665,7 +1729,8 @@ function render() {
   document.getElementById('pbanner').innerHTML = renderPagosBanner(q1,q2,{año:m.año,mes:mi>=0?mi:0});
 
   const nom = getNom(m);
-  const n1=netoQ1(m), n2=netoQ2(m), tNom=n1+n2;
+  const n1=netoQ1(m), n2=netoQ2(m);
+  const bas1=basicoQ1(m), bas2=basicoQ2(m);
   const gastosQ1=calcTotalQuincena(m,'q1');
   const gastosQ2=calcTotalQuincena(m,'q2');
   const tGas=gastosQ1+gastosQ2;
@@ -1678,48 +1743,55 @@ function render() {
   const dispQ2=calcDisponibleQuincena(m,'q2');
   const dispQ1Cls=dispQ1>=0?'sg':'sr';
   const dispQ2Cls=dispQ2>=0?'sg':'sr';
-  // Chevrons de cada bloque expandible del resumen (▲ abierto / ▼ cerrado).
+  const vencQ1=calcVencidosQuincena(m,'q1');
+  const vencQ2=calcVencidosQuincena(m,'q2');
+  const alertaHtml=' <span title="Cuota de crédito vencida" style="color:var(--red)">⚠️</span>';
+  // Total de ingresos del mes = suma de los ingresos registrados en ambas quincenas
+  // (pestaña Ingresos), no el neto de nómina.
+  const ingQ1=calcIngresosQuincena(m,'q1'), ingQ2=calcIngresosQuincena(m,'q2');
+  const tIngresos=ingQ1+ingQ2;
+  // Chevron (▲ abierto / ▼ cerrado) y marca visual del pill actualmente seleccionado/expandido.
   const chv=function(key){ return statBreakdownOpen[key]?'▲':'▼'; };
+  const selSt=function(key){ return statBreakdownOpen[key]?'box-shadow:inset 0 0 0 1.5px var(--acc);background:var(--surf2)':''; };
+  // Cada pill navega a su pestaña (selectStat) y además despliega su propio desglose
+  // in-place, quedando marcado como seleccionado mientras esté expandido.
+  function pillHtml(key,tabIdx,label,valHtml){
+    var onclick=tabIdx==null?'toggleStatBreakdown(\''+key+'\')':'selectStat(\''+key+'\','+tabIdx+')';
+    return '<div class="stat" onclick="'+onclick+'" style="cursor:pointer;'+selSt(key)+'">'
+      +'<div class="slbl" style="display:flex;justify-content:space-between;align-items:center">'+label+'<span style="font-size:8px">'+chv(key)+'</span></div>'
+      +valHtml+'</div>';
+  }
 
-  document.getElementById('summary').innerHTML=`
-    <div class="stat"><div class="slbl">Básico mes</div><div class="sval sb">${cop(nom.basico_total)}</div></div>
-    <div class="stat" onclick="toggleStatBreakdown('neto')" style="cursor:pointer">
-      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Neto mes<span style="font-size:8px">${chv('neto')}</span></div>
-      <div class="sval sg">${cop(tNom)}</div>
-    </div>
-    <div class="stat" onclick="toggleStatBreakdown('gastos')" style="cursor:pointer">
-      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Gastos<span style="font-size:8px">${chv('gastos')}</span></div>
-      <div class="sval sr">${cop(tGas)}</div>
-    </div>
-    <div class="stat" onclick="toggleStatBreakdown('tarjeta')" style="cursor:pointer">
-      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Tarjeta<span style="font-size:8px">${chv('tarjeta')}</span></div>
-      <div class="sval sa">${cop(tcSaldo)}</div>
-    </div>
-    <div class="stat" onclick="toggleStatBreakdown('dispQ1')" style="cursor:pointer">
-      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Disponible Q1<span style="font-size:8px">${chv('dispQ1')}</span></div>
-      <div class="sval ${dispQ1Cls}">${dispQ1<0?'-':''}${cop(Math.abs(dispQ1))}</div>
-    </div>
-    <div class="stat" onclick="toggleStatBreakdown('dispQ2')" style="cursor:pointer">
-      <div class="slbl" style="display:flex;justify-content:space-between;align-items:center">Disponible Q2<span style="font-size:8px">${chv('dispQ2')}</span></div>
-      <div class="sval ${dispQ2Cls}">${dispQ2<0?'-':''}${cop(Math.abs(dispQ2))}</div>
-    </div>`;
+  document.getElementById('summary').innerHTML=
+    pillHtml('basico',3,'Básico mes','<div class="sval sb">'+cop(nom.basico_total)+'</div>')
+    +pillHtml('ingresos',4,'Ingresos','<div class="sval sg">'+cop(tIngresos)+'</div>')
+    +pillHtml('gastos',null,'Gastos','<div class="sval sr">'+cop(tGas)+'</div>')
+    +pillHtml('tarjeta',2,'Tarjeta','<div class="sval sa">'+cop(tcSaldo)+'</div>')
+    +pillHtml('dispQ1',0,'Disponible Q1','<div class="sval '+dispQ1Cls+'">'+(dispQ1<0?'-':'')+cop(Math.abs(dispQ1))+(vencQ1.length?alertaHtml:'')+'</div>')
+    +pillHtml('dispQ2',1,'Disponible Q2','<div class="sval '+dispQ2Cls+'">'+(dispQ2<0?'-':'')+cop(Math.abs(dispQ2))+(vencQ2.length?alertaHtml:'')+'</div>');
 
   document.getElementById('summary').style.display = summaryOpen ? 'grid' : 'none';
   const chevEl = document.getElementById('summary-chevron');
   if (chevEl) chevEl.textContent = summaryOpen ? '▲' : '▼';
 
-  // Fila simple de 2 líneas (label izq. / valor der.) para los desgloses de Neto, Gastos y
-  // Disponible — mismo estándar visual .trow/.tlbl/.tval que ya usa el resto de la app.
+  // Fila simple de 2 líneas (label izq. / valor der.) para los desgloses — mismo estándar
+  // visual .trow/.tlbl/.tval que ya usa el resto de la app.
   function breakdownRow(label, value, color, borderBottom){
     return '<div class="trow" style="background:none;padding:6px 0;'+(borderBottom?'border-bottom:1px solid var(--brd)':'')+'">'
       +'<span class="tlbl">'+label+'</span>'
       +'<span class="tval" style="font-size:13px;color:'+color+'">'+value+'</span></div>';
   }
-  const netoBreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Neto Q2',cop(n2),'var(--grn)',false);
+  const basicoBreakdownHtml=breakdownRow('Básico Q1',cop(bas1),'var(--grn)',true)+breakdownRow('Básico Q2',cop(bas2),'var(--grn)',false);
+  const ingresosBreakdownHtml=breakdownRow('Ingresos Q1',cop(ingQ1),'var(--grn)',true)+breakdownRow('Ingresos Q2',cop(ingQ2),'var(--grn)',false);
   const gastosBreakdownHtml=breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',false);
-  const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',false);
-  const dispQ2BreakdownHtml=breakdownRow('Neto Q2',cop(n2),'var(--grn)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',false);
-  [['neto',netoBreakdownHtml],['gastos',gastosBreakdownHtml],['dispQ1',dispQ1BreakdownHtml],['dispQ2',dispQ2BreakdownHtml]].forEach(function(pair){
+  function vencidosRowsHtml(venc){
+    return venc.map(function(v,i){
+      return breakdownRow('⚠️ '+esc(v.nombre)+' · cuota '+v.numCuota+'/'+v.cuotasTotal,cop(v.valorCuota),'var(--red)',i<venc.length-1);
+    }).join('');
+  }
+  const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',vencQ1.length>0)+vencidosRowsHtml(vencQ1);
+  const dispQ2BreakdownHtml=breakdownRow('Neto Q2',cop(n2),'var(--grn)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',vencQ2.length>0)+vencidosRowsHtml(vencQ2);
+  [['basico',basicoBreakdownHtml],['ingresos',ingresosBreakdownHtml],['gastos',gastosBreakdownHtml],['dispQ1',dispQ1BreakdownHtml],['dispQ2',dispQ2BreakdownHtml]].forEach(function(pair){
     var key=pair[0], html=pair[1];
     var el=document.getElementById(STAT_BREAKDOWN_DOM_IDS[key]);
     if(el){
@@ -1744,7 +1816,7 @@ function render() {
       var lbl=showDisp?'Disponible':'Pendiente';
       var val=showDisp?dispTc:saldoTc;
       var valColor=showDisp?(val>=0?'var(--grn)':'var(--red)'):'var(--red)';
-      return '<div onclick="goToTarjeta(\''+tid+'\')" style="flex-shrink:0;width:136px;background:var(--surf2);border-radius:12px;padding:10px 12px;border-left:3px solid '+tcBrandColor(marca)+';cursor:pointer">'
+      return '<div onclick="event.stopPropagation();goToTarjeta(\''+tid+'\')" style="flex-shrink:0;width:136px;background:var(--surf2);border-radius:12px;padding:10px 12px;border-left:3px solid '+tcBrandColor(marca)+';cursor:pointer">'
         +'<div style="min-height:16px;margin-bottom:12px">'+tcBrandBadgeHtml(marca)+'</div>'
         +'<div style="font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px">'+esc(card.nombre)+'</div>'
         +'<div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em">'+lbl+'</div>'
@@ -1788,7 +1860,7 @@ function setGSort(which,s){
   document.getElementById('scroll').innerHTML=renderGastos(which==='q1'?m.q1_gastos||[]:m.q2_gastos||[],which);
 }
 
-function sortGastos(gastos,which){
+function sortGastos(gastos,which,subMap){
   var s=gSort[which]||'orden';
   var arr=gastos.slice(); // shallow copy to avoid mutating original
 
@@ -1799,12 +1871,24 @@ function sortGastos(gastos,which){
   else if(s==='metodo') arr.sort(function(a,b){return (a.metodo||'').localeCompare(b.metodo||'','es');});
   // 'orden' = mantiene el orden original como base
 
+  // Estado efectivo de pago: para un grupo, su propio pagado_flag no se actualiza al marcar
+  // subgastos como pagados, así que hay que derivarlo de sus subgastos (todos pagados/sin
+  // pagar => grupo "pagado") para que sí baje al final de la lista al completarse.
+  function estadoPago(x){
+    if(x.sinpagar) return 2;
+    if(x.esGrupo){
+      var subs=(subMap&&subMap[x.id])||[];
+      var relevantes=subs.filter(function(sg){return !sg.sinpagar;});
+      var allPaid=relevantes.length>0&&relevantes.every(function(sg){return sg.pagado_flag;});
+      return allPaid?1:0;
+    }
+    return x.pagado_flag?1:0;
+  }
+
   // Orden primario automático: pendientes primero, pagados al final, sin pagar al fondo del todo
   // Se aplica SIEMPRE, sin importar el criterio elegido arriba (sort estable conserva el orden secundario dentro de cada grupo)
   arr.sort(function(a,b){
-    var va=a.sinpagar?2:a.pagado_flag?1:0;
-    var vb=b.sinpagar?2:b.pagado_flag?1:0;
-    return va-vb;
+    return estadoPago(a)-estadoPago(b);
   });
 
   return arr;
@@ -1845,7 +1929,7 @@ function renderGastos(gastos,which) {
     if(g.metodo===activeFiltro) return true;
     return (subMap[g.id]||[]).some(function(s){return s.metodo===activeFiltro;});
   });
-  const topGastos=sortGastos(topGastosFiltered,which);
+  const topGastos=sortGastos(topGastosFiltered,which,subMap);
 
   const activos=topGastosAll.filter(function(x){return !x.sinpagar;});
   const total=calcTotalGrupoAware(activos, subMap, which==='q1');
@@ -1897,7 +1981,12 @@ function renderGastos(gastos,which) {
       var pendiente=base>0?base-subsPagados:subsPendientes;
       var allPaid=subs.length>0&&subs.filter(function(s){return !s.sinpagar;}).every(function(s){return s.pagado_flag;});
       var countBadge=subs.length>0?'<span class="tc-count">'+subs.length+'</span>':'';
-      var subRowsHtml=subs.map(function(s){return buildSubRow(s,which);}).join('');
+      var subsOrdenados=subs.slice().sort(function(a,b){
+        var va=a.sinpagar?2:a.pagado_flag?1:0;
+        var vb=b.sinpagar?2:b.pagado_flag?1:0;
+        return va-vb;
+      });
+      var subRowsHtml=subsOrdenados.map(function(s){return buildSubRow(s,which);}).join('');
       var addBtn='<div class="g-sub-add" onclick="openGasto(null,\''+which+'\',\''+g.id+'\')">＋ Agregar al grupo</div>';
 
       var deudaRow='';
@@ -1925,6 +2014,7 @@ function renderGastos(gastos,which) {
     var gCls=(tras?'grow-nopag':'')+(g.id===lastCreatedId?' gnew':'');
     var cuotaBadge='';
     var mensBadge='';
+    var vencidoBadge='';
     if(g.mensualidad){
       var mp2=g.mensualidad.split('-');
       var mNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -1939,10 +2029,21 @@ function renderGastos(gastos,which) {
       // fecha real de amortización) — así queda claro a qué mes corresponde sin tener que
       // abrir el detalle del crédito.
       if(g.creditoId && creditos[g.creditoId]){
-        var rowRef=calcAmortizacion(creditos[g.creditoId]).rows[g.numCuota-1];
+        var crRef=creditos[g.creditoId];
+        var rowRef=calcAmortizacion(crRef).rows[g.numCuota-1];
         if(rowRef){
           var mesesAbrev=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
           cuotaLbl+=' · '+mesesAbrev[new Date(rowRef.fecha+'T12:00:00').getMonth()];
+          // "Vencido" depende únicamente de la fecha propia de ESTA cuota (no de si es la
+          // primera pendiente del crédito según cr.pagos, que puede desincronizarse) — así
+          // cada gasto se evalúa por su propia fecha: la cuota 5/36 movida a otra quincena
+          // con fecha ya pasada aparece vencida, y la 6/36 con fecha futura (ej. 31 de julio)
+          // no, sin importar el estado de otras cuotas del mismo crédito. Tampoco aplica si
+          // este gasto se marcó "sin pagar" (se movió a la otra quincena): ya no es el
+          // registro activo de esa cuota, es solo un recordatorio.
+          if(!g.pagado_flag && !g.sinpagar && diasHasta(rowRef.fecha+'T12:00:00')<0){
+            vencidoBadge='<span style="font-size:9px;font-weight:700;background:var(--red-d);color:var(--red);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">Vencido</span>';
+          }
         }
       }
       cuotaBadge='<span style="font-size:10px;font-weight:600;background:var(--surf2);color:'+cuotaColor+';padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+cuotaLbl+'</span>';
@@ -1955,13 +2056,14 @@ function renderGastos(gastos,which) {
     var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):esc(g.metodo||'');
     return '<div class="grow '+gCls+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
-      +'<div class="ginfo"><div class="gname '+namCls+'">'+esc(nombreGasto(g))+cuotaBadge+mensBadge+nopag+'</div><div class="gmeta">'+esc(g.metodo||'')+dh+compBadge+'</div></div>'
+      +'<div class="ginfo"><div class="gname '+namCls+'">'+esc(nombreGasto(g))+cuotaBadge+vencidoBadge+mensBadge+nopag+'</div><div class="gmeta">'+esc(g.metodo||'')+dh+compBadge+'</div></div>'
       +'<div style="text-align:right"><div class="gamt '+amtCls+'">'+cop(g.presupuesto)+'</div><div class="gmth">'+realLine+'</div></div>'
       +'</div>';
   }
 
   var rows=topGastos.map(function(g){ return buildGastoRowHtml(g); }).join('');
 
+  var pendienteQ=Math.max(total-pagado,0);
   var spNote=sinPagarTotal>0?'<span style="color:var(--amb);font-size:11px;font-weight:500;margin-left:6px">· '+cop(sinPagarTotal)+' sin pagar</span>':'';
   var dispColor=disp>=0?'grn':'red';
   var dispTxt=(disp<0?'-':'')+cop(disp);
@@ -2030,8 +2132,8 @@ function renderGastos(gastos,which) {
     +'</div>'
     +'<div class="pw"><div class="pb '+bc+'" style="width:'+pct+'%"></div></div>'
     +rows
-    +'<div class="trow"><span class="tlbl">Pagado '+pct+'%</span>'
-    +'<span class="tval"><span style="color:var(--grn)">'+cop(pagado)+'</span> <span style="color:var(--mut);font-size:12px;font-weight:400">/ '+cop(total)+'</span>'+spNote+'</span></div>'
+    +'<div class="trow"><span class="tlbl" style="font-size:11px;font-weight:500">Pagado '+pct+'%</span>'
+    +'<span class="tval" style="font-size:11px;font-weight:500"><span style="color:var(--grn)">'+cop(pagado)+'</span> <span style="color:var(--mut)">/ '+cop(total)+'</span>'+(pendienteQ>0?' <span style="color:var(--mut)">/ </span><span style="color:var(--acc)">'+cop(pendienteQ)+'</span>':'')+spNote+'</span></div>'
     +'</div>';
 }
 // ── CALENDARIO ───────────────────────────────────────────────────────────────
@@ -2566,8 +2668,17 @@ function sugerirCuotaCredito(){
   const cr=creditos[crId]; if(!cr) return;
   const amort=calcAmortizacion(cr);
   const pagos=cr.pagos||[];
-  // Buscar la primera cuota NO pagada
-  var idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
+  // Cuotas de este crédito que ya tienen un gasto creado este mes (en Q1 o Q2) — para no
+  // sugerir de nuevo la misma cuota si, por ejemplo, la 5/36 ya se creó en Q1 y ahora se está
+  // creando otro gasto del mismo crédito en Q2: debe sugerir la 6/36, no repetir la 5/36.
+  const mCtx=getM();
+  const usadas={};
+  (mCtx.q1_gastos||[]).concat(mCtx.q2_gastos||[]).forEach(function(g){
+    if(g.creditoId===crId && g.numCuota) usadas[g.numCuota]=true;
+  });
+  // Buscar la primera cuota NO pagada y sin gasto ya creado
+  var idx=amort.rows.findIndex(function(r,i){return !pagos[i] && !usadas[r.numero];});
+  if(idx===-1) idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
   if(idx===-1) idx=amort.rows.length-1; // todas pagadas: sugerir la última
   const row=amort.rows[idx];
   // La cuota sugerida se guarda en el propio <select> (data-cuota): el formulario de gasto
@@ -3123,6 +3234,18 @@ function copiarGastoQ2(id) {
   const g=m.q1_gastos.find(x=>x.id===id);
   if(!g){closeModal();return;}
   const copia={id:uid(),nombre:g.nombre,catTipoId:g.catTipoId||null,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,pagado_flag:false,sinpagar:false};
+  // Si el gasto viene de un crédito, la copia en Q2 debe heredar el vínculo (creditoId/numCuota)
+  // para que siga representando la misma cuota — de lo contrario el crédito queda con esa cuota
+  // pendiente sin ningún gasto que permita marcarla como pagada, y la copia en Q2 pierde toda
+  // relación con el crédito. Como la cuota debía pagarse en la quincena anterior (Q1) y no se
+  // pagó, aparecerá como "Vencido" tanto en el crédito como en esta fila (ver diasHasta/badge).
+  if(g.creditoId){
+    copia.creditoId=g.creditoId;
+    copia.numCuota=g.numCuota;
+    copia.cuotas_total=g.cuotas_total;
+    copia.cuota_actual=g.cuota_actual;
+  }
+  if(g.mensualidad) copia.mensualidad=g.mensualidad;
   m.q2_gastos.push(copia);
   save(); closeModal(); render(); toast('Copiado a Q2');
 }
@@ -3360,7 +3483,20 @@ function toggleSummary(){
   });
 }
 function toggleStatBreakdown(key){
-  statBreakdownOpen[key]=!statBreakdownOpen[key];
+  // Solo un pill del Resumen del mes puede estar expandido a la vez: al abrir uno
+  // (ej. Q1), se colapsan los demás (ej. Tarjeta) en vez de acumularse todos abiertos.
+  var opening=!statBreakdownOpen[key];
+  Object.keys(statBreakdownOpen).forEach(function(k){ statBreakdownOpen[k]=false; });
+  statBreakdownOpen[key]=opening;
+  render();
+}
+// Igual que toggleStatBreakdown, pero además navega a la pestaña asociada al pill —
+// así el pill queda "marcado" (desplegado + resaltado) y a la vez lleva a su pestaña.
+function selectStat(key,tabIdx){
+  var opening=!statBreakdownOpen[key];
+  Object.keys(statBreakdownOpen).forEach(function(k){ statBreakdownOpen[k]=false; });
+  statBreakdownOpen[key]=opening;
+  curTab=tabIdx;
   render();
 }
 // Selecciona la tarjeta tocada en el carrusel del resumen y salta directo a la pestaña Tarjeta.
