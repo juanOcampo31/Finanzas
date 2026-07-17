@@ -884,6 +884,14 @@ function openCreditosMenu(){
     return {id:id,cr:cr,amort:amort,pagadas:pagadas,saldoActual:saldoActual,proximaIdx:proximaIdx,activo:activo,pct:pct,cuotasFaltantes:cuotasFaltantes,color:ringColors[i%ringColors.length]};
   });
 
+  // Orden de la lista de créditos: activos primero (los pagados/completados al final), y
+  // entre los activos, del más cerca de finalizar (menos cuotas faltantes) al más lejano.
+  var infosOrdenados=infos.slice().sort(function(a,b){
+    if(a.activo!==b.activo) return a.activo?-1:1;
+    if(!a.activo) return 0;
+    return a.cuotasFaltantes-b.cuotasFaltantes;
+  });
+
   var activos=infos.filter(function(x){return x.activo;});
   var saldoTotal=activos.reduce(function(a,x){return a+x.saldoActual;},0);
   var proximo=activos.reduce(function(best,x){
@@ -893,10 +901,9 @@ function openCreditosMenu(){
   var proximoFmt=proximo?new Date(proximo.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
 
   // Próximo pago (pill expandible): colapsado muestra cantidad de créditos con pago
-  // pendiente + la fecha más cercana; expandido lista cada crédito con su próxima
-  // cuota, ordenados priorizando el estado (vencido/urgente primero) y, dentro del
-  // mismo estado, por % completado descendente (más avanzados primero, los que
-  // recién empiezan / con más tiempo por delante al final).
+  // pendiente + la fecha más cercana; expandido lista cada crédito con su próxima cuota,
+  // ordenados por cuánto falta para esa fecha (de la más cercana a la más lejana) —
+  // como los "días" de una cuota vencida son negativos, quedan primero automáticamente.
   var proximoPagoList=activos.map(function(x){
     var row=x.amort.rows[x.proximaIdx];
     var dias=diasHasta(row.fecha+'T12:00:00');
@@ -905,14 +912,9 @@ function openCreditosMenu(){
     // así que si la fecha ya pasó, la cuota está vencida, no pagada.
     var st=diasStatus(dias);
     if(dias<0) st=Object.assign({},st,{txt:'Vencido'});
-    return {id:x.id,nombre:x.cr.nombre,fecha:row.fecha,valorCuota:row.valorCuota,pct:x.pct,st:st};
+    return {id:x.id,nombre:x.cr.nombre,fecha:row.fecha,valorCuota:row.valorCuota,pct:x.pct,dias:dias,st:st};
   });
-  var CRED_ESTADO_ORDEN={urgent:0,soon:1,ok:2};
-  proximoPagoList.sort(function(a,b){
-    var oa=CRED_ESTADO_ORDEN[a.st.cls], ob=CRED_ESTADO_ORDEN[b.st.cls];
-    if(oa!==ob) return oa-ob;
-    return b.pct-a.pct;
-  });
+  proximoPagoList.sort(function(a,b){ return a.dias-b.dias; });
   var proximoPagoExpandHtml=proximoPagoList.map(function(p){
     var f=new Date(p.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
     return '<div class="cal-event" onclick="closeModal();openCreditoDetalle(\''+p.id+'\')">'
@@ -935,7 +937,7 @@ function openCreditosMenu(){
     +'</div>'
     +(activos.length?'<div class="cal-event-list" id="credpp-expand" style="display:none;margin:0 0 14px">'+proximoPagoExpandHtml+'</div>':'');
 
-  var listHtml=infos.length?infos.map(function(x){
+  var listHtml=infosOrdenados.length?infosOrdenados.map(function(x){
     var cr=x.cr,amort=x.amort;
     var proximaFecha=x.proximaIdx!==-1?new Date(amort.rows[x.proximaIdx].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
     var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
