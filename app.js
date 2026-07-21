@@ -1465,7 +1465,10 @@ const ICONS = {
   checkCircle:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
   alertTriangle:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   minus:'<line x1="5" y1="12" x2="19" y2="12"/>',
-  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'
+  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  calculator:'<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>',
+  percent:'<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  barChart:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>'
 };
 function icon(name, size){
   size=size||15;
@@ -4206,15 +4209,17 @@ function openInfoGeneral(){
     var aportePrima=(basico*30)/360;
     // % de cambio del básico respecto al mes anterior
     var cambioBasicoHtml='';
+    var subioB=null;
     if(i>0 && !sugerido && !esSugerido[i-1]){
       var basicoAnterior=basicoConSugerido[i-1];
       if(basicoAnterior>0 && basico!==basicoAnterior){
         var pctB=((basico-basicoAnterior)/basicoAnterior)*100;
-        var subioB=pctB>0;
+        subioB=pctB>0;
         cambioBasicoHtml='<span style="font-size:10px;font-weight:700;color:var(--'+(subioB?'grn':'red')+');margin-left:6px;display:inline-flex;align-items:center;gap:2px;vertical-align:middle">'
           +icon(subioB?'arrowUp':'arrowDown',10)+Math.abs(pctB).toFixed(1)+'%</span>';
       }
     }
+    var calIconColor=sugerido?'var(--mut)':(subioB===true?'var(--grn)':subioB===false?'var(--red)':'var(--acc)');
     // % de cambio del bono respecto al mes anterior
     var cambioBonoHtml='';
     if(i>0 && !sugerido && !esSugerido[i-1]){
@@ -4227,7 +4232,9 @@ function openInfoGeneral(){
       }
     }
     return '<tr style="border-bottom:1px solid var(--brd)">'
-      +'<td style="padding:7px 10px;font-size:12px;color:var(--txt)">'+nombre+(sugerido?'<span style="font-size:9px;color:var(--amb);margin-left:4px">(sug.)</span>':'')+'</td>'
+      +'<td style="padding:7px 10px;font-size:12px;color:var(--txt)"><span style="display:inline-flex;align-items:center;gap:7px;vertical-align:middle">'
+      +'<span style="color:'+calIconColor+';display:inline-flex">'+icon('cal',13)+'</span>'
+      +nombre+(sugerido?'<span style="font-size:9px;color:var(--amb);margin-left:2px">(sug.)</span>':'')+'</span></td>'
       +'<td style="padding:7px 10px;font-size:12px;text-align:right;color:'+(sugerido?'var(--mut)':'var(--txt)')+'">'+cop(basico)+cambioBasicoHtml+'</td>'
       +'<td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--acc);font-weight:600">'+cop(aportePrima)+'</td>'
       +'<td style="padding:7px 10px;font-size:12px;text-align:right;color:'+(sugerido?'var(--mut)':'var(--pur)')+'">'+cop(bono)+cambioBonoHtml+'</td>'
@@ -4266,25 +4273,24 @@ function openInfoGeneral(){
   var interesesCesantias=Math.round(cesantias*0.12);
   var avisoAño=añoTieneSugeridos?'<div style="font-size:11px;color:var(--amb);margin-top:2px;display:flex;align-items:center;gap:5px">'+icon('alertTriangle',12)+'Incluye meses sugeridos (sin crear aún)</div>':'';
 
+  function resumenCard(fxId,iconName,iconColor,iconBg,label,valor){
+    return '<button onclick="toggleFormula(\''+fxId+'\')" style="background:var(--surf2);border:none;border-radius:var(--r2);padding:12px;text-align:left;cursor:pointer;min-width:0">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      +'<div style="width:24px;height:24px;border-radius:7px;background:'+iconBg+';color:'+iconColor+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon(iconName,13)+'</div>'
+      +'<span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</span>'
+      +'</div>'
+      +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+cop(valor)+'</div>'
+      +'</button>';
+  }
   var resumenPills='<div class="card" style="margin-bottom:10px">'
-    +'<div class="chead"><span class="ctitle">Resumen anual</span></div>'
+    +'<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
+    +'<div style="width:26px;height:26px;border-radius:8px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center">'+icon('barChart',14)+'</div>'
+    +'<span class="ctitle">Resumen anual</span></div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 16px">'
-    +'<button onclick="toggleFormula(\'fx-primaj\')" style="background:var(--surf2);border:none;border-radius:var(--r2);padding:10px;text-align:left;cursor:pointer">'
-    +'<div style="font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em">Prima Junio</div>'
-    +'<div style="font-size:15px;font-weight:700;color:var(--txt);margin-top:2px">'+cop(primaS1)+'</div>'
-    +'</button>'
-    +'<button onclick="toggleFormula(\'fx-primad\')" style="background:var(--surf2);border:none;border-radius:var(--r2);padding:10px;text-align:left;cursor:pointer">'
-    +'<div style="font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em">Prima Diciembre</div>'
-    +'<div style="font-size:15px;font-weight:700;color:var(--txt);margin-top:2px">'+cop(primaS2)+'</div>'
-    +'</button>'
-    +'<button onclick="toggleFormula(\'fx-cesantias\')" style="background:var(--surf2);border:none;border-radius:var(--r2);padding:10px;text-align:left;cursor:pointer">'
-    +'<div style="font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em">Cesantías</div>'
-    +'<div style="font-size:15px;font-weight:700;color:var(--txt);margin-top:2px">'+cop(cesantias)+'</div>'
-    +'</button>'
-    +'<button onclick="toggleFormula(\'fx-intereses\')" style="background:var(--surf2);border:none;border-radius:var(--r2);padding:10px;text-align:left;cursor:pointer">'
-    +'<div style="font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em">Int. cesantías</div>'
-    +'<div style="font-size:15px;font-weight:700;color:var(--txt);margin-top:2px">'+cop(interesesCesantias)+'</div>'
-    +'</button>'
+    +resumenCard('fx-primaj','dollar','var(--acc)','var(--acc-d)','Prima Junio',primaS1)
+    +resumenCard('fx-primad','dollar','var(--pur)','var(--pur-d)','Prima Diciembre',primaS2)
+    +resumenCard('fx-cesantias','calculator','var(--grn)','var(--grn-d)','Cesantías',cesantias)
+    +resumenCard('fx-intereses','percent','var(--amb)','var(--amb-d)','Int. cesantías',interesesCesantias)
     +'</div>'
     +'<div id="fx-primaj" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Enero a Junio: Σ (básico × 30 ÷ 360)'+(s1TieneSugeridos?' · incluye meses sugeridos':'')+'</div>'
     +'<div id="fx-primad" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Julio a Diciembre: Σ (básico × 30 ÷ 360)'+(s2TieneSugeridos?' · incluye meses sugeridos':'')+'</div>'
@@ -4296,7 +4302,9 @@ function openInfoGeneral(){
     +'<p style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
     +'Básico mensual de cada mes del año y cálculo de prima de servicios (básico ÷ 30, sumado por semestre). Los meses sin crear toman el básico del último mes existente como sugerencia.</p>'
     +'<div class="card" style="margin-bottom:10px">'
-    +'<div class="chead"><span class="ctitle">Básico por mes</span></div>'
+    +'<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
+    +'<div style="width:26px;height:26px;border-radius:8px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center">'+icon('cal',14)+'</div>'
+    +'<span class="ctitle">Básico por mes</span></div></div>'
     +tableHtml
     +'</div>'
     +resumenPills
@@ -4306,7 +4314,11 @@ function openInfoGeneral(){
 function toggleFormula(id){
   const el=document.getElementById(id);
   if(!el) return;
-  el.style.display=el.style.display==='none'?'block':'none';
+  const willOpen=el.style.display==='none';
+  document.querySelectorAll('[id^="fx-"]').forEach(function(other){
+    if(other!==el) other.style.display='none';
+  });
+  el.style.display=willOpen?'block':'none';
 }
 
 function openMonthPicker(){
