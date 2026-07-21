@@ -1784,11 +1784,38 @@ function syncIngresosDed(m, which){
   }
 }
 
+// ── Navegación de meses (tabs superiores, scroll horizontal) ───────────────────
+// Un ítem compacto (mes abreviado + punto de estado) por cada mes existente en db,
+// para que la barra no se vea como una fila de píldoras anchas ocupando todo el
+// ancho, sino solo el espacio que sus meses realmente necesitan. El mes activo va
+// resaltado con texto en negrilla y un subrayado; el punto indica qué tan pagado
+// está el mes (mismo criterio que el modal "Seleccionar mes"): verde 75-100%,
+// ámbar 25-75%, rojo <25%, gris si aún no tiene gastos. El botón "+" para crear
+// el siguiente mes vive fuera de esta barra (fijo en el topbar, ver index.html)
+// para que no se desplace ni cambie de posición al agregar meses.
+function renderMonthTabs(){
+  const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
+  return keys.map(function(k){
+    const mes=db[k];
+    const active=k===curM;
+    const activos=[...(mes.q1_gastos||[]),...(mes.q2_gastos||[])].filter(function(g){return !g.sinpagar&&!g.esGrupo;});
+    const total=activos.reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+    const pagado=activos.filter(function(g){return g.pagado_flag;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+    const pct=total>0?Math.round(pagado/total*100):0;
+    const dotColor=total===0?'var(--brd2)':pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)';
+    return '<button onclick="goToMonth('+k+')" data-mk="'+k+'" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;cursor:pointer;padding:4px 8px 6px;border-bottom:2px solid '+(active?'var(--acc)':'transparent')+'">'
+      +'<span style="font-size:11px;font-weight:'+(active?'800':'600')+';color:'+(active?'var(--txt)':'var(--mut)')+';white-space:nowrap">'+mes.nombre.slice(0,3)+'</span>'
+      +'<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';flex-shrink:0"></span>'
+      +'</button>';
+  }).join('');
+}
+
 // ── Render principal ──────────────────────────────────────────────────────────
 function render() {
   const m=getM();
-  document.getElementById('lm').textContent = m.nombre;
-  document.getElementById('ly').textContent = m.año;
+  document.getElementById('mtabs').innerHTML = renderMonthTabs();
+  const activeTab=document.querySelector('#mtabs [data-mk="'+curM+'"]');
+  if(activeTab) activeTab.scrollIntoView({inline:'center',block:'nearest'});
   localStorage.setItem('fin26m', curM);
 
   const mi = MESES.indexOf(m.nombre);
@@ -2697,8 +2724,6 @@ function renderNom(m) {
 }
 
 // ── Navegación ────────────────────────────────────────────────────────────────
-function prevM(){if(curM>0){curM--;gFiltro={q1:'todos',q2:'todos'};gSort={q1:'orden',q2:'orden'};gFilterOpen={q1:false,q2:false};curTab=0;curTC=null;render();}}
-function nextM(){const mx=Math.max(...Object.keys(db).map(Number));if(curM<mx){curM++;gFiltro={q1:'todos',q2:'todos'};gSort={q1:'orden',q2:'orden'};gFilterOpen={q1:false,q2:false};curTab=0;curTC=null;render();}}
 function sw(i){curTab=i;render();}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
