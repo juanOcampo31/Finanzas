@@ -16,23 +16,23 @@
 <div id="app">
   <div class="topbar">
     <div class="topbar-left">
-      <button class="mnav" onclick="prevM()" aria-label="Mes anterior">&#8249;</button>
-      <div onclick="openMonthPicker()" style="cursor:pointer;padding:2px 6px;border-radius:var(--r2)">
-        <span class="mlbl" id="lm">-</span><span class="myr" id="ly"> -</span>
-        <span style="font-size:10px;color:var(--mut);margin-left:2px">▼</span>
+      <button class="mnav" onclick="prevM()" aria-label="Mes anterior"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div onclick="openMonthPicker()" style="cursor:pointer;padding:2px 6px;border-radius:var(--r2);display:flex;align-items:baseline">
+        <span class="mlbl" id="lm">-</span><span class="myr" id="ly">-</span>
+        <span style="color:var(--mut);margin-left:2px;display:inline-flex;align-items:center;position:relative;top:1px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </div>
-      <button class="mnav" onclick="nextM()" aria-label="Mes siguiente">&#8250;</button>
+      <button class="mnav" onclick="nextM()" aria-label="Mes siguiente"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
     </div>
     <div class="topbar-right">
       <input type="file" id="imp-file" accept=".json,.txt" style="display:none" onchange="importJSON(this)">
-      <button class="ibtn" onclick="openOverflowMenu()" title="Más opciones" aria-label="Más opciones" style="font-size:18px">&#8942;</button>
-      <button class="ibtn" onclick="openNewMonth()" title="Nuevo mes" aria-label="Crear nuevo mes">&#43;</button>
+      <button class="ibtn" onclick="openOverflowMenu()" title="Más opciones" aria-label="Más opciones"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+      <button class="ibtn" onclick="openNewMonth()" title="Nuevo mes" aria-label="Crear nuevo mes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     </div>
   </div>
   <div class="pbanner" id="pbanner"></div>
   <div onclick="toggleSummary()" style="display:flex;justify-content:space-between;align-items:center;padding:6px 16px;cursor:pointer;background:var(--surf);border-bottom:1px solid var(--brd)">
     <span style="font-size:11px;color:var(--mut);font-weight:600">Resumen del mes</span>
-    <span id="summary-chevron" style="font-size:12px;color:var(--mut)">▼</span>
+    <span id="summary-chevron" style="color:var(--mut);display:flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
   </div>
   <div class="summary" id="summary" style="display:none"></div>
   <div id="basicoBreakdown" style="display:none;padding:2px 14px 8px;background:var(--surf);border-bottom:1px solid var(--brd)"></div>
@@ -70,7 +70,7 @@
     <!-- Texto de respaldo: debe coincidir con CACHE_VERSION en sw.js. app.js lo actualiza
          en cuanto el service worker responde el postMessage GET_VERSION; esto es solo lo
          que se ve mientras esa respuesta no ha llegado (o si falla). -->
-    <div class="lock-version" id="lockVersion">V 1.14 &bull; Powered by Felipe Ocampo</div>
+    <div class="lock-version" id="lockVersion">V 1.21 &bull; Powered by Felipe Ocampo</div>
   </div>
 </div>
 

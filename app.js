@@ -221,10 +221,10 @@ function showRecoveryOptions(){
     +'Si tu PIN no descifra tus datos guardados (por ejemplo, porque un cambio de PIN anterior '
     +'quedó a medias), elige una opción:</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
-    +(hasRecoveryPhone?'<button class="bcnl" onclick="closeModal();recoverWithPhone()">📱 Recuperar con mi número de celular</button>':'')
-    +(hasDataKey?'<button class="bcnl" onclick="closeModal();recoverWithPreviousPin()">↩️ Intentar con mi PIN anterior</button>':'')
-    +'<button class="bcnl" onclick="closeModal();document.getElementById(\'lock-imp-file\').click()">📥 Restaurar desde un backup exportado (.json)</button>'
-    +'<button class="bcnl" style="color:var(--red)" onclick="closeModal();confirmWipeAll()">🗑️ Borrar todo y empezar de nuevo</button>'
+    +(hasRecoveryPhone?'<button class="bcnl" onclick="closeModal();recoverWithPhone()">'+btnIcon('phone')+'Recuperar con mi número de celular</button>':'')
+    +(hasDataKey?'<button class="bcnl" onclick="closeModal();recoverWithPreviousPin()">'+btnIcon('undo')+'Intentar con mi PIN anterior</button>':'')
+    +'<button class="bcnl" onclick="closeModal();document.getElementById(\'lock-imp-file\').click()">'+btnIcon('download')+'Restaurar desde un backup exportado (.json)</button>'
+    +'<button class="bcnl" style="color:var(--red)" onclick="closeModal();confirmWipeAll()">'+btnIcon('trash')+'Borrar todo y empezar de nuevo</button>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cancelar</button></div>');
 }
@@ -422,9 +422,9 @@ function openSecurityMenu(){
   openModal('<div class="mtitle">Seguridad</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Tu PIN protege el acceso a la app y cifra tus copias de seguridad exportadas.</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
-    +'<button class="bcnl" onclick="closeModal();startChangePIN()">🔑 Cambiar PIN</button>'
-    +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">📱 '+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
-    +'<button class="bcnl" style="color:var(--red)" onclick="lockNow()">🔒 Bloquear ahora</button>'
+    +'<button class="bcnl" onclick="closeModal();startChangePIN()">'+btnIcon('key')+'Cambiar PIN</button>'
+    +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">'+btnIcon('phone')+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
+    +'<button class="bcnl" style="color:var(--red)" onclick="lockNow()">'+btnIcon('lock')+'Bloquear ahora</button>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
 }
@@ -505,7 +505,7 @@ function startSetRecoveryPhone(){
     +'y de inmediato se te pedirá definir un PIN nuevo. '
     +'<b style="color:var(--amb)">Cualquiera que conozca estos 6 dígitos podrá recuperar el acceso a tus datos</b>, así que elige un número que solo tú sepas de memoria.</p>'
     +'<div class="field"><label>Número de celular</label><input id="rp-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="Ej: 3001234567" value="'+(perfilTelefono||'').replace(/"/g,'&quot;')+'"></div>'
-    +(perfilTelefono?'<button class="bcnl" style="width:100%;color:var(--red);margin-bottom:10px" onclick="removeRecoveryPhone()">🗑️ Quitar número de recuperación</button>':'')
+    +(perfilTelefono?'<button class="bcnl" style="width:100%;color:var(--red);margin-bottom:10px" onclick="removeRecoveryPhone()">'+btnIcon('trash')+'Quitar número de recuperación</button>':'')
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button><button class="bpri" onclick="confirmSetRecoveryPhone()">Guardar</button></div>');
 }
 async function confirmSetRecoveryPhone(){
@@ -980,9 +980,9 @@ function openCreditosMenu(){
       +'<span>'+x.pagadas+' / '+cr.cuotas+' cuotas pagadas</span>'
       +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
       +'</div></div>'
-      +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut)">›</span></button>'
+      +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
       +'</div>';
-  }).join(''):'<div class="empty"><div class="eic">💵</div><p>Sin créditos. Crea uno nuevo.</p></div>';
+  }).join(''):'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('dollar',36)+'</div><p>Sin créditos. Crea uno nuevo.</p></div>';
 
   openModal('<div class="mtitle">Créditos</div>'
     +(infos.length?headerHtml:'')
@@ -1003,7 +1003,7 @@ function openNewCredito(modo){
   modo = modo==='importar' ? 'importar' : 'manual';
   const pillsHtml='<div class="trow2" style="margin-bottom:14px">'
     +'<button class="topt'+(modo==='manual'?' sc':'')+'" onclick="openNewCredito(\'manual\')">Manual</button>'
-    +'<button class="topt'+(modo==='importar'?' sa':'')+'" onclick="openNewCredito(\'importar\')">📥 Importar</button>'
+    +'<button class="topt'+(modo==='importar'?' sa':'')+'" onclick="openNewCredito(\'importar\')">'+btnIcon('download')+'Importar</button>'
     +'</div>';
 
   if(modo==='importar'){
@@ -1014,7 +1014,7 @@ function openNewCredito(modo){
       +pillsHtml
       +formatoPlanoCreditoHtml()
       +'<input type="file" id="cr-import-file" accept=".json" style="display:none" onchange="importCreditoPlan(this)">'
-      +'<button class="bpri" style="width:100%;margin-top:10px" onclick="document.getElementById(\'cr-import-file\').click()">📥 Elegir archivo JSON</button>'
+      +'<button class="bpri" style="width:100%;margin-top:10px" onclick="document.getElementById(\'cr-import-file\').click()">'+btnIcon('download')+'Elegir archivo JSON</button>'
       +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="openCreditosMenu()">Cancelar</button></div>');
     return;
   }
@@ -1236,7 +1236,7 @@ function openCreditoDetalle(id){
     var esProxima=(i===proximaIdx);
     var fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
     return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'background:var(--acc-d)':'')+'">'
-      +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:24px;height:24px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;font-size:13px">✓</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
+      +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:24px;height:24px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;display:flex">'+icon('check',13)+'</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:12px;font-weight:600;color:var(--txt)">Cuota '+r.numero+' de '+cr.cuotas+'</div>'
       +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+fechaFmt+' · saldo '+cop(r.saldo)+'</div>'
@@ -1249,12 +1249,12 @@ function openCreditoDetalle(id){
   }).join('');
 
   if(ocultar && !rowsHtml){
-    rowsHtml='<div style="padding:24px;text-align:center;color:var(--grn);font-size:13px">✓ Todas las cuotas están pagadas</div>';
+    rowsHtml='<div style="padding:24px;text-align:center;color:var(--grn);font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px">'+icon('check',14)+'Todas las cuotas están pagadas</div>';
   }
 
   openModal('<div class="mtitle">'+esc(cr.nombre)+'</div>'
     +'<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
-    +'<button onclick="editNombreCredito(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">✎ Editar nombre</button>'
+    +'<button onclick="editNombreCredito(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('edit',13)+'Editar nombre</button>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-bottom:10px">'
     +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Cuota</div><div style="font-size:14px;font-weight:700;color:var(--acc)">'+cop(amort.valorCuota)+'</div></div>'
@@ -1424,6 +1424,58 @@ function escJS(s){
 function cop(v) {
   if (v == null || isNaN(v)) return '$0';
   return '$' + Math.round(Math.abs(v)).toLocaleString('es-CO');
+}
+
+// ── Íconos de línea (estilo Feather: stroke, sin relleno) ──────────────────────
+// Estándar único para todos los íconos de la UI: reemplaza emojis y glifos de
+// texto (▲✎🗑️📅 etc.) por SVGs consistentes. Uso: icon('trash', 16).
+const ICONS = {
+  card:'<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+  dollar:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  trendUp:'<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  swap:'<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  bank:'<line x1="3" y1="21" x2="21" y2="21"/><line x1="5" y1="21" x2="5" y2="10"/><line x1="9" y1="21" x2="9" y2="10"/><line x1="15" y1="21" x2="15" y2="10"/><line x1="19" y1="21" x2="19" y2="10"/><polygon points="12 2 21 9 3 9"/>',
+  info:'<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  clipboard:'<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
+  arrowDownCircle:'<circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/>',
+  arrowUpCircle:'<circle cx="12" cy="12" r="10"/><polyline points="16 12 12 8 8 12"/><line x1="12" y1="16" x2="12" y2="8"/>',
+  arrowDown:'<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
+  arrowUp:'<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
+  arrowRight:'<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+  fileText:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  paperclip:'<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  key:'<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+  phone:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  undo:'<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>',
+  refresh:'<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  edit:'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+  trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  chevronUp:'<polyline points="18 15 12 9 6 15"/>',
+  chevronDown:'<polyline points="6 9 12 15 18 9"/>',
+  chevronRight:'<polyline points="9 18 15 12 9 6"/>',
+  dots:'<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  checkCircle:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  alertTriangle:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  minus:'<line x1="5" y1="12" x2="19" y2="12"/>',
+  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'
+};
+function icon(name, size){
+  size=size||15;
+  const path=ICONS[name];
+  if(!path) return '';
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>';
+}
+// Ícono en línea previo a un texto (ej. dentro de un botón), alineado con la baseline del texto.
+function btnIcon(name, size){
+  return '<span style="display:inline-flex;vertical-align:middle;position:relative;top:-1px;margin-right:6px">'+icon(name,size||14)+'</span>';
 }
 // ── Máscara de moneda para inputs (sin símbolo $, solo puntos de miles) ────────
 // Los campos de dinero usan type="text" + inputmode="numeric" (un <input type="number">
@@ -1733,7 +1785,7 @@ function syncIngresosDed(m, which){
 function render() {
   const m=getM();
   document.getElementById('lm').textContent = m.nombre;
-  document.getElementById('ly').textContent = ' '+m.año;
+  document.getElementById('ly').textContent = m.año;
   localStorage.setItem('fin26m', curM);
 
   const mi = MESES.indexOf(m.nombre);
@@ -1757,13 +1809,13 @@ function render() {
   const dispQ2Cls=dispQ2>=0?'sg':'sr';
   const vencQ1=calcVencidosQuincena(m,'q1');
   const vencQ2=calcVencidosQuincena(m,'q2');
-  const alertaHtml=' <span title="Cuota de crédito vencida" style="color:var(--red)">⚠️</span>';
+  const alertaHtml=' <span title="Cuota de crédito vencida" style="color:var(--amb);display:inline-block;vertical-align:-2px">'+icon('alertTriangle',12)+'</span>';
   // Total de ingresos del mes = suma de los ingresos registrados en ambas quincenas
   // (pestaña Ingresos), no el neto de nómina.
   const ingQ1=calcIngresosQuincena(m,'q1'), ingQ2=calcIngresosQuincena(m,'q2');
   const tIngresos=ingQ1+ingQ2;
   // Chevron (▲ abierto / ▼ cerrado) y marca visual del pill actualmente seleccionado/expandido.
-  const chv=function(key){ return statBreakdownOpen[key]?'▲':'▼'; };
+  const chv=function(key){ return icon(statBreakdownOpen[key]?'chevronUp':'chevronDown',9); };
   const selSt=function(key){ return statBreakdownOpen[key]?'box-shadow:inset 0 0 0 1.5px var(--acc);background:var(--surf2)':''; };
   // Cada pill navega a su pestaña (selectStat) y además despliega su propio desglose
   // in-place, quedando marcado como seleccionado mientras esté expandido.
@@ -1784,7 +1836,7 @@ function render() {
 
   document.getElementById('summary').style.display = summaryOpen ? 'grid' : 'none';
   const chevEl = document.getElementById('summary-chevron');
-  if (chevEl) chevEl.textContent = summaryOpen ? '▲' : '▼';
+  if (chevEl) chevEl.innerHTML = icon(summaryOpen ? 'chevronUp' : 'chevronDown', 13);
 
   // Fila simple de 2 líneas (label izq. / valor der.) para los desgloses — mismo estándar
   // visual .trow/.tlbl/.tval que ya usa el resto de la app.
@@ -1798,7 +1850,7 @@ function render() {
   const gastosBreakdownHtml=breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',false);
   function vencidosRowsHtml(venc){
     return venc.map(function(v,i){
-      return breakdownRow('⚠️ '+esc(v.nombre)+' · cuota '+v.numCuota+'/'+v.cuotasTotal,cop(v.valorCuota),'var(--red)',i<venc.length-1);
+      return breakdownRow('<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">'+icon('alertTriangle',12)+esc(v.nombre)+'</span> · cuota '+v.numCuota+'/'+v.cuotasTotal,cop(v.valorCuota),'var(--red)',i<venc.length-1);
     }).join('');
   }
   const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',vencQ1.length>0)+vencidosRowsHtml(vencQ1);
@@ -1917,7 +1969,7 @@ function setGFiltro(which,f){
 }
 
 function renderGastos(gastos,which) {
-  if(!gastos.length) return '<div class="empty"><div class="eic">📋</div><p>Sin gastos. Toca + para agregar.</p></div>';
+  if(!gastos.length) return '<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('clipboard',36)+'</div><p>Sin gastos. Toca + para agregar.</p></div>';
 
   // Collect unique methods for filter pills
   var metodos=['todos'];
@@ -1969,7 +2021,7 @@ function renderGastos(gastos,which) {
     var nameCls=sp?'pd':st?'np':'';
     var amtCls=sp?'pa':'';
     var nopagBadge=st?'<span class="nopag-badge">Sin pagar</span>':'';
-    var chkTxt=sp?'✓':st?'→':'';
+    var chkTxt=sp?icon('check',11):st?icon('arrowRight',11):'';
     return '<div class="g-sub-row">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+chkTxt+'</div>'
       +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
@@ -2003,7 +2055,7 @@ function renderGastos(gastos,which) {
 
       var deudaRow='';
       var grpChk=allPaid?'paid':'';
-      var grpTxt=allPaid?'✓':'';
+      var grpTxt=allPaid?icon('check',11):'';
       // Mostrar lo pagado si hay subgastos pagados
       var pendienteHtml=subsPagados>0
         ?'<div style="font-size:10px;color:var(--grn);margin-top:1px">Pag: '+cop(subsPagados)+'</div>'
@@ -2011,11 +2063,11 @@ function renderGastos(gastos,which) {
       return '<div class="g-group">'
         +'<div class="g-group-head" onclick="toggleGG(\''+g.id+'\',\'gg-'+gi+'\',\'gc-'+gi+'\')">'
         +'<div class="gchk '+grpChk+'">'+grpTxt+'</div>'
-        +'<div class="ginfo"><div class="gname">'+esc(nombreGasto(g))+countBadge+(g.tcLinked?'<span style="font-size:10px;color:var(--acc);margin-left:5px">⟳</span>':'')+' </div><div class="gmeta">'+esc(g.metodo||'')+'</div></div>'
+        +'<div class="ginfo"><div class="gname">'+esc(nombreGasto(g))+countBadge+(g.tcLinked?'<span style="display:inline-flex;vertical-align:middle;color:var(--acc);margin-left:5px">'+icon('refresh',11)+'</span>':'')+' </div><div class="gmeta">'+esc(g.metodo||'')+'</div></div>'
         +'<div style="text-align:right;display:flex;align-items:center;gap:6px">'
         +'<div><div class="gamt '+(g.tcLinked&&totalGrupo<0?'a':'')+'">'+(g.tcLinked&&totalGrupo<0?'-':'')+cop(Math.abs(totalGrupo))+'</div>'+pendienteHtml+'</div>'
-        +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);font-size:15px;padding:4px 6px;cursor:pointer;flex-shrink:0">✎</button>'
-        +'<div class="g-chevron" id="gc-'+gi+'">›</div></div>'
+        +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);padding:4px 6px;cursor:pointer;flex-shrink:0;display:flex;align-items:center">'+icon('edit',15)+'</button>'
+        +'<div class="g-chevron" id="gc-'+gi+'" style="display:flex">'+icon('chevronRight',16)+'</div></div>'
         +'</div>'
         +'<div id="gg-'+gi+'" style="display:'+(gGroupOpen[g.id]?'block':'none')+'"><div class="g-sub-wrap">'+subRowsHtml+deudaRow+addBtn+'</div></div>'
         +'</div>';
@@ -2033,7 +2085,7 @@ function renderGastos(gastos,which) {
       var mLabel=mNames[parseInt(mp2[1])-1]; // only month, no year
       mensBadge='<span style="font-size:10px;font-weight:600;background:var(--pur-d);color:var(--pur);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+mLabel+'</span>';
     }
-    var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px">🧾 '+esc(g.comprobante)+'</span>':'';
+    var compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px;display:inline-flex;align-items:center;gap:3px;vertical-align:middle">'+icon('paperclip',11)+esc(g.comprobante)+'</span>':'';
     if(g.cuotas_total>0&&g.cuota_actual>0){
       var cuotaColor=g.pagado_flag?'var(--grn)':'var(--amb)';
       var cuotaLbl=g.cuota_actual+'/'+g.cuotas_total;
@@ -2064,7 +2116,7 @@ function renderGastos(gastos,which) {
     var namCls=p?'pd':tras?'np':'';
     var amtCls=p?'pa':'';
     var nopag=tras?'<span class="nopag-badge">Sin pagar</span>':'';
-    var chkTxt=p?'✓':tras?'→':'';
+    var chkTxt=p?icon('check',11):tras?icon('arrowRight',11):'';
     var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):esc(g.metodo||'');
     return '<div class="grow '+gCls+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
@@ -2138,7 +2190,7 @@ function renderGastos(gastos,which) {
     +'<span style="font-size:11px;font-weight:700;color:var(--txt)">'+pct+'%</span>'
     +'<button onclick="toggleGFilter(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px">'
     +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
-    +'Filtrar '+(isOpen?'▲':'▼')
+    +'Filtrar '+icon(isOpen?'chevronUp':'chevronDown',10)
     +'</button>'
     +'</div>'
     +'</div>'
@@ -2254,19 +2306,6 @@ function renderTC(m) {
     +'<button onclick="openNewCard()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>'
     +'</div>';
 
-  // Disponible de tarjeta (agregado): suma de (cupo - saldo) de las tarjetas con cupo configurado.
-  // Si ninguna tarjeta tiene cupo definido, no se muestra nada (no hay límite con qué calcularlo).
-  const tarjetasConCupo=tcIds.filter(function(tid){return m.tarjetas[tid].info&&m.tarjetas[tid].info.cupo;});
-  const tcDisponibleTotal=tarjetasConCupo.length
-    ?tarjetasConCupo.reduce(function(a,tid){return a+(m.tarjetas[tid].info.cupo-calcTCSaldo(m,tid));},0)
-    :null;
-  const dispTotalRow=tcDisponibleTotal===null?'':(
-    '<div style="padding:0 14px 10px;display:flex;justify-content:space-between;align-items:center">'
-    +'<span style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Disponible tarjeta</span>'
-    +'<span style="font-size:13px;font-weight:700;color:var(--'+(tcDisponibleTotal>=0?'grn':'red')+')">'+(tcDisponibleTotal<0?'-':'')+cop(Math.abs(tcDisponibleTotal))+'</span>'
-    +'</div>'
-  );
-
   const compras=tc.filter(function(x){return x.tipo==='Compra';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
   const abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
   const saldo=compras-abonos;
@@ -2287,19 +2326,35 @@ function renderTC(m) {
     +'<button class="nedit" style="padding:4px 12px;font-size:12px;color:var(--red)" onclick="confirmDeleteCard(\''+curTC+'\')">Eliminar tarjeta</button>'
     +'</div>'):'';
 
-  const infoCard='<div class="card" style="margin-bottom:10px">'
-    +'<div class="chead" onclick="toggleTCInfo()" style="cursor:pointer">'
-    +'<span class="ctitle">Info de '+esc(t.nombre)+'</span>'
-    +'<div style="display:flex;align-items:center;gap:8px">'
-    +(tcOpen?'':'<span style="font-size:11px;color:var(--mut)">'+(info.fechaPago?fmtInfoDate(info.fechaPago):'Sin definir')+'</span>')
-    +'<button onclick="event.stopPropagation();editTCInfo()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:14px;padding:2px 6px">✎</button>'
-    +'<span style="color:var(--mut);font-size:14px">'+(tcOpen?'▲':'▼')+'</span>'
+  const ultimos4Html=info.ultimos4?' <span style="color:var(--mut);font-weight:500;letter-spacing:1px">•••• '+esc(info.ultimos4)+'</span>':'';
+  const icCard='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>';
+  const icDollar='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const icTrend='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>';
+  const headerCard='<div class="card" style="padding:16px;margin-bottom:10px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:center;gap:10px;min-width:0">'
+    +'<div style="width:32px;height:22px;border-radius:4px;background:var(--surf2);color:var(--mut);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icCard+'</div>'
+    +'<span style="font-size:15px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.nombre)+ultimos4Html+'</span>'
+    +'</div>'
+    +'<button onclick="toggleTCInfo()" style="background:none;border:none;color:var(--mut);cursor:pointer;padding:2px 8px;flex-shrink:0;display:flex;align-items:center">'+icon('dots',18)+'</button>'
+    +'</div>'
+    +'<div style="display:flex;align-items:stretch;border:1px solid var(--brd2);border-radius:var(--r2);overflow:hidden">'
+    +'<div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;min-width:0">'
+    +'<div style="min-width:0"><div style="font-size:11px;color:var(--mut);margin-bottom:2px">Saldo actual</div>'
+    +'<div style="font-size:14px;font-weight:500;color:var(--'+(saldo<0?'grn':'amb')+')">'+(saldo<0?'-':'')+cop(Math.abs(saldo))+'</div></div>'
+    +'<div style="width:30px;height:30px;border-radius:8px;background:var(--'+(saldo<0?'grn':'amb')+'-d);color:var(--'+(saldo<0?'grn':'amb')+');display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icDollar+'</div>'
+    +'</div>'
+    +'<div style="width:1px;background:var(--brd2)"></div>'
+    +'<div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;min-width:0">'
+    +'<div style="min-width:0"><div style="font-size:11px;color:var(--mut);margin-bottom:2px">Disponible</div>'
+    +'<div style="font-size:14px;font-weight:500;color:var(--grn)">'+(cupoDisp!==null?cop(cupoDisp):'<span style="font-size:12px;font-style:italic;color:var(--mut)">Sin cupo</span>')+'</div></div>'
+    +'<div style="width:30px;height:30px;border-radius:8px;background:var(--grn-d);color:var(--grn);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icTrend+'</div>'
     +'</div>'
     +'</div>'
-    +infoBody
+    +(tcOpen?'<div style="border-top:1px solid var(--brd);margin-top:14px;padding-top:6px">'+infoBody+'</div>':'')
     +'</div>';
 
-  if(!tc.length) return cardPills+dispTotalRow+infoCard+'<div class="empty"><div class="eic">💳</div><p>Sin movimientos. Toca + para agregar.</p></div>';
+  if(!tc.length) return cardPills+headerCard+'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('card',36)+'</div><p>Sin movimientos. Toca + para agregar.</p></div>';
 
   var grupos={};
   var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
@@ -2310,49 +2365,64 @@ function renderTC(m) {
   });
   var gruposArr=Object.entries(grupos).map(function(entry){
     var nombre=entry[0], items=entry[1];
-    var total=items.reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
-    var tipo=items[0].tipo;
+    var neto=items.reduce(function(a,x){return a+(x.tipo==='Abono'?-Math.abs(x.valor||0):Math.abs(x.valor||0));},0);
+    var total=Math.abs(neto);
+    var tipo=neto<0?'Abono':'Compra';
     var firstFecha=items[0]?items[0].fecha:'';
     return {nombre:nombre,items:items,total:total,tipo:tipo,firstFecha:firstFecha};
   }).sort(function(a,b){return a.firstFecha>b.firstFecha?-1:a.firstFecha<b.firstFecha?1:0;});
 
   var grupoRows=gruposArr.map(function(g,gi){
+    var zero=g.total===0;
     var ab=g.tipo==='Abono';
     var detalles=g.items.map(function(x){
+      var xAb=x.tipo==='Abono';
       return '<div class="tc-detail" onclick="editTC(\''+x.id+'\')">'
         +'<div style="font-size:12px;color:var(--mut)">'+fmtD(x.fecha)+'</div>'
-        +'<div style="font-size:12px;font-weight:600;color:var(--'+(ab?'grn':'red')+')">'+(ab?'-':'+')+cop(Math.abs(x.valor||0))+'</div>'
+        +'<div style="font-size:12px;font-weight:600;color:var(--'+(xAb?'grn':'red')+')">'+(xAb?'-':'+')+cop(Math.abs(x.valor||0))+'</div>'
         +'</div>';
     }).join('');
     var countBadge=g.items.length>1?'<span class="tc-count">'+g.items.length+'</span>':'';
     var dateRange=g.items.length===1?fmtD(g.items[0].fecha):fmtD(g.items[0].fecha)+' – '+fmtD(g.items[g.items.length-1].fecha);
     return '<div class="tc-group" id="tcg-'+gi+'">'
       +'<div class="tc-group-head" onclick="toggleTCG('+gi+')">'
-      +'<div class="tcic '+(ab?'a':'c')+'">'+(ab?'↓':'↑')+'</div>'
+      +(zero?'<div class="tcic" style="background:var(--brd);color:var(--mut)">'+icon('minus',14)+'</div>':'<div class="tcic '+(ab?'a':'c')+'">'+icon(ab?'arrowDown':'arrowUp',14)+'</div>')
       +'<div style="flex:1;min-width:0">'
       +'<div class="tcdesc">'+esc(g.nombre)+countBadge+'</div>'
       +'<div class="tcdate">'+dateRange+'</div>'
       +'</div>'
       +'<div style="text-align:right;display:flex;align-items:center;gap:8px">'
-      +'<div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(g.total)+'</div>'
-      +'<div class="tc-chevron" id="tcc-'+gi+'">›</div>'
+      +(zero?'<div class="tcval" style="color:var(--mut)">'+cop(0)+'</div>':'<div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(g.total)+'</div>')
+      +'<div class="tc-chevron" id="tcc-'+gi+'" style="display:flex">'+icon('chevronRight',16)+'</div>'
       +'</div>'
       +'</div>'
       +'<div class="tc-detail-wrap" id="tcd-'+gi+'" style="display:none">'+detalles+'</div>'
       +'</div>';
   }).join('');
 
-  return cardPills+dispTotalRow+infoCard+'<div class="card">'
-    +'<div class="chead">'
-    +'<span class="ctitle">'+esc(t.nombre)+'</span>'
-    +'<div style="display:flex;gap:8px;align-items:center">'
-    +'<span class="badge '+(saldo<0?'br':'ba')+'">Saldo '+(saldo<0?'-':'')+cop(Math.abs(saldo))+'</span>'
-    +(info.cupo?'<span class="badge '+(cupoDisp>=0?'bg':'br')+'">Disp: '+(cupoDisp<0?'-':'')+cop(Math.abs(cupoDisp))+'</span>':'')
+  const periodoTotal=compras+abonos;
+  const comprasDeg=periodoTotal>0?(compras/periodoTotal)*360:0;
+  const icSwap='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+  const resumenRow='<div style="display:flex;align-items:center;gap:12px;padding:14px;border-top:1px solid var(--brd)">'
+    +'<div style="width:34px;height:34px;border-radius:10px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icSwap+'</div>'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:11px;color:var(--mut);margin-bottom:3px">Resumen del periodo</div>'
+    +'<div style="font-size:13px"><span style="color:var(--mut)">Compras</span> <span style="font-weight:600;color:var(--red)">'+cop(compras)+'</span>'
+    +'<span style="color:var(--mut);margin:0 5px">|</span><span style="color:var(--mut)">Abonos</span> <span style="font-weight:600;color:var(--grn)">- '+cop(abonos)+'</span></div>'
     +'</div>'
+    +(periodoTotal>0?('<div style="position:relative;width:44px;height:44px;flex-shrink:0">'
+      +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--red) '+comprasDeg+'deg,var(--grn) 0deg)"></div>'
+      +'<div style="position:absolute;inset:8px;border-radius:50%;background:var(--surf)"></div>'
+      +'</div>'):'')
+    +'</div>';
+
+  return cardPills+headerCard
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 8px">'
+    +'<span style="font-size:15px;font-weight:700;color:var(--txt)">Movimientos</span>'
     +'</div>'
+    +'<div class="card">'
     +grupoRows
-    +'<div class="trow"><span class="tlbl">Compras · Abonos</span>'
-    +'<span class="tval"><span style="color:var(--red)">'+cop(compras)+'</span> · <span style="color:var(--grn)">'+cop(abonos)+'</span></span></div>'
+    +resumenRow
     +'</div>';
 }
 
@@ -2449,7 +2519,7 @@ function renderIngresos(m){
   var noteRow='<div style="padding:0 14px 10px;font-size:11px;color:var(--mut)">Se suma automáticamente al Disponible '+qLabel+' (como deducción de Nómina, no editable ahí).</div>';
 
   if(!lista.length){
-    return pills+noteRow+'<div class="empty"><div class="eic">💰</div><p>Sin ingresos en '+qLabel+'. Toca + para agregar.</p></div>';
+    return pills+noteRow+'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('arrowDownCircle',36)+'</div><p>Sin ingresos en '+qLabel+'. Toca + para agregar.</p></div>';
   }
 
   var sorted=[...lista].sort(function(a,b){return (b.fecha||'')>(a.fecha||'')?1:-1;});
@@ -2560,9 +2630,9 @@ function renderNom(m) {
       const display = isSuma ? val : -val;
       const cls = isSuma ? 'g' : 'r';
       const sign = isSuma ? '+' : '-';
-      const credBadge=(d.creditoId&&creditos[d.creditoId])?`<span class="npct" style="color:var(--acc)">🏦 Cuota ${d.numCuota}/${creditos[d.creditoId].cuotas}</span>`:'';
-      const ingBadge=d.esIngresos?`<span class="npct" style="color:var(--grn);cursor:pointer" onclick="event.stopPropagation();goToIngresos('${dedKey}')">🔒 Ver detalle ›</span>`:'';
-      const editBtn=d.esIngresos?'':`<button class="nedit" onclick="editDed(event,'${lbl}',${i})">✎</button>`;
+      const credBadge=(d.creditoId&&creditos[d.creditoId])?`<span class="npct" style="color:var(--acc);display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${icon('bank',11)}Cuota ${d.numCuota}/${creditos[d.creditoId].cuotas}</span>`:'';
+      const ingBadge=d.esIngresos?`<span class="npct" style="color:var(--grn);cursor:pointer;display:inline-flex;align-items:center;gap:4px;vertical-align:middle" onclick="event.stopPropagation();goToIngresos('${dedKey}')">${icon('lock',11)}Ver detalle${icon('chevronRight',11)}</span>`:'';
+      const editBtn=d.esIngresos?'':`<button class="nedit" onclick="editDed(event,'${lbl}',${i})" style="display:inline-flex;align-items:center">${icon('edit',13)}</button>`;
       return `<div class="nrow">
         <span class="nlbl">
           <span style="font-size:11px;font-weight:700;color:var(--${isSuma?'grn':'red'})">${sign}</span>
@@ -2589,7 +2659,7 @@ function renderNom(m) {
       </div>
       <div class="nrow"><span class="nlbl">Base de cálculo</span><span class="nval g">${cop(bq)}</span></div>
       <div class="sdiv" onclick="toggleNomDed('${dedKey}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-        <span>Deducciones</span><span style="font-size:11px;margin-right:4px">${dedOpen?'▲':'▼'}</span>
+        <span>Deducciones</span><span style="margin-right:4px;display:inline-flex">${icon(dedOpen?'chevronUp':'chevronDown',11)}</span>
       </div>
       ${dedOpen?drows:''}
       ${dedOpen?`<div class="nrow" style="justify-content:flex-end"><button class="nedit" style="padding:4px 12px;font-size:12px" onclick="addDed('${lbl}')">+ Deducción</button></div>`:''}
@@ -2615,7 +2685,7 @@ function renderNom(m) {
     <div class="nrow"><span class="nlbl">Neto Q2</span><span class="nval g">${cop(n2)}</span></div>
     <div class="nrow ntot"><span class="nlbl">Neto total mes</span><span class="nval g">${cop(n1+n2)}</span></div>
     <div class="nrow" style="justify-content:flex-end;border-top:1px solid var(--brd)">
-      <button class="nedit" style="padding:4px 12px;font-size:12px" onclick="editBasico()">✎ Editar básico y bonos</button>
+      <button class="nedit" style="padding:4px 12px;font-size:12px" onclick="editBasico()">${btnIcon('edit',12)}Editar básico y bonos</button>
     </div>
   </div>`;
   return resumen
@@ -2833,7 +2903,7 @@ function openGasto(g,which,parentId){
   var crearCreditoLinkHtml='';
   var verCreditoDetalleHtml='';
   if(e.creditoId && creditos[e.creditoId]){
-    verCreditoDetalleHtml='<button onclick="event.preventDefault();closeModal();openCreditoDetalle(\''+e.creditoId+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-bottom:10px">🏦 Ver detalle '+etiquetaCredito(creditos[e.creditoId])+' · '+esc(creditos[e.creditoId].nombre)+'</button>';
+    verCreditoDetalleHtml='<button onclick="event.preventDefault();closeModal();openCreditoDetalle(\''+e.creditoId+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-bottom:10px">'+btnIcon('bank',12)+'Ver detalle '+etiquetaCredito(creditos[e.creditoId])+' · '+esc(creditos[e.creditoId].nombre)+'</button>';
   } else if(!isE){
     crearCreditoLinkHtml='<button onclick="event.preventDefault();irCrearCreditoDesdeGasto(\''+wh+'\',\''+pid+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-top:4px">+ Crear crédito nuevo (cuotas fijas)</button>';
   } else {
@@ -2848,16 +2918,16 @@ function openGasto(g,which,parentId){
   }
 
   // Ícono pequeño en el encabezado de cada tarjeta, referente a su contenido.
-  function cheadIcon(emoji, titulo){
+  function cheadIcon(iconName, titulo){
     return '<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
-      +'<div class="tcic" style="width:26px;height:26px;font-size:13px;background:var(--acc-d);color:var(--acc)">'+emoji+'</div>'
+      +'<div class="tcic" style="width:26px;height:26px;background:var(--acc-d);color:var(--acc)">'+icon(iconName,13)+'</div>'
       +'<span class="ctitle">'+titulo+'</span></div></div>';
   }
 
   // Sección "Información del gasto": Nombre/Valor y Valor real/Forma de pago en 2 columnas;
   // "Usar gasto guardado" queda como última fila, de ancho completo.
   const infoGastoCard='<div class="card" style="margin-bottom:12px">'
-    +cheadIcon('📄','Información del gasto')
+    +cheadIcon('fileText','Información del gasto')
     +'<div style="padding:4px 14px 12px">'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +nameFieldHtml
@@ -2888,11 +2958,11 @@ function openGasto(g,which,parentId){
   // Características y Organización van lado a lado; si Organización no aplica, Características
   // ocupa el ancho completo en vez de dejar una columna vacía.
   const caracteristicasCard='<div class="card" style="'+(showOrganizacion?'margin-bottom:0;height:100%;box-sizing:border-box':'margin-bottom:12px')+'">'
-    +cheadIcon('⚙️','Características del gasto')
+    +cheadIcon('settings','Características del gasto')
     +caracteristicasInner+'</div>';
   const organizacionCard=showOrganizacion?(
     '<div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box">'
-    +cheadIcon('📁','Organización del gasto')
+    +cheadIcon('folder','Organización del gasto')
     +organizacionInner+'</div>'
   ):'';
   const caracOrgRow=showOrganizacion
@@ -2901,7 +2971,7 @@ function openGasto(g,which,parentId){
 
   // Sección "Estado del gasto": pagado / sin pagar.
   const estadoCard='<div class="card" style="margin-bottom:12px">'
-    +cheadIcon('🚩','Estado del gasto')
+    +cheadIcon('flag','Estado del gasto')
     +'<div style="padding:4px 14px 12px">'
     +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Pagado</label></div>'
     +'<div class="cbx-row"><input type="checkbox" id="g-sp"'+spChecked+'><label for="g-sp" style="font-size:13px;color:var(--amb)">'+spLabel+'</label></div>'
@@ -3382,7 +3452,7 @@ function openPagoModal(g,which){
     +'<input id="pg-comp" type="text" value="'+(g.comprobante||'')+'" placeholder="Ej: REF-12345, captura, número..."></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="confirmarPago(\''+g.id+'\',\''+which+'\')">✓ Marcar pagado</button>'
+    +'<button class="bpri" onclick="confirmarPago(\''+g.id+'\',\''+which+'\')">'+btnIcon('check',13)+'Marcar pagado</button>'
     +'</div>');
 }
 
@@ -3442,8 +3512,8 @@ function openTCModal(tc){
   const delBtn=isE?'<button class="bdel" onclick="delTC(\''+eid+'\')">Eliminar movimiento</button>':'';
   openModal('<div class="mtitle">'+(isE?'Editar movimiento':'Nuevo movimiento')+'</div>'
     +'<div class="trow2">'
-    +'<button class="topt'+cCls+'" id="oc" onclick="setTC(\'Compra\')">↑ Compra</button>'
-    +'<button class="topt'+aCls+'" id="oa" onclick="setTC(\'Abono\')">↓ Abono</button>'
+    +'<button class="topt'+cCls+'" id="oc" onclick="setTC(\'Compra\')">'+btnIcon('arrowUp',13)+'Compra</button>'
+    +'<button class="topt'+aCls+'" id="oa" onclick="setTC(\'Abono\')">'+btnIcon('arrowDown',13)+'Abono</button>'
     +'</div>'
     +'<div class="field"><label>Descripción</label><input id="tc-d" value="'+esc(t.descripcion)+'" placeholder="Gasolina, UNE..."></div>'
     +'<div class="field"><label>Valor</label><input id="tc-v" type="text" inputmode="numeric" value="'+valStr+'" oninput="maskMoneyInput(this)"></div>'
@@ -3488,7 +3558,7 @@ function calcFechaSugerida(fechaPagoStr){
 function toggleSummary(){
   summaryOpen=!summaryOpen;
   document.getElementById('summary').style.display = summaryOpen ? 'grid' : 'none';
-  document.getElementById('summary-chevron').textContent = summaryOpen ? '▲' : '▼';
+  document.getElementById('summary-chevron').innerHTML = icon(summaryOpen ? 'chevronUp' : 'chevronDown', 13);
   Object.keys(STAT_BREAKDOWN_DOM_IDS).forEach(function(key){
     var el=document.getElementById(STAT_BREAKDOWN_DOM_IDS[key]);
     if(el) el.style.display=(summaryOpen&&statBreakdownOpen[key])?'block':'none';
@@ -3744,8 +3814,8 @@ function editDed(e,lbl,i){
   openModal('<div class="mtitle">Editar deducción</div>'
     +'<div class="field"><label>Nombre</label><input id="d-n" value="'+esc(d.nombre)+'"></div>'
     +'<div class="trow2">'
-    +'<button class="topt'+rCls+'" id="d-resta" onclick="setDedTipo(\'resta\')">− Resta</button>'
-    +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
+    +'<button class="topt'+rCls+'" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
+    +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001" value="'+(d.porcentaje||'')+'"></div>'
     +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" value="'+moneyInputFmt(d.valor_fijo)+'" oninput="maskMoneyInput(this)"></div>'
@@ -3759,8 +3829,8 @@ function addDed(lbl){
   openModal('<div class="mtitle">Nueva deducción / ingreso</div>'
     +'<div class="field"><label>Nombre</label><input id="d-n" placeholder="Prima, Salud, Bono..."></div>'
     +'<div class="trow2">'
-    +'<button class="topt sc" id="d-resta" onclick="setDedTipo(\'resta\')">− Resta</button>'
-    +'<button class="topt" id="d-suma" onclick="setDedTipo(\'suma\')">+ Suma</button>'
+    +'<button class="topt sc" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
+    +'<button class="topt" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001"></div>'
     +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" oninput="maskMoneyInput(this)"></div>'
@@ -3812,10 +3882,10 @@ function openCatalogosMenu(){
     +'<div style="display:flex;flex-direction:column">'
     +'<div onclick="openGastoTemplates()" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer">'
     +'<span style="font-size:14px;color:var(--txt)">Gastos</span>'
-    +'<span style="font-size:11px;color:var(--mut)">'+catTipos.length+' ítem(s) ›</span></div>'
+    +'<span style="font-size:11px;color:var(--mut);display:inline-flex;align-items:center;gap:4px">'+catTipos.length+' ítem(s)'+icon('chevronRight',12)+'</span></div>'
     +'<div onclick="openCatList(\'metodos\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer">'
     +'<span style="font-size:14px;color:var(--txt)">Formas de pago</span>'
-    +'<span style="font-size:11px;color:var(--mut)">'+catMetodos.length+' ítem(s) ›</span></div>'
+    +'<span style="font-size:11px;color:var(--mut);display:inline-flex;align-items:center;gap:4px">'+catMetodos.length+' ítem(s)'+icon('chevronRight',12)+'</span></div>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
 }
@@ -3831,8 +3901,8 @@ function openCatList(tipo){
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--brd)">'
       +'<span style="font-size:13px;color:var(--txt)">'+esc(item.nombre)+'</span>'
       +'<div style="display:flex;gap:8px">'
-      +'<button onclick="editCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✎</button>'
-      +'<button onclick="deleteCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑</button>'
+      +'<button onclick="editCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;display:flex;align-items:center">'+icon('edit',13)+'</button>'
+      +'<button onclick="deleteCatItem(\''+tipo+'\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;display:flex;align-items:center">'+icon('trash',13)+'</button>'
       +'</div></div>';
   }).join(''):'<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Sin elementos. Agrega el primero.</div>';
 
@@ -3975,15 +4045,15 @@ function openGastoTemplates(){
       +(detalle.length?'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+detalle.join(' · ')+'</div>':'')
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-shrink:0">'
-      +'<button onclick="editGastoTemplate(\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✎</button>'
-      +'<button onclick="deleteCatItem(\'tipos\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑</button>'
+      +'<button onclick="editGastoTemplate(\''+item.id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;display:flex;align-items:center">'+icon('edit',13)+'</button>'
+      +'<button onclick="deleteCatItem(\'tipos\',\''+item.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;display:flex;align-items:center">'+icon('trash',13)+'</button>'
       +'</div></div>';
   }).join(''):'<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Sin gastos guardados. Crea plantillas para reutilizar al registrar gastos.</div>';
 
   openModal('<div class="mtitle">Gastos (plantillas)</div>'
     +'<p style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px">Guarda gastos frecuentes con su valor, forma de pago y cuotas para no escribirlos cada vez. Son opcionales: en el formulario siempre puedes escribir un nombre libre.</p>'
     +'<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
-    +'<button onclick="seedGastosDesdeUltimoMes()" style="background:var(--surf2);border:1px solid var(--brd2);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--acc);cursor:pointer">↻ Crear desde el último mes</button>'
+    +'<button onclick="seedGastosDesdeUltimoMes()" style="background:var(--surf2);border:1px solid var(--brd2);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--acc);cursor:pointer">'+btnIcon('refresh',12)+'Crear desde el último mes</button>'
     +'</div>'
     +'<div style="max-height:320px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:14px">'+rowsHtml+'</div>'
     +'<div class="macts">'
@@ -4141,8 +4211,8 @@ function openInfoGeneral(){
       if(basicoAnterior>0 && basico!==basicoAnterior){
         var pctB=((basico-basicoAnterior)/basicoAnterior)*100;
         var subioB=pctB>0;
-        cambioBasicoHtml='<span style="font-size:10px;font-weight:700;color:var(--'+(subioB?'grn':'red')+');margin-left:6px">'
-          +(subioB?'▲':'▼')+' '+Math.abs(pctB).toFixed(1)+'%</span>';
+        cambioBasicoHtml='<span style="font-size:10px;font-weight:700;color:var(--'+(subioB?'grn':'red')+');margin-left:6px;display:inline-flex;align-items:center;gap:2px;vertical-align:middle">'
+          +icon(subioB?'arrowUp':'arrowDown',10)+Math.abs(pctB).toFixed(1)+'%</span>';
       }
     }
     // % de cambio del bono respecto al mes anterior
@@ -4152,8 +4222,8 @@ function openInfoGeneral(){
       if(bonoAnterior>0 && bono!==bonoAnterior){
         var pctBo=((bono-bonoAnterior)/bonoAnterior)*100;
         var subioBo=pctBo>0;
-        cambioBonoHtml='<span style="font-size:10px;font-weight:700;color:var(--'+(subioBo?'grn':'red')+');margin-left:6px">'
-          +(subioBo?'▲':'▼')+' '+Math.abs(pctBo).toFixed(1)+'%</span>';
+        cambioBonoHtml='<span style="font-size:10px;font-weight:700;color:var(--'+(subioBo?'grn':'red')+');margin-left:6px;display:inline-flex;align-items:center;gap:2px;vertical-align:middle">'
+          +icon(subioBo?'arrowUp':'arrowDown',10)+Math.abs(pctBo).toFixed(1)+'%</span>';
       }
     }
     return '<tr style="border-bottom:1px solid var(--brd)">'
@@ -4194,7 +4264,7 @@ function openInfoGeneral(){
   }
   var cesantias=Math.round(sumaCesantias);
   var interesesCesantias=Math.round(cesantias*0.12);
-  var avisoAño=añoTieneSugeridos?'<div style="font-size:11px;color:var(--amb);margin-top:2px">⚠ Incluye meses sugeridos (sin crear aún)</div>':'';
+  var avisoAño=añoTieneSugeridos?'<div style="font-size:11px;color:var(--amb);margin-top:2px;display:flex;align-items:center;gap:5px">'+icon('alertTriangle',12)+'Incluye meses sugeridos (sin crear aún)</div>':'';
 
   var resumenPills='<div class="card" style="margin-bottom:10px">'
     +'<div class="chead"><span class="ctitle">Resumen anual</span></div>'
@@ -4248,21 +4318,31 @@ function openMonthPicker(){
     const total=activos.reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
     const pagado=activos.filter(function(g){return g.pagado_flag;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
     const pct=total>0?Math.round(pagado/total*100):0;
-    const barColor=pct===100?'var(--grn)':pct>50?'var(--amb)':'var(--surf2)';
-    return '<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--brd);cursor:pointer'+(isCur?'':';opacity:.85')+';">'
-      +'<div style="flex:1">'
+    const ringColor=pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)';
+    const estadoTxt=isCur?'Actual':(pct>=75?'Completado':pct>=25?'En progreso':'Pendiente');
+    const estadoColor=isCur?'var(--acc)':(pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)');
+    return '<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--brd);cursor:pointer">'
+      +'<div style="width:30px;height:30px;border-radius:8px;background:'+(isCur?'var(--acc-d)':'var(--surf2)')+';color:'+(isCur?'var(--acc)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon('cal',15)+'</div>'
+      +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:13px;font-weight:'+(isCur?'700':'500')+';color:'+(isCur?'var(--acc)':'var(--txt)')+'">'+mes.nombre+' '+mes.año+'</div>'
-      +'<div style="height:4px;background:var(--brd);border-radius:4px;margin-top:5px;overflow:hidden">'
-      +'<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:4px;transition:width .3s"></div>'
       +'</div>'
-      +'</div>'
-      +'<div style="text-align:right;flex-shrink:0">'
-      +'<div style="font-size:12px;font-weight:600;color:'+(isCur?'var(--acc)':'var(--mut)')+'">'+pct+'%</div>'
-      +'<div style="font-size:10px;color:var(--mut)">'+(isCur?'actual':'')+'</div>'
+      +'<div style="position:relative;width:40px;height:40px;flex-shrink:0">'
+      +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+ringColor+' '+(pct*3.6)+'deg,var(--brd) 0deg)"></div>'
+      +'<div style="position:absolute;inset:4px;border-radius:50%;background:var(--surf);display:flex;align-items:center;justify-content:center">'
+      +'<span style="font-size:10px;font-weight:800;color:var(--txt)">'+pct+'%</span>'
+      +'</div></div>'
+      +'<div style="text-align:right;flex-shrink:0;min-width:0">'
+      +'<div style="font-size:11px;font-weight:700;color:'+estadoColor+'">'+estadoTxt+'</div>'
+      +'<div style="font-size:10px;color:var(--mut);white-space:nowrap">'+cop(pagado)+' / '+cop(total)+'</div>'
       +'</div>'
       +'</div>';
   }).join('');
-  openModal('<div class="mtitle">Seleccionar mes</div>'+monthList);
+  const legend='<div style="display:flex;justify-content:center;gap:14px;margin-top:14px;padding-top:10px;border-top:1px solid var(--brd)">'
+    +'<span style="font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block"></span>0 - 25%</span>'
+    +'<span style="font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--amb);display:inline-block"></span>25 - 75%</span>'
+    +'<span style="font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--grn);display:inline-block"></span>75 - 100%</span>'
+    +'</div>';
+  openModal('<div class="mtitle">Seleccionar mes</div>'+monthList+legend);
 }
 
 
@@ -4296,7 +4376,7 @@ function openDeleteMonth(){
       +'<div style="font-size:13px;font-weight:600;color:var(--txt)">'+mes.nombre+' '+mes.año+(isCur?' <span style="font-size:10px;color:var(--acc)">actual</span>':'')+'</div>'
       +'<div style="font-size:11px;color:var(--mut);margin-top:1px">'+gastos+' gastos · '+tc+' mov. tarjeta</div>'
       +'</div>'
-      +'<span style="color:var(--red);font-size:16px;padding-left:12px">🗑</span>'
+      +'<span style="color:var(--red);padding-left:12px;display:flex;align-items:center">'+icon('trash',16)+'</span>'
       +'</div>';
   }).join('');
   openModal('<div class="mtitle">Eliminar mes</div>'
@@ -4532,8 +4612,8 @@ function openMonthReview(){
         +'<div style="font-size:12px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(nombreGasto(g))+grupoTag+credTag+'</div>'
         +'<div style="font-size:10px;color:var(--mut)">'+cop(g.presupuesto)+'</div>'
         +'</div>'
-        +'<button onclick="moveDraftGasto(\''+g.id+'\',\''+which+'\',\''+otraQ+'\')" title="Mover a '+otraQ.toUpperCase()+'" style="background:var(--surf2);border:1px solid var(--brd2);border-radius:50%;width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--acc);cursor:pointer;font-size:13px;padding:0">→</button>'
-        +'<button onclick="deleteDraftGasto(\''+g.id+'\',\''+which+'\')" title="Eliminar de esta carga" style="background:var(--red-d);border:1px solid rgba(248,113,113,.35);border-radius:50%;width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--red);cursor:pointer;font-size:12px;padding:0">🗑</button>'
+        +'<button onclick="moveDraftGasto(\''+g.id+'\',\''+which+'\',\''+otraQ+'\')" title="Mover a '+otraQ.toUpperCase()+'" style="background:var(--surf2);border:1px solid var(--brd2);border-radius:50%;width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--acc);cursor:pointer;padding:0">'+icon('arrowRight',13)+'</button>'
+        +'<button onclick="deleteDraftGasto(\''+g.id+'\',\''+which+'\')" title="Eliminar de esta carga" style="background:var(--red-d);border:1px solid rgba(248,113,113,.35);border-radius:50%;width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--red);cursor:pointer;padding:0">'+icon('trash',13)+'</button>'
         +'</div>';
     }).join('');
   }
@@ -4634,9 +4714,9 @@ function openBackupMenu(){
     +'Importa un backup para restaurar tus datos.</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<button class="bpri" onclick="exportJSON()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
-    +'<span style="font-size:16px">📤</span> Exportar / compartir backup</button>'
+    +icon('upload',16)+' Exportar / compartir backup</button>'
     +'<button class="bcnl" onclick="document.getElementById(\'imp-file\').click();closeModal()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
-    +'<span style="font-size:16px">📥</span> Importar backup JSON</button>'
+    +icon('download',16)+' Importar backup JSON</button>'
     +'</div>');
 }
 
