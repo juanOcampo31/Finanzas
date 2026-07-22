@@ -15,8 +15,7 @@
 <body>
 <div id="app">
   <div class="topbar">
-    <div id="mtabs" style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch"></div>
-    <button class="ibtn" onclick="openNewMonth()" title="Nuevo mes" aria-label="Crear nuevo mes" style="flex-shrink:0;margin:0 4px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+    <div id="mtabs" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-start;gap:2px"></div>
     <div class="topbar-right">
       <input type="file" id="imp-file" accept=".json,.txt" style="display:none" onchange="importJSON(this)">
       <button class="ibtn" onclick="openOverflowMenu()" title="Más opciones" aria-label="Más opciones"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>

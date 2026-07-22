@@ -1784,38 +1784,73 @@ function syncIngresosDed(m, which){
   }
 }
 
-// ── Navegación de meses (tabs superiores, scroll horizontal) ───────────────────
-// Un ítem compacto (mes abreviado + punto de estado) por cada mes existente en db,
-// para que la barra no se vea como una fila de píldoras anchas ocupando todo el
-// ancho, sino solo el espacio que sus meses realmente necesitan. El mes activo va
-// resaltado con texto en negrilla y un subrayado; el punto indica qué tan pagado
-// está el mes (mismo criterio que el modal "Seleccionar mes"): verde 75-100%,
-// ámbar 25-75%, rojo <25%, gris si aún no tiene gastos. El botón "+" para crear
-// el siguiente mes vive fuera de esta barra (fijo en el topbar, ver index.html)
-// para que no se desplace ni cambie de posición al agregar meses.
+// ── Navegación de meses (tabs superiores, ventana de 3) ─────────────────────────
+// Muestra siempre como máximo 3 meses: anterior, activo (centrado) y siguiente.
+// El botón "+" (círculo punteado) solo reemplaza al mes "siguiente" cuando el mes
+// activo YA es el último; mientras el último mes solo se ve como "siguiente" (sin
+// estar centrado), la flecha ">" sigue visible para poder centrarlo. La flecha
+// "<" nunca se oculta (evita el salto de layout al llegar al primer mes); ahí
+// simplemente se deshabilita porque no hay mes anterior. El punto indica qué tan
+// pagado está cada mes (mismo criterio que el modal "Seleccionar mes"): verde
+// 75-100%, ámbar 25-75%, rojo <25%, gris si aún no tiene gastos.
 function renderMonthTabs(){
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
-  return keys.map(function(k){
+  const idx=keys.indexOf(curM);
+  const lastKey=keys[keys.length-1];
+  const isLast=curM===lastKey;
+  const prevKey=idx>0?keys[idx-1]:null;
+  const nextKey=isLast?null:keys[idx+1];
+
+  function dotColorFor(k){
     const mes=db[k];
-    const active=k===curM;
     const activos=[...(mes.q1_gastos||[]),...(mes.q2_gastos||[])].filter(function(g){return !g.sinpagar&&!g.esGrupo;});
     const total=activos.reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
     const pagado=activos.filter(function(g){return g.pagado_flag;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
     const pct=total>0?Math.round(pagado/total*100):0;
-    const dotColor=total===0?'var(--brd2)':pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)';
+    return total===0?'var(--brd2)':pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)';
+  }
+
+  function monthBtn(k){
+    const mes=db[k];
+    const active=k===curM;
     return '<button onclick="goToMonth('+k+')" data-mk="'+k+'" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;cursor:pointer;padding:4px 8px 6px;border-bottom:2px solid '+(active?'var(--acc)':'transparent')+'">'
       +'<span style="font-size:11px;font-weight:'+(active?'800':'600')+';color:'+(active?'var(--txt)':'var(--mut)')+';white-space:nowrap">'+mes.nombre.slice(0,3)+'</span>'
-      +'<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';flex-shrink:0"></span>'
+      +'<span style="width:8px;height:8px;border-radius:50%;background:'+dotColorFor(k)+';flex-shrink:0"></span>'
       +'</button>';
-  }).join('');
+  }
+
+  function arrowBtn(dir,targetKey){
+    const disabled=targetKey===null;
+    const path=dir==='left'?'<polyline points="15 18 9 12 15 6"/>':'<polyline points="9 18 15 12 9 6"/>';
+    return '<button'+(disabled?' disabled':' onclick="goToMonth('+targetKey+')"')+' aria-label="'+(dir==='left'?'Mes anterior':'Mes siguiente')+'" style="flex-shrink:0;background:none;border:none;cursor:'+(disabled?'default':'pointer')+';color:'+(disabled?'var(--brd2)':'var(--mut)')+';padding:4px 2px;display:flex;align-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></button>';
+  }
+
+  const addBtn='<button onclick="openNewMonth()" data-mk="add" title="Nuevo mes" aria-label="Crear nuevo mes" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:none;border:none;cursor:pointer;padding:4px 8px 6px;border-bottom:2px solid transparent">'
+    +'<span style="width:24px;height:24px;border-radius:50%;border:1.5px dashed var(--mut);display:flex;align-items:center;justify-content:center;color:var(--mut);flex-shrink:0">'
+    +'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    +'</span>'
+    +'</button>';
+
+  let html='';
+  html+=arrowBtn('left',prevKey);
+  if(prevKey!==null) html+=monthBtn(prevKey);
+  html+=monthBtn(curM);
+  if(isLast){
+    html+=addBtn;
+  } else {
+    html+=monthBtn(nextKey);
+    // Sin mes anterior que mostrar (estamos en el primero): se agrega un mes más
+    // a la derecha para que siempre se vean 3 meses en la ventana, no solo 2.
+    if(prevKey===null && idx+2<=keys.length-1) html+=monthBtn(keys[idx+2]);
+    html+=arrowBtn('right',nextKey);
+  }
+  return html;
 }
 
 // ── Render principal ──────────────────────────────────────────────────────────
 function render() {
   const m=getM();
   document.getElementById('mtabs').innerHTML = renderMonthTabs();
-  const activeTab=document.querySelector('#mtabs [data-mk="'+curM+'"]');
-  if(activeTab) activeTab.scrollIntoView({inline:'center',block:'nearest'});
   localStorage.setItem('fin26m', curM);
 
   const mi = MESES.indexOf(m.nombre);
@@ -4172,8 +4207,11 @@ function openOverflowMenu(){
   const icTrash='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
   const icList='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
   const icLock='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+  const icCal='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
   openModal('<div class="mtitle">Más opciones</div>'
     +'<div style="display:flex;flex-direction:column">'
+    +'<div onclick="closeModal();openMonthPicker()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
+    +icCal+'<span style="font-size:14px;color:var(--txt)">Histórico de meses</span></div>'
     +'<div onclick="closeModal();openCatalogosMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
     +icList+'<span style="font-size:14px;color:var(--txt)">Catálogos</span></div>'
     +'<div onclick="closeModal();openBackupMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
