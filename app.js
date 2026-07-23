@@ -2813,13 +2813,16 @@ function sugerirCuotaCredito(){
   const cr=creditos[crId]; if(!cr) return;
   const amort=calcAmortizacion(cr);
   const pagos=cr.pagos||[];
-  // Cuotas de este crédito que ya tienen un gasto creado este mes (en Q1 o Q2) — para no
-  // sugerir de nuevo la misma cuota si, por ejemplo, la 5/36 ya se creó en Q1 y ahora se está
-  // creando otro gasto del mismo crédito en Q2: debe sugerir la 6/36, no repetir la 5/36.
-  const mCtx=getM();
+  // Cuotas de este crédito que ya tienen un gasto creado en CUALQUIER mes (no solo el que se
+  // está viendo) — para no repetir la misma cuota si, por ejemplo, la 6/36 ya se creó en Q2
+  // del mes anterior y ahora se está creando otro gasto del mismo crédito en Q1 del mes
+  // siguiente: debe sugerir la 7/36, no repetir la 6/36.
   const usadas={};
-  (mCtx.q1_gastos||[]).concat(mCtx.q2_gastos||[]).forEach(function(g){
-    if(g.creditoId===crId && g.numCuota) usadas[g.numCuota]=true;
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    (mes.q1_gastos||[]).concat(mes.q2_gastos||[]).forEach(function(g){
+      if(g.creditoId===crId && g.numCuota) usadas[g.numCuota]=true;
+    });
   });
   // Buscar la primera cuota NO pagada y sin gasto ya creado
   var idx=amort.rows.findIndex(function(r,i){return !pagos[i] && !usadas[r.numero];});
@@ -3412,6 +3415,37 @@ function editGasto(id,which){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
   const g=list.find(x=>x.id===id);if(g)openGasto(g,which);
 }
+// Al pagar la cuota N de un crédito, busca si queda alguna cuota ANTERIOR (numCuota menor)
+// de ese mismo crédito todavía sin pagar en cualquier mes — pasa cuando el usuario crea
+// gastos de cuotas fuera de orden o se salta un mes. Devuelve la más reciente de esas
+// pendientes (numCuota más alto por debajo de la que se está pagando), o null si no hay.
+function buscarCuotaPendienteAnterior(creditoId,numCuotaPagada){
+  var anterior=null;
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    [['q1_gastos','Q1'],['q2_gastos','Q2']].forEach(function(par){
+      (mes[par[0]]||[]).forEach(function(g){
+        if(g.creditoId===creditoId && g.numCuota && g.numCuota<numCuotaPagada && !g.pagado_flag){
+          if(!anterior || g.numCuota>anterior.numCuota){
+            anterior={numCuota:g.numCuota,mesNombre:mes.nombre,año:mes.año,which:par[1]};
+          }
+        }
+      });
+    });
+  });
+  return anterior;
+}
+// Impide pagar una cuota si queda una anterior sin pagar (deben pagarse en orden) — si
+// bloquea, ya deja el aviso mostrado con el mes/quincena de la cuota pendiente.
+function bloquearPagoFueraDeOrden(g){
+  if(!g.creditoId || !g.numCuota) return false;
+  const pend=buscarCuotaPendienteAnterior(g.creditoId,g.numCuota);
+  if(pend){
+    showAlert('No puedes marcar esta cuota como pagada: la cuota '+pend.numCuota+' de este crédito sigue sin pagar en '+pend.mesNombre+' '+pend.año+' · '+pend.which+'. Las cuotas deben pagarse en orden.',{title:'Cuota anterior pendiente'});
+    return true;
+  }
+  return false;
+}
 function toggleP(e,id,which){
   e.stopPropagation();
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
@@ -3444,6 +3478,7 @@ function toggleP(e,id,which){
   } else if(g.metodo==='PSE' || g.mensualidad){
     openPagoModal(g,which);
   } else {
+    if(bloquearPagoFueraDeOrden(g)) return;
     g.pagado_flag=true;
     if(g.parentId){
       const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
@@ -3523,6 +3558,7 @@ function confirmarPago(id,which){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
   const g=list.find(x=>x.id===id);
   if(!g) return;
+  if(bloquearPagoFueraDeOrden(g)) return;
   const val=moneyVal('pg-val')||null;
   const fecha=document.getElementById('pg-fecha').value||null;
   const comp=document.getElementById('pg-comp').value.trim()||null;
