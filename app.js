@@ -2548,7 +2548,7 @@ function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,venc
 }
 
 // Mini-tarjeta compacta de crédito (compartida entre Inicio y la pestaña Tarjeta).
-function buildTcMiniHtml(m,tid,onclickAttr){
+function buildTcMiniHtml(m,tid,onclickAttr,pickerHtml){
   const card=m.tarjetas[tid];
   if(!card) return '';
   const info=card.info||{};
@@ -2569,10 +2569,11 @@ function buildTcMiniHtml(m,tid,onclickAttr){
   if(dispTc!=null) footParts.push('Cupo libre <span style="color:var(--grn)">'+cop(dispTc)+'</span>');
   if(fechaCorteTxt) footParts.push('Corte '+fechaCorteTxt);
   return '<div class="tc-mini"'+(onclickAttr?' onclick="'+onclickAttr+'"':'')+'>'
+    +(pickerHtml||'')
     +'<div class="tc-mini-row">'
     +'<div class="tc-mini-chip">'+(info.marca?esc(info.marca.slice(0,4).toUpperCase()):'TC')+'</div>'
     +'<div class="tc-mini-mid">'
-    +'<div class="tc-mini-name">Tarjeta '+(info.marca?esc(info.marca):'')+' ····'+(info.ultimos4?esc(info.ultimos4):'····')+'</div>'
+    +'<div class="tc-mini-name">'+esc(card.nombre||('Tarjeta '+(info.marca||'')))+'</div>'
     +(fechaPagoTxt?'<div class="tc-mini-due">Paga antes del <span style="color:var(--amb)">'+fechaPagoTxt+'</span></div>':'')
     +'</div>'
     +'<div class="tc-mini-right"><div class="tc-mini-lbl">SALDO</div><div class="tc-mini-val">'+cop(saldo)+'</div></div>'
@@ -2582,12 +2583,29 @@ function buildTcMiniHtml(m,tid,onclickAttr){
     +'</div>';
 }
 
+// Pastillas para elegir qué tarjeta mostrar — compartidas entre Inicio y la pestaña
+// Tarjeta (misma variable curTC, así la selección queda sincronizada entre ambas vistas).
+// El botón "＋ Nueva" solo se incluye cuando showNew=true (solo en la pestaña Tarjeta).
+function buildTcPickerHtml(m,tcIds,activeTid,showNew){
+  if(tcIds.length<2 && !showNew) return '';
+  const pillsHtml=tcIds.map(function(tid){
+    var t=m.tarjetas[tid];
+    var active=tid===activeTid;
+    var cardSaldo=calcTCSaldo(m,tid);
+    return '<button onclick="event.stopPropagation();selectTC(\''+tid+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#06202B':'var(--mut)')+'">'+esc(t.nombre)+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
+  }).join('');
+  const newBtn=showNew?'<button onclick="event.stopPropagation();openNewCard()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>':'';
+  return '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch">'+pillsHtml+newBtn+'</div>';
+}
+
 function renderInicio(m){
   const qcardsHtml=buildQCardsHtml(m,homeQ,'selectHomeQ','DISPONIBLE',calcDisponibleQuincena(m,'q1'),calcDisponibleQuincena(m,'q2'),calcVencidosQuincena(m,'q1'),calcVencidosQuincena(m,'q2'),quincenaCompletada(m,'q1'),quincenaCompletada(m,'q2'));
 
-  // Tarjeta de crédito (primera tarjeta del mes; reutiliza los mismos datos de la pestaña Tarjeta)
+  // Tarjeta de crédito (reutiliza los mismos datos de la pestaña Tarjeta y la selección
+  // actual de tarjeta, curTC, para mostrar la misma que se eligió ahí o desde el picker)
   const tcIds=listTCIds(m);
-  const tcHtml=tcIds.length?buildTcMiniHtml(m,tcIds[0],'sw(2)'):'';
+  const homeTid=(curTC&&m.tarjetas[curTC])?curTC:tcIds[0];
+  const tcHtml=tcIds.length?buildTcMiniHtml(m,homeTid,'sw(2)',buildTcPickerHtml(m,tcIds,homeTid,false)):'';
 
   const list=homeQ==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
   const listHtml=renderGastos(list,homeQ);
@@ -2829,6 +2847,7 @@ function renderGastos(gastos,which) {
     +'<div class="pw"><div class="pb '+bc+'" style="width:'+pct+'%"></div></div>'
     +noteFilterRow
     +sortPillsHtml
+    +'<div style="height:1px;background:var(--brd);margin:0 0 4px"></div>'
     +rows
     +'<div class="glist-add" onclick="openGasto(null,\''+which+'\')">+ Agregar gasto a Q'+qLabel+'</div>'
     +'</div>';
@@ -2919,7 +2938,6 @@ function renderTC(m) {
   const info=t.info||{fechaCorte:null,fechaPago:null,cupo:null};
   const sugerida=calcFechaSugerida(info.fechaPago);
   const tcOpen=tcInfoOpen;
-  const tcMiniHtml=buildTcMiniHtml(m,curTC,null);
 
   function fmtInfoDate(s){
     if(!s) return '<span style="color:var(--mut);font-style:italic">No definida</span>';
@@ -2927,18 +2945,10 @@ function renderTC(m) {
     return d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
   }
 
-  // ── Selector de tarjetas (píldoras) ──────────────────────────────────────
-  var cardPills='<div style="display:flex;gap:6px;overflow-x:auto;padding:10px 14px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch">'
-    +tcIds.map(function(tid){
-      var card=m.tarjetas[tid];
-      var active=tid===curTC;
-      var cardSaldo=calcTCSaldo(m,tid);
-      return '<button onclick="selectTC(\''+tid+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;'
-        +'background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'
-        +esc(card.nombre)+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
-    }).join('')
-    +'<button onclick="openNewCard()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>'
-    +'</div>';
+  // ── Selector de tarjetas (píldoras, compartido con el picker de Inicio) —
+  // va dentro del mismo panel tc-mini, igual que en Inicio.
+  var cardPills=buildTcPickerHtml(m,tcIds,curTC,true);
+  const tcMiniHtml=buildTcMiniHtml(m,curTC,null,cardPills);
 
   const compras=tc.filter(function(x){return x.tipo==='Compra';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
   const abonos =tc.filter(function(x){return x.tipo==='Abono';}).reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
@@ -2960,32 +2970,12 @@ function renderTC(m) {
     +'<button class="nedit" style="padding:4px 12px;font-size:12px;color:var(--red)" onclick="confirmDeleteCard(\''+curTC+'\')">Eliminar tarjeta</button>'
     +'</div>'):'';
 
-  const ultimos4Html=info.ultimos4?' <span style="color:var(--mut);font-weight:500;letter-spacing:1px">•••• '+esc(info.ultimos4)+'</span>':'';
-  const icCard='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>';
-  const icDollar='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
-  const icTrend='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>';
-  const headerCard='<div class="card" style="padding:16px;margin-bottom:10px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-    +'<div style="display:flex;align-items:center;gap:10px;min-width:0">'
-    +'<div style="width:32px;height:22px;border-radius:4px;background:var(--surf2);color:var(--mut);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icCard+'</div>'
-    +'<span style="font-size:15px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.nombre)+ultimos4Html+'</span>'
-    +'</div>'
+  const headerCard='<div class="card" style="padding:12px 14px;margin-bottom:10px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between">'
+    +'<span style="font-size:12px;font-weight:700;color:var(--mut)">Información de la tarjeta</span>'
     +'<button onclick="toggleTCInfo()" style="background:none;border:none;color:var(--mut);cursor:pointer;padding:2px 8px;flex-shrink:0;display:flex;align-items:center">'+icon('dots',18)+'</button>'
     +'</div>'
-    +'<div style="display:flex;align-items:stretch;border:1px solid var(--brd2);border-radius:var(--r2);overflow:hidden">'
-    +'<div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;min-width:0">'
-    +'<div style="min-width:0"><div style="font-size:11px;color:var(--mut);margin-bottom:2px">Saldo actual</div>'
-    +'<div style="font-size:14px;font-weight:500;color:var(--'+(saldo<0?'grn':'amb')+')">'+(saldo<0?'-':'')+cop(Math.abs(saldo))+'</div></div>'
-    +'<div style="width:30px;height:30px;border-radius:8px;background:var(--'+(saldo<0?'grn':'amb')+'-d);color:var(--'+(saldo<0?'grn':'amb')+');display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icDollar+'</div>'
-    +'</div>'
-    +'<div style="width:1px;background:var(--brd2)"></div>'
-    +'<div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;min-width:0">'
-    +'<div style="min-width:0"><div style="font-size:11px;color:var(--mut);margin-bottom:2px">Disponible</div>'
-    +'<div style="font-size:14px;font-weight:500;color:var(--grn)">'+(cupoDisp!==null?cop(cupoDisp):'<span style="font-size:12px;font-style:italic;color:var(--mut)">Sin cupo</span>')+'</div></div>'
-    +'<div style="width:30px;height:30px;border-radius:8px;background:var(--grn-d);color:var(--grn);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icTrend+'</div>'
-    +'</div>'
-    +'</div>'
-    +(tcOpen?'<div style="border-top:1px solid var(--brd);margin-top:14px;padding-top:6px">'+infoBody+'</div>':'')
+    +(tcOpen?'<div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:6px">'+infoBody+'</div>':'')
     +'</div>';
 
   // Créditos marcados como "compra diferida a cuotas" de esta tarjeta (cr.tcVinculada===curTC)
@@ -3008,7 +2998,7 @@ function renderTC(m) {
       +'<div class="card" style="margin-bottom:10px">'+filas+'</div>';
   }
 
-  if(!tc.length) return tcMiniHtml+cardPills+headerCard+creditosVinculadosHtml+'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('card',36)+'</div><p>Sin movimientos. Toca + para agregar.</p></div>';
+  if(!tc.length) return tcMiniHtml+headerCard+creditosVinculadosHtml+'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('card',36)+'</div><p>Sin movimientos. Toca + para agregar.</p></div>';
 
   var grupos={};
   var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
@@ -3070,7 +3060,7 @@ function renderTC(m) {
       +'</div>'):'')
     +'</div>';
 
-  return tcMiniHtml+cardPills+headerCard+creditosVinculadosHtml
+  return tcMiniHtml+headerCard+creditosVinculadosHtml
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 8px">'
     +'<span style="font-size:15px;font-weight:700;color:var(--txt)">Movimientos</span>'
     +'</div>'
@@ -3082,7 +3072,7 @@ function renderTC(m) {
 
 function selectTC(tid){
   curTC=tid;
-  document.getElementById('scroll').innerHTML=renderTC(getM());
+  render();
 }
 
 // Marcas disponibles para el "logo" simple mostrado en el carrusel de tarjetas del resumen.
