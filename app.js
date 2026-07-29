@@ -818,13 +818,13 @@ let gGroupOpen  = {};  // group open state: {groupId: bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
 let curIngQ = 'q1'; // quincena seleccionada actualmente en la pestaña Ingresos
+let curNomQ = 'q1'; // quincena seleccionada actualmente en la pestaña Nómina
 let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
 // Desgloses expandibles de cada bloque del Resumen del mes — todos colapsados por defecto.
 // Cada pill además navega a su pestaña correspondiente al seleccionarse (ver selectStat()).
 let statBreakdownOpen = {basico:false, ingresos:false, gastos:false, tarjeta:false, dispQ1:false, dispQ2:false};
 const STAT_BREAKDOWN_DOM_IDS = {basico:'basicoBreakdown', ingresos:'netoBreakdown', gastos:'gastosBreakdown', tarjeta:'tcBreakdown', dispQ1:'dispQ1Breakdown', dispQ2:'dispQ2Breakdown'};
 let lastCreatedId = null;                         // id del último gasto creado, para animación de entrada
-let nomDedOpen  = {'q1':false,'q2':false};      // deducciones nómina expandidas
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 let curTab = 0;
 let homeQ = 'q1'; // quincena seleccionada dentro de la vista Inicio
@@ -1038,12 +1038,22 @@ function cuotasOcupadasCredito(creditoId, excluir){
   return usadas;
 }
 
-// Vista de la pestaña Créditos — mismo cálculo/orden que openCreditosMenu(), pero
-// pintado inline en #scroll en vez de en un modal (el modal se conserva para el acceso
-// rápido desde la mini-card "Créditos" del banner de otras pestañas).
+// Vista de la pestaña Créditos: hero con saldo total + 3 stats (cuotas del mes,
+// activos, próximo pago — este último con el mismo pill expandible que ya existía en
+// openCreditosMenu), y debajo la lista "Mis créditos" con las tarjetas de siempre
+// (anillo de progreso + "Ver detalles del crédito" abre el modal openCreditoDetalle).
 function renderCreditos(m){
   const ids=Object.keys(creditos);
   const ringColors=['var(--acc)','var(--pur)','var(--grn)','var(--amb)'];
+
+  if(!ids.length){
+    return '<div class="cred-hero"><div class="cred-hero-lbl">Saldo total que debo</div>'
+      +'<div class="cred-hero-val"><span class="cred-hero-cur">$</span>0</div></div>'
+      +'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('dollar',36)+'</div><p>Sin créditos. Toca + para crear uno.</p></div>';
+  }
+
+  const mi=MESES.indexOf(m.nombre);
+  const miSafe=mi>=0?mi:0;
 
   var infos=ids.map(function(id,i){
     var cr=creditos[id];
@@ -1052,7 +1062,12 @@ function renderCreditos(m){
     var activo=proximaIdx!==-1;
     var pct=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
     var cuotasFaltantes=Math.max(cr.cuotas-pagadas,0);
-    return {id:id,cr:cr,amort:amort,pagadas:pagadas,saldoActual:saldoActual,proximaIdx:proximaIdx,activo:activo,pct:pct,cuotasFaltantes:cuotasFaltantes,color:ringColors[i%ringColors.length]};
+    var cuotasDelMes=amort.rows.reduce(function(a,r,i){
+      if(cr.pagos&&cr.pagos[i]) return a;
+      var f=new Date(r.fecha+'T12:00:00');
+      return (f.getFullYear()===m.año&&f.getMonth()===miSafe)?a+r.valorCuota:a;
+    },0);
+    return {id:id,cr:cr,amort:amort,pagadas:pagadas,saldoActual:saldoActual,proximaIdx:proximaIdx,activo:activo,pct:pct,cuotasFaltantes:cuotasFaltantes,cuotasDelMes:cuotasDelMes,color:ringColors[i%ringColors.length]};
   });
 
   var infosOrdenados=infos.slice().sort(function(a,b){
@@ -1062,7 +1077,10 @@ function renderCreditos(m){
   });
 
   var activos=infos.filter(function(x){return x.activo;});
-  var saldoTotal=activos.reduce(function(a,x){return a+x.saldoActual;},0);
+  var saldoTotal=infos.reduce(function(a,x){return a+x.saldoActual;},0);
+  var cuotasMes=infos.reduce(function(a,x){return a+x.cuotasDelMes;},0);
+  var activosCount=activos.length;
+
   var proximo=activos.reduce(function(best,x){
     var f=x.amort.rows[x.proximaIdx].fecha;
     return (!best||f<best.fecha)?{fecha:f,nombre:x.cr.nombre}:best;
@@ -1092,14 +1110,22 @@ function renderCreditos(m){
       +'</div></div>';
   }).join('');
 
-  var headerHtml='<div class="summary" style="border-radius:var(--r2);margin:12px 14px 0">'
-    +'<div class="stat"><div class="slbl">Activos</div><div class="sval sb">'+activos.length+'</div></div>'
-    +'<div class="stat"><div class="slbl">Saldo total</div><div class="sval">'+cop(saldoTotal)+'</div></div>'
-    +'<div class="stat" style="cursor:pointer" onclick="toggleCredProxPago()"><div class="slbl">Próximo pago</div><div class="sval sb">'+proximoFmt+'</div>'+(activos.length?'<div style="font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+activos.length+(activos.length===1?' crédito ▾':' créditos ▾')+'</div>':'')+'</div>'
+  var heroHtml='<div class="cred-hero">'
+    +'<div class="cred-hero-lbl">Saldo total que debo</div>'
+    +'<div class="cred-hero-val"><span class="cred-hero-cur">$</span>'+Math.round(saldoTotal).toLocaleString('es-CO')+'</div>'
+    +'<div class="cred-hero-stats">'
+    +'<div class="cred-hero-stat"><div class="cred-hero-stat-lbl" style="color:var(--red)">Cuotas del mes</div><div class="cred-hero-stat-val" style="color:var(--red)">'+cop(cuotasMes)+'</div></div>'
+    +'<div class="glist-div"></div>'
+    +'<div class="cred-hero-stat"><div class="cred-hero-stat-lbl">Créditos activos</div><div class="cred-hero-stat-val">'+activosCount+'</div></div>'
+    +'<div class="glist-div"></div>'
+    +'<div class="cred-hero-stat" style="cursor:pointer" onclick="toggleCredProxPago()"><div class="cred-hero-stat-lbl" style="color:var(--acc)">Próximo pago</div><div class="cred-hero-stat-val" style="color:var(--acc)">'+proximoFmt+'</div>'
+    +(activos.length?'<div style="font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+activos.length+(activos.length===1?' crédito ▾':' créditos ▾')+'</div>':'')
     +'</div>'
-    +(activos.length?'<div class="cal-event-list" id="credpp-expand" style="display:none;margin:0 14px 14px">'+proximoPagoExpandHtml+'</div>':'');
+    +'</div>'
+    +'</div>'
+    +(activos.length?'<div class="cal-event-list" id="credpp-expand" style="display:none;margin:10px 0 0">'+proximoPagoExpandHtml+'</div>':'');
 
-  var listHtml=infosOrdenados.length?infosOrdenados.map(function(x){
+  var listHtml=infosOrdenados.map(function(x){
     var cr=x.cr,amort=x.amort;
     var proximaFecha=x.proximaIdx!==-1?new Date(amort.rows[x.proximaIdx].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
     var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
@@ -1134,9 +1160,14 @@ function renderCreditos(m){
       +'</div></div>'
       +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
       +'</div>';
-  }).join(''):'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('dollar',36)+'</div><p>Sin créditos. Toca + para crear uno.</p></div>';
+  }).join('');
 
-  return (infos.length?headerHtml:'')+listHtml;
+  return '<div class="home-view">'+heroHtml
+    +'<div class="glist-card">'
+    +'<div class="glist-head"><span class="glist-title">Mis créditos</span><span class="glist-sub">toca para ver la amortización</span></div>'
+    +'<div class="cred-list">'+listHtml+'</div>'
+    +'</div>'
+    +'</div>';
 }
 
 function openCreditosMenu(){
@@ -1860,7 +1891,8 @@ const ICONS = {
   plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
   calculator:'<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>',
   percent:'<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
-  barChart:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>'
+  barChart:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
+  externalLink:'<path d="M7 17L17 7"/><path d="M8 7h9v9"/>'
 };
 function icon(name, size){
   size=size||15;
@@ -2367,7 +2399,7 @@ function render() {
     if(mtitle&&mtitle.textContent==='Seleccionar mes') openMonthPicker();
   }
   const el=document.getElementById('scroll');
-  el.classList.toggle('scroll-home', homeActive);
+  el.classList.toggle('scroll-home', homeActive||curTab===3||curTab===4);
   if      (curTab===0) el.innerHTML=renderInicio(m);
   else if (curTab===1) el.innerHTML=renderIngresos(m);
   else if (curTab===2) el.innerHTML=renderTC(m);
@@ -3185,84 +3217,124 @@ function syncPrimaDed(m){
   }
 }
 
+const DOW_FULL=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+
+// Suma de las deducciones tipo 'resta' de una quincena (mismo criterio que calcNeto,
+// pero sin las 'suma' — esas son ingresos ya contados aparte — para poder mostrar
+// "Devengado"/"Deducciones" como dos totales que sí cuadran con el neto real.
+function sumDeducciones(bq,deds){
+  return (deds||[]).filter(function(d){return d.tipo!=='suma';}).reduce(function(a,d){
+    return a+(d.porcentaje?bq*d.porcentaje:(d.valor_fijo||0));
+  },0);
+}
+
 function renderNom(m) {
   const nom=getNom(m);
   syncPrimaDed(m);
+  const mi=MESES.indexOf(m.nombre);
+  const miSafe=mi>=0?mi:0;
+  const bas1=basicoQ1(m), bas2=basicoQ2(m);
+  const ing1=calcIngresosQuincena(m,'q1'), ing2=calcIngresosQuincena(m,'q2');
+  const ded1=sumDeducciones(bas1,nom.ded_q1), ded2=sumDeducciones(bas2,nom.ded_q2);
   const n1=netoQ1(m), n2=netoQ2(m);
+  const dev1=bas1+ing1, dev2=bas2+ing2;
+  const mesDev=dev1+dev2, mesDed=ded1+ded2;
+  const mesExtras=nom.bonos_total+ing1+ing2;
+  const diasQ1c=15, diasQ2c=diasQ2(m.año,miSafe);
+  const {q1:fechaQ1,q2:fechaQ2}=getPago(m.año,miSafe);
 
-  function block(lbl, bq, bonq, deds) {
-    const neto=calcNeto(bq,deds);
-    const isQ1=lbl.includes('Q1');
-    const dedKey=isQ1?'q1':'q2';
-    const dedOpen=nomDedOpen[dedKey]||false;
-    const drows=(deds||[]).map((d,i)=>{
-      _dedTipo = d.tipo || 'resta';
-      const isSuma = d.tipo === 'suma';
-      const val = d.porcentaje ? bq * d.porcentaje : (d.valor_fijo || 0);
-      const display = isSuma ? val : -val;
-      const cls = isSuma ? 'g' : 'r';
-      const sign = isSuma ? '+' : '-';
-      const credBadge=(d.creditoId&&creditos[d.creditoId])?`<span class="npct" style="color:var(--acc);display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${icon('bank',11)}Cuota ${d.numCuota}/${creditos[d.creditoId].cuotas}</span>`:'';
-      const ingBadge=d.esIngresos?`<span class="npct" style="color:var(--grn);cursor:pointer;display:inline-flex;align-items:center;gap:4px;vertical-align:middle" onclick="event.stopPropagation();goToIngresos('${dedKey}')">${icon('lock',11)}Ver detalle${icon('chevronRight',11)}</span>`:'';
-      const editBtn=d.esIngresos?'':`<button class="nedit" onclick="editDed(event,'${lbl}',${i})" style="display:inline-flex;align-items:center">${icon('edit',13)}</button>`;
-      return `<div class="nrow">
-        <span class="nlbl">
-          <span style="font-size:11px;font-weight:700;color:var(--${isSuma?'grn':'red'})">${sign}</span>
-          ${d.nombre}${d.porcentaje?`<span class="npct">${(d.porcentaje*100).toFixed(0)}%</span>`:''}${credBadge}${ingBadge}
-          ${editBtn}
-        </span>
-        <span class="nval ${cls}">${isSuma?'+':''}${cop(display)}</span>
-      </div>`;
-    }).join('');
-    return `<div class="card">
-      <div class="chead"><span class="ctitle">${lbl}</span><span class="badge bg">${cop(neto)}</span></div>
-      <div class="nom-grid">
-        <div class="ncard">
-          <div class="ncard-lbl">Básico quincenal</div>
-          <div class="ncard-val" style="color:var(--acc)">${cop(bq)}</div>
-          <div class="ncard-sub">Mes: ${cop(nom.basico_total)}</div>
-        </div>
-        <div class="ncard">
-          <div class="ncard-lbl">Bonos quincenal</div>
-          <div class="ncard-val" style="color:var(--pur)">${cop(bonq)}</div>
-          <div class="ncard-sub">Mes: ${cop(nom.bonos_total)}</div>
-          <div class="ncard-tag">Solo informativo</div>
-        </div>
-      </div>
-      <div class="nrow"><span class="nlbl">Base de cálculo</span><span class="nval g">${cop(bq)}</span></div>
-      <div class="sdiv" onclick="toggleNomDed('${dedKey}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-        <span>Deducciones</span><span style="margin-right:4px;display:inline-flex">${icon(dedOpen?'chevronUp':'chevronDown',11)}</span>
-      </div>
-      ${dedOpen?drows:''}
-      ${dedOpen?`<div class="nrow" style="justify-content:flex-end"><button class="nedit" style="padding:4px 12px;font-size:12px" onclick="addDed('${lbl}')">+ Deducción</button></div>`:''}
-      <div class="nrow ntot"><span class="nlbl">Neto a recibir</span><span class="nval g">${cop(neto)}</span></div>
-    </div>`;
+  const which=curNomQ;
+  const isQ1=which==='q1';
+  const bq=isQ1?bas1:bas2, bonq=isQ1?(nom.bonos_q1||0):(nom.bonos_q2||0);
+  const ingQ=isQ1?ing1:ing2, dedQ=isQ1?ded1:ded2, devQ=isQ1?dev1:dev2, netoQ=isQ1?n1:n2;
+  const diasQ=isQ1?diasQ1c:diasQ2c;
+  const deds=(isQ1?nom.ded_q1:nom.ded_q2)||[];
+  const lbl=isQ1?'Nómina Q1':'Nómina Q2';
+  const fechaQ=isQ1?fechaQ1:fechaQ2;
+  const diasPago=diasHasta(fechaQ);
+  const stPago=diasStatus(diasPago);
+  const pagoTxt=diasPago<0?'Ya pagado':('Llega el '+DOW_FULL[fechaQ.getDay()]+' '+fechaQ.getDate()+' · '+stPago.txt);
+
+  function qTab(qKey,label,fecha,neto){
+    const active=curNomQ===qKey;
+    return '<div class="nomq-tab'+(active?' active':'')+'" onclick="selectNomQ(\''+qKey+'\')">'
+      +'<div class="nomq-tab-lbl">'+label+' <span class="nomq-tab-fecha">· '+fecha+'</span></div>'
+      +'<div class="nomq-tab-val">'+cop(neto)+'</div>'
+      +'</div>';
   }
-  const resumen = `<div class="card" style="margin-bottom:10px">
-    <div class="chead"><span class="ctitle">Resumen mensual</span><span class="badge bb">${cop(nom.basico_total)}</span></div>
-    <div class="nom-grid">
-      <div class="ncard">
-        <div class="ncard-lbl">Básico total</div>
-        <div class="ncard-val" style="color:var(--acc)">${cop(nom.basico_total)}</div>
-        <div class="ncard-sub">Q1: ${cop(basicoQ1(m))} · Q2: ${cop(basicoQ2(m))}</div>
-      </div>
-      <div class="ncard">
-        <div class="ncard-lbl">Bonos total</div>
-        <div class="ncard-val" style="color:var(--pur)">${cop(nom.bonos_total)}</div>
-        <div class="ncard-sub">Q1: ${cop(nom.bonos_q1)} · Q2: ${cop(nom.bonos_q2)}</div>
-        <div class="ncard-tag">Solo informativo</div>
-      </div>
-    </div>
-    <div class="nrow"><span class="nlbl">Neto Q1</span><span class="nval g">${cop(n1)}</span></div>
-    <div class="nrow"><span class="nlbl">Neto Q2</span><span class="nval g">${cop(n2)}</span></div>
-    <div class="nrow ntot"><span class="nlbl">Neto total mes</span><span class="nval g">${cop(n1+n2)}</span></div>
-    <div class="nrow" style="justify-content:flex-end;border-top:1px solid var(--brd)">
-      <button class="nedit" style="padding:4px 12px;font-size:12px" onclick="editBasico()">${btnIcon('edit',12)}Editar básico y bonos</button>
-    </div>
-  </div>`;
-  return resumen
-    + block('Nómina Q1', basicoQ1(m), nom.bonos_q1||0, nom.ded_q1||[])
-    + block('Nómina Q2', basicoQ2(m), nom.bonos_q2||0, nom.ded_q2||[]);
+
+  const resumenHtml='<div class="nom-resumen">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between">'
+    +'<div class="nom-resumen-title">Resumen de '+m.nombre.toLowerCase()+'</div>'
+    +'<div class="nom-resumen-sub">'+(diasQ1c+diasQ2c)+' días · 2 pagos</div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:8px">'
+    +'<div><div class="nom-resumen-lbl">Neto del mes</div>'
+    +'<div class="nom-resumen-val"><span class="nom-resumen-cur">$</span>'+Math.round(n1+n2).toLocaleString('es-CO')+'</div></div>'
+    +'<div style="text-align:right;font-size:10.5px;font-weight:700;color:var(--mut);line-height:1.6">'
+    +'<div>Q1 <span style="color:var(--txt)">'+cop(n1)+'</span></div>'
+    +'<div>Q2 <span style="color:var(--txt)">'+cop(n2)+'</span></div>'
+    +'</div>'
+    +'</div>'
+    +'<div class="nom-resumen-stats">'
+    +'<div class="nom-resumen-stat"><div class="nom-resumen-stat-lbl" style="color:var(--grn)">Devengado</div><div class="nom-resumen-stat-val" style="color:var(--grn)">'+cop(mesDev)+'</div></div>'
+    +'<div class="glist-div"></div>'
+    +'<div class="nom-resumen-stat"><div class="nom-resumen-stat-lbl" style="color:var(--red)">Deducciones</div><div class="nom-resumen-stat-val" style="color:var(--red)">'+cop(mesDed)+' <span style="font-size:10px;font-weight:700;color:var(--mut)">'+(mesDev>0?Math.round(mesDed/mesDev*100):0)+'%</span></div></div>'
+    +'<div class="glist-div"></div>'
+    +'<div class="nom-resumen-stat"><div class="nom-resumen-stat-lbl">Extras</div><div class="nom-resumen-stat-val">'+cop(mesExtras)+'</div></div>'
+    +'</div>'
+    +'<div class="nom-resumen-edit" onclick="editBasico()">'+btnIcon('edit',12)+'Editar básico y bonos</div>'
+    +'</div>';
+
+  function fmtDLocal(dt){ return dt.getDate()+' '+MESES_ABBR_MIN[dt.getMonth()]; }
+  const tabsHtml='<div class="nomq-tabs">'+qTab('q1','Q1',fmtDLocal(fechaQ1),n1)+qTab('q2','Q2',fmtDLocal(fechaQ2),n2)+'</div>';
+
+  const heroHtml='<div class="nom-hero">'
+    +'<div class="nom-hero-lbl">Neto a recibir '+which.toUpperCase()+'</div>'
+    +'<div class="nom-hero-val"><span class="nom-hero-cur">$</span>'+Math.round(netoQ).toLocaleString('es-CO')+'</div>'
+    +'<div class="nom-hero-pago" style="color:'+(diasPago>=0?'var(--acc)':'var(--mut)')+'">'+pagoTxt+'</div>'
+    +'<div class="nom-hero-stats">'
+    +'<div class="nom-hero-stat"><div class="nom-hero-stat-lbl" style="color:var(--grn)">Devengado</div><div class="nom-hero-stat-val" style="color:var(--grn)">'+cop(devQ)+'</div></div>'
+    +'<div class="glist-div"></div>'
+    +'<div class="nom-hero-stat"><div class="nom-hero-stat-lbl" style="color:var(--red)">Deducciones</div><div class="nom-hero-stat-val" style="color:var(--red)">'+cop(dedQ)+'</div></div>'
+    +'<div class="glist-div"></div>'
+    +'<div class="nom-hero-stat" style="flex:.7"><div class="nom-hero-stat-lbl">Días</div><div class="nom-hero-stat-val">'+diasQ+'</div></div>'
+    +'</div>'
+    +'</div>';
+
+  var devRows='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Básico quincenal</div><div class="nom-row-nota">'+diasQ+' días</div></div><div class="nom-row-val">'+cop(bq)+'</div></div>';
+  if(bonq>0){
+    devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Bonos</div><div class="nom-row-nota">Solo informativo · no cuenta para el neto</div></div><div class="nom-row-val" style="color:var(--mut)">'+cop(bonq)+'</div></div>';
+  }
+  const ingList=(m.ingresos&&m.ingresos[which])||[];
+  devRows+=ingList.map(function(x){
+    return '<div class="nom-row" onclick="editIngreso(\''+x.id+'\',\''+which+'\')" style="cursor:pointer"><div class="nom-row-info"><div class="nom-row-name">'+esc(x.nombre)+'</div><div class="nom-row-nota">'+fmtD(x.fecha)+'</div></div><div class="nom-row-val">'+cop(x.valor)+'</div></div>';
+  }).join('');
+
+  var dedRows=deds.map(function(d,i){
+    if(d.tipo==='suma') return null; // los ingresos ya se listan arriba en "Devengados"
+    const val=d.porcentaje?bq*d.porcentaje:(d.valor_fijo||0);
+    const base=d.porcentaje?Math.round(d.porcentaje*100)+'%':'Fijo';
+    const credBadge=(d.creditoId&&creditos[d.creditoId])?' · Cuota '+d.numCuota+'/'+creditos[d.creditoId].cuotas:'';
+    return '<div class="nom-row" onclick="editDed(event,\''+lbl+'\','+i+')" style="cursor:pointer">'
+      +'<div class="nom-row-info"><div class="nom-row-name">'+esc(d.nombre)+' <span class="nom-row-badge">'+base+credBadge+'</span></div></div>'
+      +'<div class="nom-row-val" style="color:var(--red)">-'+cop(val)+'</div>'
+      +'</div>';
+  }).filter(Boolean).join('');
+
+  return '<div class="home-view">'+resumenHtml+tabsHtml+heroHtml
+    +'<div class="glist-card">'
+    +'<div class="glist-head"><span class="glist-title">Devengados '+which.toUpperCase()+'</span><span class="glist-sub" style="color:var(--grn);font-weight:800">'+cop(devQ)+'</span></div>'
+    +devRows
+    +'<div class="glist-head" style="border-top:1px solid var(--brd)"><span class="glist-title">Deducciones '+which.toUpperCase()+'</span><span class="glist-sub" style="color:var(--red);font-weight:800">-'+cop(dedQ)+'</span></div>'
+    +dedRows
+    +'<div class="glist-add" onclick="addDed(\''+lbl+'\')">+ Agregar deducción o devengado</div>'
+    +'</div>'
+    +'</div>';
+}
+function selectNomQ(q){
+  curNomQ=q;
+  render();
 }
 
 // ── Navegación ────────────────────────────────────────────────────────────────
@@ -3303,7 +3375,7 @@ function onFab(){
   if(curTab===0)openGasto(null,homeQ);
   else if(curTab===1)openIngresoModal(null,curIngQ);
   else if(curTab===2)openTCModal(null);
-  else if(curTab===3)addDed('Nómina Q1');
+  else if(curTab===3)addDed(curNomQ==='q1'?'Nómina Q1':'Nómina Q2');
   else openNewCredito();
 }
 
@@ -4382,10 +4454,6 @@ function saveBasico(){
 }
 
 // ── CRUD Deducciones ──────────────────────────────────────────────────────────
-function toggleNomDed(key){
-  nomDedOpen[key]=!nomDedOpen[key];
-  document.getElementById('scroll').innerHTML=renderNom(getM());
-}
 
 // Selector opcional "crédito por deducción de nómina" (ej. libranzas tipo "PrestaFE"): al
 // elegir un crédito, sugiere (sin bloquear) el valor de su próxima cuota pendiente.

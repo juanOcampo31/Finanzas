@@ -90,21 +90,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .tcdate{font-size:11px;color:var(--mut);margin-top:1px}
 .tcval{font-size:13px;font-weight:600}.tcval.c{color:var(--red)}.tcval.a{color:var(--grn)}
 .tcsaldo{font-size:11px;color:var(--mut);text-align:right;margin-top:1px}
-.nom-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 14px;border-bottom:1px solid var(--brd)}
-.ncard{background:var(--bg);border-radius:var(--r2);padding:10px 12px}
-.ncard-lbl{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
-.ncard-val{font-size:15px;font-weight:700}
-.ncard-sub{font-size:11px;color:var(--mut);margin-top:2px}
-.ncard-tag{font-size:10px;background:var(--pur-d);color:var(--pur);padding:2px 6px;border-radius:10px;display:inline-block;margin-top:4px}
 .nrow{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--brd)}
 .nrow:last-child{border-bottom:none}
 .nlbl{font-size:13px;color:var(--mut);display:flex;align-items:center;gap:5px}
-.npct{font-size:10px;opacity:.7}
 .nval{font-size:13px;font-weight:600}
-.nval.g{color:var(--grn)}.nval.r{color:var(--red)}
-.nrow.ntot{background:rgba(0,0,0,.2)}
-.nrow.ntot .nlbl{color:var(--txt);font-weight:600}
-.nrow.ntot .nval{font-size:15px}
+.nval.g{color:var(--grn)}
 .nedit{background:none;border:1px solid var(--brd2);border-radius:5px;padding:2px 7px;font-size:11px;color:var(--mut);cursor:pointer;margin-left:4px}
 .fab{position:fixed;bottom:calc(64px + env(safe-area-inset-bottom));right:18px;width:50px;height:50px;background:var(--acc);border:none;border-radius:50%;color:#0F172A;font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:100}
 .fab:active{transform:scale(.92)}
@@ -219,6 +209,57 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .glist-filter-row{padding:0 14px 6px;display:flex;justify-content:flex-end}
 .glist-add{text-align:center;padding:12px 14px;color:var(--acc);font-size:12px;font-weight:800;cursor:pointer}
 .glist-add:active{opacity:.7}
+
+/* ── Vista Créditos ──────────────────────────────────────────────────────── */
+.cred-hero{flex-shrink:0;padding:2px 4px 12px}
+.cred-hero-lbl{font-size:9.5px;font-weight:800;letter-spacing:.05em;color:var(--mut);text-transform:uppercase}
+.cred-hero-val{font-size:38px;font-weight:800;letter-spacing:-.03em;line-height:1;margin-top:3px;font-variant-numeric:tabular-nums}
+.cred-hero-cur{font-size:20px;font-weight:700;color:var(--mut);margin-right:2px}
+.cred-hero-stats{display:flex;align-items:stretch;gap:0;margin-top:11px}
+.cred-hero-stat{flex:1;min-width:0}
+.cred-hero-stat-lbl{font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--mut);text-transform:uppercase}
+.cred-hero-stat-val{font-size:18px;font-weight:800;letter-spacing:-.02em;margin-top:1px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.cred-list{display:flex;flex-direction:column;gap:0}
+
+/* ── Vista Nómina ─────────────────────────────────────────────────────────── */
+.nom-resumen{flex-shrink:0;background:var(--surf2);border:1px solid var(--brd2);border-radius:14px;padding:11px 13px;margin-bottom:8px}
+.nom-resumen-title{font-size:11.5px;font-weight:800;letter-spacing:-.01em}
+.nom-resumen-sub{font-size:10px;font-weight:700;color:var(--mut)}
+.nom-resumen-lbl{font-size:9px;font-weight:800;letter-spacing:.06em;color:var(--mut);text-transform:uppercase}
+.nom-resumen-val{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1;margin-top:1px;font-variant-numeric:tabular-nums}
+.nom-resumen-cur{font-size:15px;font-weight:700;color:var(--mut);margin-right:1px}
+.nom-resumen-stats{display:flex;align-items:stretch;gap:0;margin-top:10px;padding-top:9px;border-top:1px solid var(--brd)}
+.nom-resumen-stat{flex:1;min-width:0}
+.nom-resumen-stat-lbl{font-size:8.5px;font-weight:800;letter-spacing:.06em;color:var(--mut);text-transform:uppercase}
+.nom-resumen-stat-val{font-size:14px;font-weight:800;letter-spacing:-.02em;margin-top:1px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nom-resumen-edit{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:9px;padding-top:8px;border-top:1px solid var(--brd);font-size:11px;font-weight:600;color:var(--mut);cursor:pointer}
+.nom-resumen-edit:active{color:var(--acc)}
+
+.nomq-tabs{display:flex;gap:7px;flex-shrink:0;margin-bottom:8px}
+.nomq-tab{flex:1;min-width:0;padding:8px 11px;border-radius:12px;cursor:pointer;background:var(--surf);border:1.5px solid rgba(148,163,184,.16);color:var(--mut)}
+.nomq-tab.active{background:rgba(34,211,238,.09);border-color:var(--acc);color:var(--acc)}
+.nomq-tab-lbl{font-size:12px;font-weight:800}
+.nomq-tab-fecha{font-weight:600}
+.nomq-tab-val{font-size:16px;font-weight:800;letter-spacing:-.025em;margin-top:2px;color:var(--txt);font-variant-numeric:tabular-nums}
+.nomq-tab.active .nomq-tab-val{color:var(--txt)}
+
+.nom-hero{flex-shrink:0;padding:2px 4px 12px}
+.nom-hero-lbl{font-size:9.5px;font-weight:800;letter-spacing:.07em;color:var(--mut);text-transform:uppercase}
+.nom-hero-val{font-size:38px;font-weight:800;letter-spacing:-.03em;line-height:1;margin-top:2px;font-variant-numeric:tabular-nums}
+.nom-hero-cur{font-size:20px;font-weight:700;color:var(--mut);margin-right:2px}
+.nom-hero-pago{font-size:11.5px;font-weight:800;margin-top:7px}
+.nom-hero-stats{display:flex;align-items:stretch;gap:0;margin-top:11px}
+.nom-hero-stat{flex:1;min-width:0}
+.nom-hero-stat-lbl{font-size:9px;font-weight:800;letter-spacing:.07em;color:var(--mut);text-transform:uppercase}
+.nom-hero-stat-val{font-size:19px;font-weight:800;letter-spacing:-.025em;margin-top:1px;font-variant-numeric:tabular-nums}
+
+.nom-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid rgba(148,163,184,.09)}
+.nom-row-info{flex:1;min-width:0}
+.nom-row-name{font-size:12.5px;font-weight:700;color:var(--txt)}
+.nom-row-nota{font-size:10px;font-weight:700;color:#6B7C96;margin-top:1px}
+.nom-row-badge{font-size:9px;font-weight:800;color:#6B7C96;background:rgba(148,163,184,.12);padding:1px 5px;border-radius:5px}
+.nom-row-val{font-size:13.5px;font-weight:800}
 
 .gchk.hoy{border-color:rgba(251,113,133,.75)}
 .grow.row-hoy{background:rgba(251,113,133,.06)}
