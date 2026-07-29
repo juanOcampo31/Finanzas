@@ -170,6 +170,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .qcards{display:flex;gap:8px;flex-shrink:0;margin-bottom:10px}
 .qcard{flex:1;min-width:0;background:var(--surf);border:1.5px solid rgba(148,163,184,.16);border-radius:16px;padding:11px 12px;cursor:pointer;transition:.15s}
 .qcard.active{background:rgba(34,211,238,.08);border-color:var(--acc)}
+.qcard.done{background:var(--surf);border-color:var(--brd2)}
+.qcard.active.done{border-color:var(--acc)}
+.qcard.done .qcard-lbl{color:var(--mut)}
+.qcard.done .qcard-disp-val{color:var(--mut)}
 .qcard-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
 .qcard-lbl{font-size:11px;font-weight:800;color:var(--mut)}
 .qcard-lbl.active{color:var(--acc)}
@@ -206,7 +210,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .glist-tot-val{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .glist-div{width:1px;background:var(--brd);margin:2px 12px}
 .glist-note-row{margin:0 14px 6px;padding-top:6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.glist-note-row.has-note{padding-top:8px;border-top:1px solid rgba(251,191,36,.3)}
 .glist-note-txt{font-size:10px;font-weight:700;color:var(--amb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .glist-add{text-align:center;padding:12px 14px;color:var(--acc);font-size:12px;font-weight:800;cursor:pointer}
 .glist-add:active{opacity:.7}
