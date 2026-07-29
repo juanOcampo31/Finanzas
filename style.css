@@ -196,7 +196,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .tc-mini-chev{color:#4B5B75;display:flex;flex-shrink:0}
 .tc-mini-foot{margin-top:8px;padding-top:8px;border-top:1px solid var(--brd);font-size:10px;font-weight:700;color:var(--mut)}
 
-.glist-card{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--bg-2);border-radius:14px 14px 0 0;padding-bottom:70px}
+.glist-card{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--surf);border-radius:14px 14px 0 0;padding-bottom:70px}
 .glist-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px 6px}
 .glist-title{font-size:13px;font-weight:800;color:var(--txt)}
 .glist-sub{font-size:10.5px;color:var(--mut)}
