@@ -205,17 +205,18 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .glist-tot-lbl{font-size:9px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
 .glist-tot-val{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .glist-div{width:1px;background:var(--brd);margin:2px 12px}
-.glist-note{margin:0 14px 8px;padding-top:8px;border-top:1px solid rgba(251,191,36,.3);font-size:10px;font-weight:700;color:var(--amb)}
-.glist-filter-row{padding:0 14px 6px;display:flex;justify-content:flex-end}
+.glist-note-row{margin:0 14px 6px;padding-top:6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.glist-note-row.has-note{padding-top:8px;border-top:1px solid rgba(251,191,36,.3)}
+.glist-note-txt{font-size:10px;font-weight:700;color:var(--amb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .glist-add{text-align:center;padding:12px 14px;color:var(--acc);font-size:12px;font-weight:800;cursor:pointer}
 .glist-add:active{opacity:.7}
 
 /* ── Vista Créditos ──────────────────────────────────────────────────────── */
-.cred-hero{flex-shrink:0;padding:2px 4px 12px}
+.cred-hero{flex-shrink:0;background:var(--surf2);border:1px solid var(--brd2);border-radius:14px;padding:11px 13px;margin-bottom:8px}
 .cred-hero-lbl{font-size:9.5px;font-weight:800;letter-spacing:.05em;color:var(--mut);text-transform:uppercase}
 .cred-hero-val{font-size:38px;font-weight:800;letter-spacing:-.03em;line-height:1;margin-top:3px;font-variant-numeric:tabular-nums}
 .cred-hero-cur{font-size:20px;font-weight:700;color:var(--mut);margin-right:2px}
-.cred-hero-stats{display:flex;align-items:stretch;gap:0;margin-top:11px}
+.cred-hero-stats{display:flex;align-items:stretch;gap:0;margin-top:10px;padding-top:9px;border-top:1px solid var(--brd)}
 .cred-hero-stat{flex:1;min-width:0}
 .cred-hero-stat-lbl{font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--mut);text-transform:uppercase}
 .cred-hero-stat-val{font-size:18px;font-weight:800;letter-spacing:-.02em;margin-top:1px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -260,6 +261,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .nom-row-nota{font-size:10px;font-weight:700;color:#6B7C96;margin-top:1px}
 .nom-row-badge{font-size:9px;font-weight:800;color:#6B7C96;background:rgba(148,163,184,.12);padding:1px 5px;border-radius:5px}
 .nom-row-val{font-size:13.5px;font-weight:800}
+.nom-lists{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:10px;padding-bottom:70px}
+.nom-panel{flex-shrink:0;background:var(--surf);border:1px solid var(--brd2);border-radius:14px;overflow:hidden}
+.nom-sec-head{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-left:3px solid transparent}
+.nom-sec-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.nom-sec-val{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+.nom-sec-head.dev{background:rgba(52,211,153,.10);border-left-color:var(--grn)}
+.nom-sec-head.dev .nom-sec-title,.nom-sec-head.dev .nom-sec-val{color:var(--grn)}
+.nom-sec-head.ded{background:rgba(251,113,133,.10);border-left-color:var(--red)}
+.nom-sec-head.ded .nom-sec-title,.nom-sec-head.ded .nom-sec-val{color:var(--red)}
 
 .gchk.hoy{border-color:rgba(251,113,133,.75)}
 .grow.row-hoy{background:rgba(251,113,133,.06)}

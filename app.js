@@ -2764,9 +2764,14 @@ function renderGastos(gastos,which) {
   }
   var sortPillsHtml=panelHtml;
 
-  var aplazadoNoteHtml=sinPagarCount>0
-    ?'<div class="glist-note">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</div>'
-    :'';
+  var filterBtnHtml='<button onclick="toggleGFilter(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px;flex-shrink:0">'
+    +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
+    +'Filtrar '+icon(isOpen?'chevronUp':'chevronDown',10)
+    +'</button>';
+  var noteFilterRow='<div class="glist-note-row'+(sinPagarCount>0?' has-note':'')+'">'
+    +(sinPagarCount>0?'<span class="glist-note-txt">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</span>':'<span></span>')
+    +filterBtnHtml
+    +'</div>';
 
   return '<div class="glist-card">'
     +'<div class="glist-head">'
@@ -2780,14 +2785,8 @@ function renderGastos(gastos,which) {
     +'<div class="glist-div"></div>'
     +'<div class="glist-tot"><div class="glist-tot-lbl">POR PAGAR</div><div class="glist-tot-val" style="color:var(--red)">'+cop(pendienteQ)+'</div></div>'
     +'</div>'
-    +aplazadoNoteHtml
+    +noteFilterRow
     +sortPillsHtml
-    +'<div class="glist-filter-row">'
-    +'<button onclick="toggleGFilter(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px">'
-    +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
-    +'Filtrar '+icon(isOpen?'chevronUp':'chevronDown',10)
-    +'</button>'
-    +'</div>'
     +rows
     +'<div class="glist-add" onclick="openGasto(null,\''+which+'\')">+ Agregar gasto a Q'+qLabel+'</div>'
     +'</div>';
@@ -3323,11 +3322,15 @@ function renderNom(m) {
   }).filter(Boolean).join('');
 
   return '<div class="home-view">'+resumenHtml+tabsHtml+heroHtml
-    +'<div class="glist-card">'
-    +'<div class="glist-head"><span class="glist-title">Devengados '+which.toUpperCase()+'</span><span class="glist-sub" style="color:var(--grn);font-weight:800">'+cop(devQ)+'</span></div>'
+    +'<div class="nom-lists">'
+    +'<div class="nom-panel">'
+    +'<div class="nom-sec-head dev"><span class="nom-sec-title">Devengados '+which.toUpperCase()+'</span><span class="nom-sec-val">'+cop(devQ)+'</span></div>'
     +devRows
-    +'<div class="glist-head" style="border-top:1px solid var(--brd)"><span class="glist-title">Deducciones '+which.toUpperCase()+'</span><span class="glist-sub" style="color:var(--red);font-weight:800">-'+cop(dedQ)+'</span></div>'
+    +'</div>'
+    +'<div class="nom-panel">'
+    +'<div class="nom-sec-head ded"><span class="nom-sec-title">Deducciones '+which.toUpperCase()+'</span><span class="nom-sec-val">-'+cop(dedQ)+'</span></div>'
     +dedRows
+    +'</div>'
     +'<div class="glist-add" onclick="addDed(\''+lbl+'\')">+ Agregar deducción o devengado</div>'
     +'</div>'
     +'</div>';
