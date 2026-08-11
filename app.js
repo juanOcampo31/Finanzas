@@ -803,6 +803,11 @@ async function loadAppData(){
     loadLegacyPlaintext();
   }
   Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
+  // Repara datos de antes de este fix: créditos creados/editados/importados mientras ya
+  // existían meses nunca generaban el gasto de sus cuotas en esos meses (solo se generaba al
+  // crear un mes NUEVO), dejando el % de "Histórico de meses" desincronizado con las cuotas
+  // marcadas como pagadas en el detalle del crédito. Idempotente, así que es seguro en cada carga.
+  regenerarGastosCreditoTodosMeses();
   await save();
   localStorage.removeItem('fin26');
   localStorage.removeItem('fin26_creditos');
@@ -968,6 +973,28 @@ function calcAmortizacionSinCache(cred){
   return {cuotaPMT:Math.round(cuotaPMT), valorCuota:valorCuota, aval:aval, total:total, rows:rows};
 }
 
+// Números de cuota (1-based) de un crédito cuyo gasto vinculado se marcó "sinpagar"
+// (checkbox "Mover a Q2"/"Sin pagar (recordatorio)") y que todavía no están realmente
+// pagadas (cr.pagos[i] false). Representan cuotas que el usuario YA decidió que no se van
+// a pagar en su mes original — se movieron, no se van a "finalizar" ahí — así que cuentan
+// para el progreso visual (X de Y, %), aunque el saldo real del crédito solo baja cuando
+// de verdad se marcan pagadas (ver calcEstadoCredito).
+function contarCuotasDiferidas(cred){
+  const pagos=cred.pagos||[];
+  const nums=new Set();
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+      list.forEach(function(g){
+        if(g.creditoId===cred.id && g.sinpagar && g.numCuota && !pagos[g.numCuota-1]){
+          nums.add(g.numCuota);
+        }
+      });
+    });
+  });
+  return nums.size;
+}
+
 // Calcula el estado financiero REAL de un crédito: recorre las cuotas en orden y solo
 // reduce el saldo con las que están realmente marcadas como pagadas (cr.pagos[i]), usando el
 // monto realmente pagado (cr.pagoDetalle[i].montoPagado) cuando se registró uno distinto al
@@ -998,7 +1025,8 @@ function calcEstadoCredito(cred){
     }
   });
   var proximaIdx=amort.rows.findIndex(function(r,i){return !pagos[i];});
-  return {amort:amort,pagadas:pagadas,saldoActual:saldoReal,proximaIdx:proximaIdx};
+  var pagadasVisual=Math.min(cred.cuotas||amort.rows.length, pagadas+contarCuotasDiferidas(cred));
+  return {amort:amort,pagadas:pagadas,pagadasVisual:pagadasVisual,saldoActual:saldoReal,proximaIdx:proximaIdx};
 }
 
 // Fuente única de verdad para "¿hay una cuota anterior sin pagar?" — se basa en cr.pagos[]
@@ -1059,7 +1087,7 @@ function renderCreditos(m){
   var infos=ids.map(function(id,i){
     var cr=creditos[id];
     var estado=calcEstadoCredito(cr);
-    var amort=estado.amort, pagadas=estado.pagadas, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
+    var amort=estado.amort, pagadas=estado.pagadasVisual, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
     var activo=proximaIdx!==-1;
     var pct=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
     var cuotasFaltantes=Math.max(cr.cuotas-pagadas,0);
@@ -1179,7 +1207,7 @@ function openCreditosMenu(){
   var infos=ids.map(function(id,i){
     var cr=creditos[id];
     var estado=calcEstadoCredito(cr);
-    var amort=estado.amort, pagadas=estado.pagadas, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
+    var amort=estado.amort, pagadas=estado.pagadasVisual, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
     var activo=proximaIdx!==-1;
     var pct=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
     var cuotasFaltantes=Math.max(cr.cuotas-pagadas,0);
@@ -1424,9 +1452,11 @@ function saveNewCredito(){
   if(creditoDesdeGastoCtx){
     const ctx=creditoDesdeGastoCtx; creditoDesdeGastoCtx=null;
     crearGastoDesdeCredito(id,ctx);
+    regenerarGastosCreditoTodosMeses();
     save();closeModal();render();
     toast('Crédito creado y gasto agregado');
   } else {
+    regenerarGastosCreditoTodosMeses();
     save();closeModal();openCreditosMenu();toast('Crédito creado');
   }
 }
@@ -1536,6 +1566,7 @@ function confirmImportCreditoPlan(){
     cuotas:plano.cuotas, tasa:0, fechaInicio:plano.fechaInicio, frecuencia:'quincenal',
     valorCuotaManual:null, pagos:[], planImportado:plano.rows
   };
+  regenerarGastosCreditoTodosMeses();
   save();closeModal();openCreditosMenu();toast('Plan de pagos importado ✓');
   window._importedPlano=null;
 }
@@ -1545,9 +1576,13 @@ let creditoOcultarPagadas=true;
 function openCreditoDetalle(id){
   const cr=creditos[id]; if(!cr) return;
   const estado=calcEstadoCredito(cr);
-  const amort=estado.amort, pagadas=estado.pagadas, saldoActual=estado.saldoActual;
+  const amort=estado.amort, pagadas=estado.pagadasVisual, saldoActual=estado.saldoActual;
   const pagos=cr.pagos||[];
   const ocultar=creditoOcultarPagadas;
+
+  var activoCr=estado.proximaIdx!==-1;
+  var proximaFechaHdr=activoCr?new Date(amort.rows[estado.proximaIdx].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
+  var proximaCuotaValHdr=activoCr?amort.rows[estado.proximaIdx].valorCuota:0;
 
   var proximaIdx=estado.proximaIdx;
   if(proximaIdx===-1) proximaIdx=amort.rows.length-1;
@@ -1581,16 +1616,34 @@ function openCreditoDetalle(id){
   const mActual=getM();
   const tcVincNombre=(cr.tcVinculada && mActual.tarjetas && mActual.tarjetas[cr.tcVinculada])?mActual.tarjetas[cr.tcVinculada].nombre:null;
   const tcVincBadge=tcVincNombre?'<div style="font-size:11px;color:var(--mut);margin-bottom:6px">Vinculado a tarjeta: <b style="color:var(--txt)">'+esc(tcVincNombre)+'</b></div>':'';
-  openModal('<div class="mtitle">'+esc(cr.nombre)+'</div>'
-    +tcVincBadge
+  var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
+  var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
+  var creditoHeaderHtml='<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:14px;margin-bottom:14px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+    +'<div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+esc(cr.nombre)+mensPill+'</div>'
+    +'<div style="font-size:11px;color:var(--mut);margin-top:2px">'+frecLbl+'</div></div>'
+    +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;'+(activoCr?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(activoCr?'Activo':'Pagado')+'</div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:14px">'
+    +'<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
+    +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--acc) '+(pctProgreso*3.6)+'deg,var(--brd) 0deg)"></div>'
+    +'<div style="position:absolute;inset:7px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
+    +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+pctProgreso+'%</div>'
+    +'<div style="font-size:8px;color:var(--mut)">Completado</div>'
+    +'</div></div>'
+    +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0">'
+    +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div>'
+    +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Valor total del crédito</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
+    +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">'+(activoCr?'Próximo pago':'Cuota')+'</div><div style="font-size:14px;font-weight:700;color:var(--acc)">'+proximaFechaHdr+'</div>'
+    +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Cuota del mes</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaValHdr)+'</div></div>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+  openWindow(tcVincBadge
     +'<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
     +'<button onclick="editCredito(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('edit',13)+'Editar crédito</button>'
     +'</div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:10px">'
-    +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Cuota</div><div style="font-size:14px;font-weight:700;color:var(--acc)">'+cop(amort.valorCuota)+'</div></div>'
-    +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div></div>'
-    +'<div style="flex:1;background:var(--surf2);border-radius:var(--r2);padding:8px 10px"><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Progreso</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+pagadas+'/'+cr.cuotas+'</div></div>'
-    +'</div>'
+    +creditoHeaderHtml
     +'<div style="margin-bottom:10px">'
     +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-bottom:4px">'
     +'<span>'+(cuotasPendientes>0?cuotasPendientes+' cuotas pendientes':'Crédito pagado')+'</span>'
@@ -1606,7 +1659,7 @@ function openCreditoDetalle(id){
     +'</div>'
     +'<div id="cr-list" style="max-height:380px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2)">'+rowsHtml+'</div>'
     +'<div class="macts" style="margin-top:14px">'
-    +'<button class="bcnl" onclick="openCreditosMenu()">Volver</button>'
+    +'<button class="bcnl" onclick="closeWindow();openCreditosMenu()">Volver</button>'
     +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmDeleteCredito(\''+id+'\')">Eliminar</button>'
     +'</div>');
 
@@ -1701,6 +1754,7 @@ function saveEditCredito(id){
       });
     });
   }
+  regenerarGastosCreditoTodosMeses();
   save();render();openCreditoDetalle(id);toast('Crédito actualizado');
 }
 
@@ -1776,7 +1830,7 @@ function deleteCredito(id){
   });
   delete creditos[id];
   invalidarAmortCache(id);
-  save();closeModal();toast('Crédito eliminado');
+  save();closeModal();closeWindow();openCreditosMenu();toast('Crédito eliminado');
 }
 
 function calcPrimaMes(m){
@@ -2218,6 +2272,30 @@ function syncIngresosDed(m, which){
 // simplemente se deshabilita porque no hay mes anterior. El punto indica qué tan
 // pagado está cada mes (mismo criterio que el modal "Seleccionar mes"): verde
 // 75-100%, ámbar 25-75%, rojo <25%, gris si aún no tiene gastos.
+//
+// Los gastos con presupuesto NEGATIVO ("saldo a favor") se excluyen del total: toggleP()
+// bloquea marcarlos como pagados (no hay deuda que pagar), así que si se incluyeran en el
+// total, el % de avance del mes nunca podría llegar a 100% aunque el usuario marcara
+// realmente todo lo demás como pagado.
+//
+// Un gasto marcado "sinpagar" (checkbox "Mover a Q2" en Q1, o "Sin pagar (recordatorio)" en
+// Q2) SÍ cuenta en el total, pero se toma como ya "pagado" para esta quincena — no va a
+// pagarse aquí (se movió a Q2, o quedó solo como recordatorio), así que no tiene sentido que
+// arrastre el % hacia abajo esperando una acción que nunca va a pasar en este mes.
+function calcPctPagadoMes(mes){
+  const conQuincena=[
+    ...(mes.q1_gastos||[]).map(function(g){return {g:g,which:'Q1'};}),
+    ...(mes.q2_gastos||[]).map(function(g){return {g:g,which:'Q2'};})
+  ].filter(function(x){return !x.g.esGrupo&&(x.g.presupuesto||0)>=0;});
+  const total=conQuincena.reduce(function(a,x){return a+Math.abs(x.g.presupuesto||0);},0);
+  const pagado=conQuincena.filter(function(x){return x.g.pagado_flag||x.g.sinpagar;}).reduce(function(a,x){return a+Math.abs(x.g.presupuesto||0);},0);
+  const pct=total>0?Math.round(pagado/total*100):0;
+  // Detalle de qué falta exactamente para el 100% — antes había que abrir la consola del
+  // navegador para averiguar qué gasto seguía sin marcar y arrastraba el % hacia abajo.
+  const pendientes=conQuincena.filter(function(x){return !(x.g.pagado_flag||x.g.sinpagar);})
+    .map(function(x){return {nombre:nombreGasto(x.g),presupuesto:x.g.presupuesto,which:x.which};});
+  return {total:total,pagado:pagado,pct:pct,pendientes:pendientes};
+}
 function renderMonthTabs(){
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
   const idx=keys.indexOf(curM);
@@ -2227,12 +2305,8 @@ function renderMonthTabs(){
   const nextKey=isLast?null:keys[idx+1];
 
   function dotColorFor(k){
-    const mes=db[k];
-    const activos=[...(mes.q1_gastos||[]),...(mes.q2_gastos||[])].filter(function(g){return !g.sinpagar&&!g.esGrupo;});
-    const total=activos.reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-    const pagado=activos.filter(function(g){return g.pagado_flag;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-    const pct=total>0?Math.round(pagado/total*100):0;
-    return total===0?'var(--brd2)':pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)';
+    const r=calcPctPagadoMes(db[k]);
+    return r.total===0?'var(--brd2)':r.pct>=75?'var(--grn)':r.pct>=25?'var(--amb)':'var(--red)';
   }
 
   function monthBtn(k){
@@ -2654,7 +2728,14 @@ function renderGastos(gastos,which) {
   },0);
   const sinPagarTotal=topGastosAll.filter(function(x){return x.sinpagar;}).reduce(function(a,x){return a+Math.abs(x.presupuesto||0);},0);
   const sinPagarCount=topGastosAll.filter(function(x){return x.sinpagar;}).length;
-  const pagadosCount=activos.filter(function(x){return x.esGrupo?(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).every(function(s){return s.pagado_flag;})&&(subMap[x.id]||[]).length>0:x.pagado_flag;}).length;
+  // "N de M pagados": el denominador (topGastosAll.length) SÍ incluye los gastos marcados
+  // "sinpagar" (mover a Q2 / recordatorio) — así que estos deben contar como pagados aquí
+  // también (ya se movieron/no se van a finalizar en esta quincena), o el badge nunca llega
+  // a "M de M" aunque todo lo demás esté realmente pagado.
+  const pagadosCount=topGastosAll.filter(function(x){
+    if(x.sinpagar) return true;
+    return x.esGrupo?(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).every(function(s){return s.pagado_flag;})&&(subMap[x.id]||[]).length>0:x.pagado_flag;
+  }).length;
   const pct=total>0?Math.round(pagado/total*100):0;
   const bc=pct<40?'pbok':pct<75?'pbw':'pbo';
   const netoQ=which==='q1'?netoQ1(getM()):netoQ2(getM());
@@ -2990,7 +3071,7 @@ function renderTC(m) {
       var estado=calcEstadoCredito(cr);
       return '<div onclick="openCreditoDetalle(\''+cid+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--brd);cursor:pointer">'
         +'<div><div style="font-size:12px;font-weight:600;color:var(--txt)">'+esc(cr.nombre)+'</div>'
-        +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+estado.pagadas+'/'+cr.cuotas+' cuotas pagadas</div></div>'
+        +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+estado.pagadasVisual+'/'+cr.cuotas+' cuotas pagadas</div></div>'
         +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(estado.saldoActual)+'</div>'
         +'</div>';
     }).join('');
@@ -3379,6 +3460,12 @@ function sw(i){curTab=i;render();}
 function openModal(h){document.getElementById('mc').innerHTML=h;document.getElementById('mbg').classList.add('open');}
 function closeModal(){document.getElementById('mbg').classList.remove('open');}
 function closeBg(e){if(e.target===document.getElementById('mbg'))closeModal();}
+
+// Ventana de pantalla completa (a diferencia del modal, que es un popup tipo bottom-sheet) —
+// usada para vistas que se sienten como una pantalla propia (ej: detalle de un crédito) en
+// vez de un diálogo momentáneo. Se cierra el modal al abrirla para no dejarlo colgado detrás.
+function openWindow(h){closeModal();document.getElementById('wc').innerHTML=h;document.getElementById('wbg').classList.add('open');}
+function closeWindow(){document.getElementById('wbg').classList.remove('open');}
 
 // ── Reemplazo consistente de alert()/confirm() nativos con el estilo propio de la app ──
 function showAlert(message,opts){
@@ -5087,17 +5174,27 @@ function openMonthPicker(){
   const monthList=keys.map(function(k){
     const mes=db[k];
     const isCur=k===curM;
-    const activos=[...(mes.q1_gastos||[]),...(mes.q2_gastos||[])].filter(function(g){return !g.sinpagar&&!g.esGrupo;});
-    const total=activos.reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-    const pagado=activos.filter(function(g){return g.pagado_flag;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
-    const pct=total>0?Math.round(pagado/total*100):0;
+    const r=calcPctPagadoMes(mes);
+    const total=r.total, pagado=r.pagado, pct=r.pct;
     const ringColor=pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)';
     const estadoTxt=isCur?'Actual':(pct>=75?'Completado':pct>=25?'En progreso':'Pendiente');
     const estadoColor=isCur?'var(--acc)':(pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)');
-    return '<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--brd);cursor:pointer">'
+    // Detalle de qué falta: solo tiene sentido mostrarlo si el % no es 100 — evita que el
+    // usuario tenga que abrir la consola del navegador para saber qué gasto sigue arrastrando
+    // el total hacia abajo.
+    const tieneFaltantes=r.pendientes.length>0;
+    const detalleHtml=tieneFaltantes?('<div id="mp-detalle-'+k+'" style="display:none;margin:0 0 8px;padding:8px 10px;background:var(--surf2);border-radius:var(--r2)">'
+      +r.pendientes.map(function(p){
+        return '<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:var(--mut)">'
+          +'<span>'+esc(p.which)+' · '+esc(p.nombre||'(sin nombre)')+'</span><span style="color:var(--txt)">'+cop(p.presupuesto)+'</span></div>';
+      }).join('')
+      +'</div>'):'';
+    return '<div style="border-bottom:1px solid var(--brd);padding:11px 0">'
+      +'<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:10px;cursor:pointer">'
       +'<div style="width:30px;height:30px;border-radius:8px;background:'+(isCur?'var(--acc-d)':'var(--surf2)')+';color:'+(isCur?'var(--acc)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon('cal',15)+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:13px;font-weight:'+(isCur?'700':'500')+';color:'+(isCur?'var(--acc)':'var(--txt)')+'">'+mes.nombre+' '+mes.año+'</div>'
+      +(tieneFaltantes?'<div onclick="event.stopPropagation();toggleMesDetalle('+k+')" style="font-size:10px;color:var(--acc);cursor:pointer;margin-top:2px">Ver qué falta ('+r.pendientes.length+') ▾</div>':'')
       +'</div>'
       +'<div style="position:relative;width:40px;height:40px;flex-shrink:0">'
       +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+ringColor+' '+(pct*3.6)+'deg,var(--brd) 0deg)"></div>'
@@ -5108,6 +5205,8 @@ function openMonthPicker(){
       +'<div style="font-size:11px;font-weight:700;color:'+estadoColor+'">'+estadoTxt+'</div>'
       +'<div style="font-size:10px;color:var(--mut);white-space:nowrap">'+cop(pagado)+' / '+cop(total)+'</div>'
       +'</div>'
+      +'</div>'
+      +detalleHtml
       +'</div>';
   }).join('');
   const legend='<div style="display:flex;justify-content:center;gap:14px;margin-top:14px;padding-top:10px;border-top:1px solid var(--brd)">'
@@ -5116,6 +5215,11 @@ function openMonthPicker(){
     +'<span style="font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--grn);display:inline-block"></span>75 - 100%</span>'
     +'</div>';
   openModal('<div class="mtitle">Seleccionar mes</div>'+monthList+legend);
+}
+function toggleMesDetalle(k){
+  const el=document.getElementById('mp-detalle-'+k);
+  if(!el) return;
+  el.style.display=el.style.display==='none'?'block':'none';
 }
 
 
@@ -5235,6 +5339,16 @@ function generarGastosCredito(nm){
       }
     });
   });
+}
+
+// generarGastosCredito() solo se llamaba al CREAR un mes nuevo, así que un crédito creado,
+// importado o editado (cambio de fecha/cuotas/plazo) después de que ya existían meses nunca
+// generaba el gasto de sus cuotas en esos meses ya existentes — sin ese gasto vinculado, marcar
+// la cuota como pagada desde el detalle del crédito no tenía nada que sincronizar, y el % del
+// mes en "Histórico de meses" se quedaba desactualizado. generarGastosCredito() ya es idempotente
+// (revisa yaExiste antes de crear), así que es seguro re-ejecutarla contra todos los meses.
+function regenerarGastosCreditoTodosMeses(){
+  Object.keys(db).forEach(function(k){ generarGastosCredito(db[k]); });
 }
 
 function buildDraftMonth(){
