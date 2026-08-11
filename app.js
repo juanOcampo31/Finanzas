@@ -808,6 +808,13 @@ async function loadAppData(){
   // crear un mes NUEVO), dejando el % de "Histórico de meses" desincronizado con las cuotas
   // marcadas como pagadas en el detalle del crédito. Idempotente, así que es seguro en cada carga.
   regenerarGastosCreditoTodosMeses();
+  // Repara gastos huérfanos de un grupo: buildDraftMonth() (crear mes nuevo) tenía un bug
+  // donde un gasto ligado por parentId a un grupo (ej. "tarjeta") que vivía en la OTRA
+  // quincena quedaba con un parentId apuntando a un id que ya no existía en el mes nuevo —
+  // huérfano, invisible para cualquier lógica de grupo. Reengancha cuando todos los grupos
+  // candidatos del mes son de la misma tarjeta (tcCardId), para no adivinar mal a cuál tarjeta
+  // pertenecía si hubiera varias distintas.
+  repararGastosHuerfanosDeGrupo();
   await save();
   localStorage.removeItem('fin26');
   localStorage.removeItem('fin26_creditos');
@@ -2282,18 +2289,31 @@ function syncIngresosDed(m, which){
 // Q2) SÍ cuenta en el total, pero se toma como ya "pagado" para esta quincena — no va a
 // pagarse aquí (se movió a Q2, o quedó solo como recordatorio), así que no tiene sentido que
 // arrastre el % hacia abajo esperando una acción que nunca va a pasar en este mes.
+//
+// Los subgastos de un grupo vinculado a tarjeta (esGrupo+tcCardId) son solo informativos —
+// registran QUÉ se compró con la tarjeta, pero esa deuda no se "paga" marcando cada compra
+// individualmente (eso es un adelanto opcional, ver calcTotalGrupoAware): se paga de una vez
+// al pagar la tarjeta. Si se contaran como cualquier gasto suelto, se quedarían pendientes
+// para siempre y arrastrarían el % del mes hacia abajo aunque el usuario no tenga nada
+// realmente atrasado — por eso se excluyen del cálculo igual que el grupo mismo.
 function calcPctPagadoMes(mes){
+  const q1=mes.q1_gastos||[], q2=mes.q2_gastos||[];
+  const tcGrupoIds=new Set([...q1,...q2].filter(function(g){return g.esGrupo&&g.tcCardId;}).map(function(g){return g.id;}));
   const conQuincena=[
-    ...(mes.q1_gastos||[]).map(function(g){return {g:g,which:'Q1'};}),
-    ...(mes.q2_gastos||[]).map(function(g){return {g:g,which:'Q2'};})
-  ].filter(function(x){return !x.g.esGrupo&&(x.g.presupuesto||0)>=0;});
+    ...q1.map(function(g){return {g:g,which:'Q1'};}),
+    ...q2.map(function(g){return {g:g,which:'Q2'};})
+  ].filter(function(x){
+    if(x.g.esGrupo) return false;
+    if(x.g.parentId && tcGrupoIds.has(x.g.parentId)) return false;
+    return (x.g.presupuesto||0)>=0;
+  });
   const total=conQuincena.reduce(function(a,x){return a+Math.abs(x.g.presupuesto||0);},0);
   const pagado=conQuincena.filter(function(x){return x.g.pagado_flag||x.g.sinpagar;}).reduce(function(a,x){return a+Math.abs(x.g.presupuesto||0);},0);
   const pct=total>0?Math.round(pagado/total*100):0;
   // Detalle de qué falta exactamente para el 100% — antes había que abrir la consola del
   // navegador para averiguar qué gasto seguía sin marcar y arrastraba el % hacia abajo.
   const pendientes=conQuincena.filter(function(x){return !(x.g.pagado_flag||x.g.sinpagar);})
-    .map(function(x){return {nombre:nombreGasto(x.g),presupuesto:x.g.presupuesto,which:x.which};});
+    .map(function(x){return {id:x.g.id,nombre:nombreGasto(x.g),presupuesto:x.g.presupuesto,which:x.which};});
   return {total:total,pagado:pagado,pct:pct,pendientes:pendientes};
 }
 function renderMonthTabs(){
@@ -5185,8 +5205,8 @@ function openMonthPicker(){
     const tieneFaltantes=r.pendientes.length>0;
     const detalleHtml=tieneFaltantes?('<div id="mp-detalle-'+k+'" style="display:none;margin:0 0 8px;padding:8px 10px;background:var(--surf2);border-radius:var(--r2)">'
       +r.pendientes.map(function(p){
-        return '<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;color:var(--mut)">'
-          +'<span>'+esc(p.which)+' · '+esc(p.nombre||'(sin nombre)')+'</span><span style="color:var(--txt)">'+cop(p.presupuesto)+'</span></div>';
+        return '<div onclick="event.stopPropagation();irAPendienteHistorico('+k+',\''+p.id+'\',\''+p.which.toLowerCase()+'\')" style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:5px 4px;cursor:pointer;border-radius:6px">'
+          +'<span style="color:var(--acc);display:flex;align-items:center;gap:3px">'+esc(p.which)+' · '+esc(p.nombre||'(sin nombre)')+icon('chevronRight',11)+'</span><span style="color:var(--txt)">'+cop(p.presupuesto)+'</span></div>';
       }).join('')
       +'</div>'):'';
     return '<div style="border-bottom:1px solid var(--brd);padding:11px 0">'
@@ -5230,6 +5250,20 @@ function goToMonth(k){
   gFilterOpen={q1:false,q2:false};
   curTC=null;
   closeModal();render();
+}
+
+// Desde "Ver qué falta" en Histórico de meses: salta directo al mes/quincena del gasto
+// pendiente y abre su editor, en vez de dejar que el usuario lo busque a mano en la lista.
+function irAPendienteHistorico(k,gastoId,which){
+  goToMonth(k);
+  curTab=0; // Inicio: ahí viven las listas de gastos Q1/Q2
+  const m=getM();
+  const list=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
+  const g=list.find(function(x){return x.id===gastoId;});
+  if(g&&g.parentId) gGroupOpen[g.parentId]=true; // si es hijo de un grupo colapsado, despliégalo
+  render();
+  if(g) openGasto(g,which);
+  else toast('No se encontró ese gasto (¿se eliminó?)');
 }
 
 function openDeleteMonth(){
@@ -5341,6 +5375,30 @@ function generarGastosCredito(nm){
   });
 }
 
+// Repara gastos con parentId "huérfano" (apunta a un id que no existe EN SU PROPIA QUINCENA)
+// causado por el bug de idMap-por-quincena en buildDraftMonth() (ver comentario ahí). Un
+// grupo (ej. "tarjeta") vive independiente en Q1 y en Q2 por diseño — cada quincena tiene su
+// propia fila de grupo con sus propios abonos — así que un huérfano de Q1 SOLO puede
+// reengancharse a un grupo que también viva en Q1 (nunca al de Q2, y viceversa). Si no hay
+// ningún grupo candidato en esa misma quincena, se deja como gasto suelto (parentId=null) en
+// vez de dejarlo invisible para siempre.
+function repararGastosHuerfanosDeGrupo(){
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    [{key:'q1_gastos'},{key:'q2_gastos'}].forEach(function(entry){
+      var list=mes[entry.key]||[];
+      var idsExistentes=new Set(list.map(function(g){return g.id;}));
+      var gruposTarjeta=list.filter(function(g){return g.esGrupo&&g.tcCardId;});
+      var tcCardIds=new Set(gruposTarjeta.map(function(g){return g.tcCardId;}));
+      list.forEach(function(g){
+        if(!g.parentId || idsExistentes.has(g.parentId)) return;
+        if(gruposTarjeta.length && tcCardIds.size===1) g.parentId=gruposTarjeta[0].id;
+        else g.parentId=null;
+      });
+    });
+  });
+}
+
 // generarGastosCredito() solo se llamaba al CREAR un mes nuevo, así que un crédito creado,
 // importado o editado (cambio de fecha/cuotas/plazo) después de que ya existían meses nunca
 // generaba el gasto de sus cuotas en esos meses ya existentes — sin ese gasto vinculado, marcar
@@ -5373,9 +5431,16 @@ function buildDraftMonth(){
     };
   });
 
-  function copyGastos(gastos) {
-    const idMap = {};
-    const mapped = gastos
+  // idMap se comparte entre Q1 y Q2 (antes cada quincena tenía el suyo propio): un gasto
+  // vinculado por parentId a un grupo (ej. "tarjeta") que vive en la OTRA quincena necesita
+  // encontrar el id nuevo de ESE grupo, así que el mapeo de ids viejo→nuevo debe construirse
+  // con los grupos de ambas quincenas antes de reajustar ningún parentId. Si no, ese gasto
+  // queda con un parentId que ya no existe en el mes nuevo — huérfano, invisible para
+  // cualquier lógica de grupo (incluida la de "Histórico de meses"), y se sigue arrastrando
+  // mes tras mes aunque se borre, porque el mes SIGUIENTE lo vuelve a copiar igual de roto.
+  const idMap = {};
+  function copyGastosIds(gastos) {
+    return gastos
       .filter(function(g){
         if(g.creditoId) return false;
         if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
@@ -5406,7 +5471,9 @@ function buildDraftMonth(){
           mensualidad: nxtMens
         });
       });
-    return mapped.map(function(g){
+  }
+  function remapParents(list){
+    return list.map(function(g){
       if(g.parentId && idMap[g.parentId]){
         return Object.assign({},g,{parentId: idMap[g.parentId]});
       }
@@ -5414,8 +5481,10 @@ function buildDraftMonth(){
     });
   }
 
-  nm.q1_gastos = copyGastos(nm.q1_gastos);
-  nm.q2_gastos = copyGastos(nm.q2_gastos);
+  const q1Copiado = copyGastosIds(nm.q1_gastos);
+  const q2Copiado = copyGastosIds(nm.q2_gastos);
+  nm.q1_gastos = remapParents(q1Copiado);
+  nm.q2_gastos = remapParents(q2Copiado);
 
   var prevLinkedGroups=(lm.q2_gastos||[]).filter(function(g){return g.esGrupo&&g.tcCardId;});
   prevLinkedGroups.forEach(function(prevG){
