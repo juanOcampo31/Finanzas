@@ -2945,7 +2945,27 @@ function renderGastos(gastos,which) {
     +sortPillsHtml
     +'<div style="height:1px;background:var(--brd);margin:0 0 4px"></div>'
     +rows
-    +'<div class="glist-add" onclick="openGasto(null,\''+which+'\')">+ Agregar gasto a Q'+qLabel+'</div>'
+    +resumenQuincenaHtml(pagado,pendienteQ)
+    +'</div>';
+}
+// Pie de la lista de gastos de una quincena — mismo formato que "Resumen del periodo" de la
+// pestaña Tarjeta (anillo compras/abonos), aquí con pagado (verde) vs por pagar (rojo).
+function resumenQuincenaHtml(pagado,pendiente){
+  const totalQ=pagado+pendiente;
+  if(totalQ<=0) return '';
+  const pagadoDeg=(pagado/totalQ)*360;
+  const icSwap='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+  return '<div style="display:flex;align-items:center;gap:12px;padding:14px;border-top:1px solid var(--brd)">'
+    +'<div style="width:34px;height:34px;border-radius:10px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icSwap+'</div>'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:11px;color:var(--mut);margin-bottom:3px">Resumen de la quincena</div>'
+    +'<div style="font-size:13px"><span style="color:var(--mut)">Pagado</span> <span style="font-weight:600;color:var(--grn)">'+cop(pagado)+'</span>'
+    +'<span style="color:var(--mut);margin:0 5px">|</span><span style="color:var(--mut)">Por pagar</span> <span style="font-weight:600;color:var(--red)">'+cop(pendiente)+'</span></div>'
+    +'</div>'
+    +'<div style="position:relative;width:44px;height:44px;flex-shrink:0">'
+    +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--grn) '+pagadoDeg+'deg,var(--red) 0deg)"></div>'
+    +'<div style="position:absolute;inset:8px;border-radius:50%;background:var(--surf)"></div>'
+    +'</div>'
     +'</div>';
 }
 // ── CALENDARIO ───────────────────────────────────────────────────────────────
