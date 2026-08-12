@@ -803,11 +803,6 @@ async function loadAppData(){
     loadLegacyPlaintext();
   }
   Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
-  // Repara datos de antes de este fix: créditos creados/editados/importados mientras ya
-  // existían meses nunca generaban el gasto de sus cuotas en esos meses (solo se generaba al
-  // crear un mes NUEVO), dejando el % de "Histórico de meses" desincronizado con las cuotas
-  // marcadas como pagadas en el detalle del crédito. Idempotente, así que es seguro en cada carga.
-  regenerarGastosCreditoTodosMeses();
   // Repara gastos huérfanos de un grupo: buildDraftMonth() (crear mes nuevo) tenía un bug
   // donde un gasto ligado por parentId a un grupo (ej. "tarjeta") que vivía en la OTRA
   // quincena quedaba con un parentId apuntando a un id que ya no existía en el mes nuevo —
@@ -1459,11 +1454,9 @@ function saveNewCredito(){
   if(creditoDesdeGastoCtx){
     const ctx=creditoDesdeGastoCtx; creditoDesdeGastoCtx=null;
     crearGastoDesdeCredito(id,ctx);
-    regenerarGastosCreditoTodosMeses();
     save();closeModal();render();
     toast('Crédito creado y gasto agregado');
   } else {
-    regenerarGastosCreditoTodosMeses();
     save();closeModal();openCreditosMenu();toast('Crédito creado');
   }
 }
@@ -1573,7 +1566,6 @@ function confirmImportCreditoPlan(){
     cuotas:plano.cuotas, tasa:0, fechaInicio:plano.fechaInicio, frecuencia:'quincenal',
     valorCuotaManual:null, pagos:[], planImportado:plano.rows
   };
-  regenerarGastosCreditoTodosMeses();
   save();closeModal();openCreditosMenu();toast('Plan de pagos importado ✓');
   window._importedPlano=null;
 }
@@ -1761,7 +1753,6 @@ function saveEditCredito(id){
       });
     });
   }
-  regenerarGastosCreditoTodosMeses();
   save();render();openCreditoDetalle(id);toast('Crédito actualizado');
 }
 
@@ -2194,15 +2185,19 @@ function netoQ2(m) { return calcNeto(basicoQ2(m), getNom(m).ded_q2); }
 // abono real solo ocurre en la quincena de pago (Q2). Pero los subgastos que sí se hayan
 // agregado manualmente a ese grupo (ej. "Gasolina" pagada con la tarjeta) son gastos reales de
 // la quincena y deben seguir contando, así que se ignora solo la base, nunca los subgastos.
+//
+// Un gasto con presupuesto NEGATIVO es un saldo a favor (reembolso/abono, no una deuda —
+// toggleP() ya bloquea marcarlo como pagado) y debe RESTAR del total, no sumarse en valor
+// absoluto — de lo contrario un reembolso aumentaría el total de gastos en vez de reducirlo.
 function calcTotalGrupoAware(activos, subMap, excludeTarjetaVinculada){
   return activos.reduce(function(a,x){
     if(x.esGrupo){
       var usaBase=!(excludeTarjetaVinculada && x.tcCardId);
       var base=(usaBase && x.presupuesto>0)?x.presupuesto:0;
       if(base>0) return a+base;
-      return a+(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
+      return a+(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).reduce(function(b,s){return b+(s.presupuesto||0);},0);
     }
-    return a+Math.abs(x.presupuesto||0);
+    return a+(x.presupuesto||0);
   },0);
 }
 // Total de gastos activos de una quincena completa (mismo criterio consciente de grupos que
@@ -2776,7 +2771,7 @@ function renderGastos(gastos,which) {
       +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
       +'<div class="gname '+nameCls+'">'+esc(nombreGasto(s))+nopagBadge+'</div>'
       +'<div class="gmeta">'+subMeta+sdh+'</div></div>'
-      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+cop(s.presupuesto)+'</div></div>'
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+(s.presupuesto<0?'+':'')+cop(s.presupuesto)+'</div></div>'
       +'</div>'
   }
 
@@ -2879,7 +2874,7 @@ function renderGastos(gastos,which) {
     return '<div class="'+rowCls+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
       +'<div class="ginfo"><div class="gname '+namCls+'">'+esc(nombreGasto(g))+cuotaBadge+vencidoBadge+mensBadge+nopag+'</div><div class="gmeta">'+metaBase+dh+compBadge+'</div></div>'
-      +'<div style="text-align:right"><div class="gamt '+amtCls+'">'+cop(g.presupuesto)+'</div><div class="gmth">'+realLine+'</div></div>'
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'"'+(g.presupuesto<0?' style="color:var(--grn)"':'')+'>'+(g.presupuesto<0?'+':'')+cop(g.presupuesto)+'</div><div class="gmth">'+realLine+'</div></div>'
       +'</div>';
   }
 
@@ -3444,13 +3439,14 @@ function renderNom(m) {
   }).join('');
 
   var dedRows=deds.map(function(d,i){
-    if(d.tipo==='suma') return null; // los ingresos ya se listan arriba en "Devengados"
+    if(d.esIngresos) return null; // el agregado automático de Ingresos ya se lista arriba en "Devengados"
+    const esSuma=d.tipo==='suma';
     const val=d.porcentaje?bq*d.porcentaje:(d.valor_fijo||0);
     const base=d.porcentaje?Math.round(d.porcentaje*100)+'%':'Fijo';
     const credBadge=(d.creditoId&&creditos[d.creditoId])?' · Cuota '+d.numCuota+'/'+creditos[d.creditoId].cuotas:'';
     return '<div class="nom-row" onclick="editDed(event,\''+lbl+'\','+i+')" style="cursor:pointer">'
       +'<div class="nom-row-info"><div class="nom-row-name">'+esc(d.nombre)+' <span class="nom-row-badge">'+base+credBadge+'</span></div></div>'
-      +'<div class="nom-row-val" style="color:var(--red)">-'+cop(val)+'</div>'
+      +'<div class="nom-row-val" style="color:var(--'+(esSuma?'grn':'red')+')">'+(esSuma?'+':'-')+cop(val)+'</div>'
       +'</div>';
   }).filter(Boolean).join('');
 
@@ -5333,25 +5329,81 @@ function openNewMonth(){
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="createMonth()">Crear '+sig+'</button></div>');
 }
+// A qué (año, mes, quincena) pertenece una cuota según su fecha real de vencimiento — no es
+// simplemente "día≤15 → Q1 del mismo mes": los primeros 10 días del mes se consideran parte
+// del Q2 del mes ANTERIOR (para que la cuota se vea con tiempo de pagarla antes de que venza,
+// en vez de aparecer recién el mismo día 1). Si sigue sin pagar cuando el mes siguiente ya
+// existe, moverCuotasVencidasAlMesSiguiente() la reubica en Q1 de ese mes como vencida.
+function calcQuincenaCuota(fechaDate){
+  var dia=fechaDate.getDate(), y=fechaDate.getFullYear(), m=fechaDate.getMonth();
+  if(dia<=10){
+    m=m-1;
+    if(m<0){ m=11; y=y-1; }
+    return {año:y,mes:m,which:'q2'};
+  }
+  if(dia<=15) return {año:y,mes:m,which:'q1'};
+  return {año:y,mes:m,which:'q2'};
+}
+
+// Al crear un mes nuevo (nm), revisa la Q2 del mes anterior (lm) por cuotas de crédito que se
+// hayan generado ahí por la regla de gracia de los primeros 10 días (ver calcQuincenaCuota) y
+// que sigan sin pagar: si el mes al que en verdad pertenecen esa cuota (por calendario) es nm,
+// ya no tiene sentido dejarla esperando en el mes anterior — se traslada (no se duplica) a
+// Q1 de nm, donde calcQuincenaCuota la ubicaría con la regla simple (día≤15 → Q1).
+function moverCuotasVencidasAlMesSiguiente(lm,nm){
+  if(!lm||!nm) return;
+  const miNm=MESES.indexOf(nm.nombre);
+  const q2=lm.q2_gastos||[];
+  const aMover=q2.filter(function(g){
+    if(!g.creditoId||g.pagado_flag||g.sinpagar) return false;
+    var cr=creditos[g.creditoId]; if(!cr) return false;
+    var row=calcAmortizacion(cr).rows[g.numCuota-1]; if(!row) return false;
+    var bucket=calcQuincenaCuota(new Date(row.fecha+'T12:00:00'));
+    return bucket.año===nm.año&&bucket.mes===miNm&&bucket.which==='q2';
+  });
+  if(!aMover.length) return;
+  var aMoverIds=new Set(aMover.map(function(g){return g.id;}));
+  lm.q2_gastos=q2.filter(function(g){return !aMoverIds.has(g.id);});
+  if(!Array.isArray(nm.q1_gastos)) nm.q1_gastos=[];
+  aMover.forEach(function(g){ nm.q1_gastos.push(g); });
+}
+
+// Un crédito que YA tiene alguna cuota vinculada a una deducción de nómina (ej. libranzas tipo
+// "fondo de empleados") se asume manejado por nómina de ahí en adelante — sus cuotas
+// FUTURAS tampoco deben sugerirse como gasto, aunque esa cuota puntual todavía no tenga
+// deducción creada (el usuario la crea manualmente en Nómina cada periodo). Sin esto, cada mes
+// nuevo seguía sugiriendo un gasto para la próxima cuota de un crédito que en realidad se paga
+// solo, descontado de la nómina.
+function creditoManejadoPorNomina(crId){
+  return Object.values(db).some(function(mes){
+    var nom=mes.nomina; if(!nom) return false;
+    return ['ded_q1','ded_q2'].some(function(key){
+      return (nom[key]||[]).some(function(d){return d.creditoId===crId;});
+    });
+  });
+}
+
 function generarGastosCredito(nm){
-  // Para cada crédito activo, revisar si alguna cuota cae en el mes nm
+  // Para cada crédito activo, revisar si alguna cuota cae en el mes nm (según su bucket
+  // año/mes/quincena real, no el mes calendario crudo de la fecha — ver calcQuincenaCuota).
   const mi=MESES.indexOf(nm.nombre);
   const año=nm.año;
   if(!Array.isArray(nm.q1_gastos)) nm.q1_gastos=[];
   if(!Array.isArray(nm.q2_gastos)) nm.q2_gastos=[];
   Object.keys(creditos).forEach(function(crId){
+    if(creditoManejadoPorNomina(crId)) return;
     var cr=creditos[crId];
     var amort=calcAmortizacion(cr);
+    // Cuotas ya cubiertas por un gasto O por una deducción de nómina — si no se revisa también
+    // la nómina, un crédito así termina con un gasto duplicado además de su deducción real.
+    var usadas=cuotasOcupadasCredito(crId);
     amort.rows.forEach(function(row,idx){
       var fecha=new Date(row.fecha+'T12:00:00');
-      if(fecha.getFullYear()===año && fecha.getMonth()===mi){
-        var dia=fecha.getDate();
-        var which=dia<=15?'q1':'q2';
+      var bucket=calcQuincenaCuota(fecha);
+      if(bucket.año===año && bucket.mes===mi){
+        var which=bucket.which;
         var list=which==='q1'?nm.q1_gastos:nm.q2_gastos;
-        // Evitar duplicar: revisar en AMBAS listas (q1 y q2) del mes
-        var yaExiste=nm.q1_gastos.some(function(g){return g.creditoId===crId&&g.numCuota===row.numero;})
-                  || nm.q2_gastos.some(function(g){return g.creditoId===crId&&g.numCuota===row.numero;});
-        if(!yaExiste){
+        if(!usadas[row.numero]){
           list.push({
             id:uid(),
             nombre:prefijoCredito(cr)+cr.nombre,
@@ -5397,16 +5449,6 @@ function repararGastosHuerfanosDeGrupo(){
       });
     });
   });
-}
-
-// generarGastosCredito() solo se llamaba al CREAR un mes nuevo, así que un crédito creado,
-// importado o editado (cambio de fecha/cuotas/plazo) después de que ya existían meses nunca
-// generaba el gasto de sus cuotas en esos meses ya existentes — sin ese gasto vinculado, marcar
-// la cuota como pagada desde el detalle del crédito no tenía nada que sincronizar, y el % del
-// mes en "Histórico de meses" se quedaba desactualizado. generarGastosCredito() ya es idempotente
-// (revisa yaExiste antes de crear), así que es seguro re-ejecutarla contra todos los meses.
-function regenerarGastosCreditoTodosMeses(){
-  Object.keys(db).forEach(function(k){ generarGastosCredito(db[k]); });
 }
 
 function buildDraftMonth(){
@@ -5657,6 +5699,7 @@ function cancelMonthReview(){
 function confirmCreateMonth(){
   const nm=window._draftMonth, nk=window._draftKey;
   if(!nm||nk==null) return;
+  moverCuotasVencidasAlMesSiguiente(db[nk-1],nm);
   db[nk]=nm;
   save();curM=nk;curTab=0;homeQ='q1';
   gFiltro={q1:'todos',q2:'todos'};
