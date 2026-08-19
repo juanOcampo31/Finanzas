@@ -952,25 +952,55 @@ function calcAmortizacionSinCache(cred){
   const aval=Math.round(valorPrestamo*((cred.pctAval||0)/100));
   const total=valorPrestamo+aval;
   const tasa=(cred.tasa||0)/100;
-  const cuotas=cred.cuotas||1;
-  const cuotaPMT=calcCuotaPMT(total,tasa,cuotas);
+  const cuotasContrato=cred.cuotas||1; // plazo originalmente pactado (tope del bucle)
+  const cuotaPMT=calcCuotaPMT(total,tasa,cuotasContrato);
   const valorCuota=cred.valorCuotaManual||Math.round(cuotaPMT);
-  const fechas=generarFechasCredito(cred.fechaInicio,cuotas,cred.frecuencia||'quincenal');
+  const fechas=generarFechasCredito(cred.fechaInicio,cuotasContrato,cred.frecuencia||'quincenal');
+
+  const pagos=cred.pagos||[];
+  const detalle=cred.pagoDetalle||{};
+  // Abonos a capital (solo "abono manual" — el excedente de pagar una cuota de más ya queda
+  // reflejado abajo vía pagoDetalle[k].montoPagado, así que no se duplica aquí).
+  const abonosPorIdx={};
+  (cred.abonos||[]).forEach(function(ab){ abonosPorIdx[ab.idx]=(abonosPorIdx[ab.idx]||0)+ab.monto; });
 
   var saldo=total;
+  if(abonosPorIdx[-1]){ saldo=Math.round((saldo-abonosPorIdx[-1])*100)/100; if(saldo<0) saldo=0; }
   const rows=[];
-  for(var k=0;k<cuotas;k++){
+  for(var k=0;k<cuotasContrato && saldo>0;k++){
     var interes=Math.round(saldo*tasa*100)/100;
-    var esUltima=(k===cuotas-1);
-    var cuotaReal=esUltima?(saldo+interes):valorCuota;
-    var capital=Math.round((cuotaReal-interes)*100)/100;
-    if(esUltima){ capital=saldo; cuotaReal=Math.round((saldo+interes)*100)/100; }
+    var pagadaReal=pagos[k] && detalle[k] && detalle[k].montoPagado!=null;
+    var cuotaReal, capital;
+    if(pagadaReal){
+      cuotaReal=detalle[k].montoPagado;
+      capital=Math.round((cuotaReal-interes)*100)/100;
+    } else {
+      // Cierra esta cuota exactamente (en vez de usar el valor fijo de la cuota) si es la
+      // última pactada por contrato, O si un abono anterior ya redujo tanto el saldo que la
+      // cuota fija alcanzaría a pagar de más — sin esto, una cuota que en realidad liquida el
+      // crédito antes de tiempo seguía mostrando el valor fijo completo en vez del remanente real.
+      var capitalTeorico=Math.round((valorCuota-interes)*100)/100;
+      var esCierre=(k===cuotasContrato-1) || capitalTeorico>=saldo;
+      if(esCierre){
+        cuotaReal=Math.round((saldo+interes)*100)/100;
+        capital=saldo;
+      } else {
+        cuotaReal=valorCuota;
+        capital=capitalTeorico;
+      }
+    }
     saldo=Math.round((saldo-capital)*100)/100;
     if(saldo<0) saldo=0;
     rows.push({
       numero:k+1, fecha:fechas[k], valorCuota:cuotaReal,
       capital:capital, intereses:interes, saldo:saldo
     });
+    if(abonosPorIdx[k]){
+      saldo=Math.round((saldo-abonosPorIdx[k])*100)/100;
+      if(saldo<0) saldo=0;
+      rows[rows.length-1].saldo=saldo;
+    }
+    if(saldo<=0){ saldo=0; break; } // saldado antes de tiempo: plazo real = rows.length
   }
   return {cuotaPMT:Math.round(cuotaPMT), valorCuota:valorCuota, aval:aval, total:total, rows:rows};
 }
@@ -1003,32 +1033,22 @@ function contarCuotasDiferidas(cred){
 // valor teórico de la cuota. A diferencia de asumir que "pagadas = las primeras N cuotas",
 // esto sigue siendo correcto aunque una cuota se haya pagado fuera de orden.
 function calcEstadoCredito(cred){
+  // El saldo real, los montos pagados y los abonos a capital ya se incorporan dentro de
+  // calcAmortizacionSinCache al generar amort.rows — aquí solo se LEE ese resultado (una sola
+  // fuente de verdad), en vez de volver a recalcularlo, para no aplicar dos veces un abono.
   const amort=calcAmortizacion(cred);
   const pagos=cred.pagos||[];
-  const detalle=cred.pagoDetalle||{};
-  const tasa=(cred.tasa||0)/100;
-  const esImportado=!!(cred.planImportado&&cred.planImportado.length);
-  var saldoReal=amort.total;
   var pagadas=0;
-  amort.rows.forEach(function(row,i){
-    if(!pagos[i]) return;
-    pagadas++;
-    var det=detalle[i];
-    var montoPagado=(det&&det.montoPagado!=null)?det.montoPagado:row.valorCuota;
-    if(esImportado){
-      // Con plan importado no reconstruimos interés con una tasa propia: los montos ya
-      // vienen fijos del banco, así que un pago distinto al teórico solo ajusta el saldo por
-      // la diferencia completa frente al interés de esa fila (no se recalculan intereses).
-      saldoReal=Math.max(0,Math.round((saldoReal-(montoPagado-row.intereses))*100)/100);
-    } else {
-      var interesReal=Math.round(saldoReal*tasa*100)/100;
-      var capitalReal=Math.round((montoPagado-interesReal)*100)/100;
-      saldoReal=Math.max(0,Math.round((saldoReal-capitalReal)*100)/100);
-    }
-  });
+  amort.rows.forEach(function(row,i){ if(pagos[i]) pagadas++; });
+
   var proximaIdx=amort.rows.findIndex(function(r,i){return !pagos[i];});
-  var pagadasVisual=Math.min(cred.cuotas||amort.rows.length, pagadas+contarCuotasDiferidas(cred));
-  return {amort:amort,pagadas:pagadas,pagadasVisual:pagadasVisual,saldoActual:saldoReal,proximaIdx:proximaIdx};
+  var saldoActual;
+  if(proximaIdx===-1) saldoActual=amort.rows.length?amort.rows[amort.rows.length-1].saldo:0;
+  else if(proximaIdx===0) saldoActual=amort.total;
+  else saldoActual=amort.rows[proximaIdx-1].saldo;
+
+  var pagadasVisual=Math.min(amort.rows.length, pagadas+contarCuotasDiferidas(cred));
+  return {amort:amort,pagadas:pagadas,pagadasVisual:pagadasVisual,saldoActual:saldoActual,proximaIdx:proximaIdx};
 }
 
 // Fuente única de verdad para "¿hay una cuota anterior sin pagar?" — se basa en cr.pagos[]
@@ -1091,8 +1111,9 @@ function renderCreditos(m){
     var estado=calcEstadoCredito(cr);
     var amort=estado.amort, pagadas=estado.pagadasVisual, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
     var activo=proximaIdx!==-1;
-    var pct=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
-    var cuotasFaltantes=Math.max(cr.cuotas-pagadas,0);
+    var totalCuotas=amort.rows.length;
+    var pct=totalCuotas>0?Math.round(pagadas/totalCuotas*100):0;
+    var cuotasFaltantes=Math.max(totalCuotas-pagadas,0);
     var cuotasDelMes=amort.rows.reduce(function(a,r,i){
       if(cr.pagos&&cr.pagos[i]) return a;
       var f=new Date(r.fecha+'T12:00:00');
@@ -1186,7 +1207,7 @@ function renderCreditos(m){
       +'<div style="height:4px;background:var(--brd);border-radius:4px;overflow:hidden">'
       +'<div style="height:100%;width:'+x.pct+'%;background:'+x.color+';border-radius:4px"></div></div>'
       +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:5px">'
-      +'<span>'+x.pagadas+' / '+cr.cuotas+' cuotas pagadas</span>'
+      +'<span>'+x.pagadas+' / '+amort.rows.length+' cuotas pagadas</span>'
       +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
       +'</div></div>'
       +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
@@ -1211,8 +1232,9 @@ function openCreditosMenu(){
     var estado=calcEstadoCredito(cr);
     var amort=estado.amort, pagadas=estado.pagadasVisual, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
     var activo=proximaIdx!==-1;
-    var pct=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
-    var cuotasFaltantes=Math.max(cr.cuotas-pagadas,0);
+    var totalCuotas=amort.rows.length;
+    var pct=totalCuotas>0?Math.round(pagadas/totalCuotas*100):0;
+    var cuotasFaltantes=Math.max(totalCuotas-pagadas,0);
     return {id:id,cr:cr,amort:amort,pagadas:pagadas,saldoActual:saldoActual,proximaIdx:proximaIdx,activo:activo,pct:pct,cuotasFaltantes:cuotasFaltantes,color:ringColors[i%ringColors.length]};
   });
 
@@ -1299,7 +1321,7 @@ function openCreditosMenu(){
       +'<div style="height:4px;background:var(--brd);border-radius:4px;overflow:hidden">'
       +'<div style="height:100%;width:'+x.pct+'%;background:'+x.color+';border-radius:4px"></div></div>'
       +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:5px">'
-      +'<span>'+x.pagadas+' / '+cr.cuotas+' cuotas pagadas</span>'
+      +'<span>'+x.pagadas+' / '+amort.rows.length+' cuotas pagadas</span>'
       +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
       +'</div></div>'
       +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
@@ -1571,6 +1593,7 @@ function confirmImportCreditoPlan(){
 }
 
 let creditoOcultarPagadas=true;
+let _pendingEditCredito=null; // {id, apply()} — cambios de saveEditCredito pendientes de confirmar cuando hay abonos registrados
 
 function openCreditoDetalle(id){
   const cr=creditos[id]; if(!cr) return;
@@ -1586,32 +1609,119 @@ function openCreditoDetalle(id){
   var proximaIdx=estado.proximaIdx;
   if(proximaIdx===-1) proximaIdx=amort.rows.length-1;
 
-  var cuotasPendientes=Math.max(cr.cuotas-pagadas,0);
-  var pctProgreso=cr.cuotas>0?Math.round(pagadas/cr.cuotas*100):0;
+  var totalCuotas=amort.rows.length;
+  var cuotasPendientes=Math.max(totalCuotas-pagadas,0);
+  var pctProgreso=totalCuotas>0?Math.round(pagadas/totalCuotas*100):0;
   var fechaFinFmt=amort.rows.length?new Date(amort.rows[amort.rows.length-1].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}):'';
+
+  const esImportadoCr=!!(cr.planImportado&&cr.planImportado.length);
+
+  // Abonos manuales que se aplicaron ANTES de la primera cuota (idx===-1) no quedan "sobre"
+  // ninguna fila — se anclan visualmente a la fila 0 (ver eventosAbono más abajo).
+  var abonosAntesDeTodo=(cr.abonos||[]).filter(function(ab){return ab.idx===-1;});
+  var abonoAntesDeTodo=abonosAntesDeTodo.reduce(function(a,x){return a+x.monto;},0);
+
+  // Cada "evento" agrupa 1+ componentes que ocurrieron en el mismo punto (misma cuota o antes
+  // de la primera). Si hay más de un componente, se listan por separado con su propio botón de
+  // eliminar para que el usuario pueda indicar CUÁL de los abonos quiere devolver.
+  // Panel de abono: mismo ancho y padding horizontal que la fila de la cuota (no un texto
+  // pequeño metido dentro de la columna de info), para que se lea como parte del mismo bloque.
+  function abonoDetailsHtml(ev){
+    var color=ev.color||'var(--grn)';
+    var compsHtml=ev.componentes.map(function(c){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:4px;border-top:1px solid var(--brd)">'
+        +'<span>'+c.etiqueta+'</span>'
+        +'<span style="display:flex;align-items:center;gap:6px">'
+        +'<span style="color:'+color+';font-weight:600">'+cop(c.monto)+'</span>'
+        +'<button onclick="confirmarEliminarComponenteAbono(\''+id+'\','+ev.idx+','+(c.abId?"'"+c.abId+"'":'null')+')" style="background:none;border:1px solid rgba(248,113,113,.4);border-radius:var(--r2);padding:3px 7px;font-size:9px;color:var(--red);cursor:pointer">Eliminar</button>'
+        +'</span></div>';
+    }).join('');
+    return '<details style="padding:9px 12px;border-bottom:1px solid var(--brd);background:rgba(0,0,0,.12)" onclick="event.stopPropagation()">'
+      +'<summary style="font-size:11px;color:'+color+';font-weight:600;cursor:pointer">'+btnIcon('dollar',12)+ev.etiqueta+'</summary>'
+      +'<div style="margin-top:6px;padding:8px 10px;background:var(--surf2);border-radius:var(--r2);font-size:11px;color:var(--mut)">'
+      +'<div style="display:flex;justify-content:space-between"><span>Total abonado</span><span style="color:'+color+';font-weight:600">'+cop(ev.monto)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo antes</span><span>'+cop(ev.saldoAntes)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo después</span><span style="color:var(--txt);font-weight:600">'+cop(ev.saldoDespues)+'</span></div>'
+      +compsHtml
+      +'</div></details>';
+  }
 
   var rowsHtml=amort.rows.map(function(r,i){
     var pagado=!!pagos[i];
     if(ocultar && pagado) return '';
     var esProxima=(i===proximaIdx);
     var fechaFmt=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
+
+    var eventosAbono=[];
+    if(i===0 && abonoAntesDeTodo>0){
+      eventosAbono.push({
+        idx:-1, monto:abonoAntesDeTodo, saldoAntes:amort.total,
+        saldoDespues:Math.max(0,Math.round((amort.total-abonoAntesDeTodo)*100)/100),
+        etiqueta:'Abono a capital aplicado antes de la primera cuota',
+        componentes:abonosAntesDeTodo.map(function(ab,n){
+          return {abId:ab.id, monto:ab.monto, etiqueta:'Abono manual #'+(n+1)+' ('+ab.fecha+')'};
+        })
+      });
+    }
+    // Excedente (Caso 1): esta cuota se pagó por más del valor fijo de la cuota — el exceso ya
+    // se aplicó a capital dentro de r.valorCuota/r.saldo (ver calcAmortizacionSinCache).
+    var det=cr.pagoDetalle&&cr.pagoDetalle[i];
+    var excedenteAqui=(!esImportadoCr && pagado && det && det.montoPagado!=null && amort.valorCuota && (det.montoPagado-amort.valorCuota)>1)
+      ? (det.montoPagado-amort.valorCuota) : 0;
+    // Abono(s) manual(es) (Caso 2) aplicados justo después de esta cuota — puede haber más de uno.
+    var abonosManualesAqui=(cr.abonos||[]).filter(function(ab){return ab.idx===i;});
+    var abonoManualAqui=abonosManualesAqui.reduce(function(a,x){return a+x.monto;},0);
+    // Excedente y abono(s) manual(es) se agrupan en un solo desplegable (si una cuota tuviera
+    // varios, poco común, se suman para el resumen pero cada uno se lista y elimina por separado).
+    if(excedenteAqui>0 || abonoManualAqui>0){
+      var saldoAntesCombo;
+      if(excedenteAqui>0){
+        var saldoPrevioFila=i>0?amort.rows[i-1].saldo:amort.total;
+        saldoAntesCombo=Math.max(0,Math.round((saldoPrevioFila-(amort.valorCuota-r.intereses))*100)/100);
+      } else {
+        saldoAntesCombo=Math.round((r.saldo+abonoManualAqui)*100)/100;
+      }
+      var componentes=[];
+      if(excedenteAqui>0){
+        componentes.push({abId:null, monto:excedenteAqui, etiqueta:'Excedente del pago de esta cuota'});
+      }
+      abonosManualesAqui.forEach(function(ab,n){
+        componentes.push({abId:ab.id, monto:ab.monto, etiqueta:'Abono manual #'+(n+1)+' ('+ab.fecha+')'});
+      });
+      eventosAbono.push({
+        idx:i,
+        monto:excedenteAqui+abonoManualAqui,
+        saldoAntes:saldoAntesCombo,
+        saldoDespues:r.saldo,
+        etiqueta:'Abono a capital',
+        color:'var(--amb)',
+        componentes:componentes
+      });
+    }
+    var abonoPanelesHtml=eventosAbono.map(abonoDetailsHtml).join('');
+
     return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'background:var(--acc-d)':'')+'">'
       +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:24px;height:24px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;display:flex">'+icon('check',13)+'</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--txt)">Cuota '+r.numero+' de '+cr.cuotas+'</div>'
+      +'<div style="font-size:12px;font-weight:600;color:var(--txt)">Cuota '+r.numero+' de '+totalCuotas+'</div>'
       +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+fechaFmt+' · saldo '+cop(r.saldo)+'</div>'
       +'<div style="font-size:10px;margin-top:1px"><span style="color:var(--grn)">Capital '+cop(r.capital)+'</span> · <span style="color:var(--red)">Interés '+cop(r.intereses)+'</span></div>'
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:6px">'
       +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(r.valorCuota)+'</div>'
       +'</div>'
-      +'</div>';
+      +'</div>'
+      +abonoPanelesHtml;
   }).join('');
 
   if(ocultar && !rowsHtml){
     rowsHtml='<div style="padding:24px;text-align:center;color:var(--grn);font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px">'+icon('check',14)+'Todas las cuotas están pagadas</div>';
   }
 
+  const puedeAbonar=activoCr && !esImportadoCr;
+  var abonoBtnHtml=puedeAbonar
+    ?'<button onclick="openAbonoModal(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('dollar',13)+'Abonar a capital</button>'
+    :'';
   const mActual=getM();
   const tcVincNombre=(cr.tcVinculada && mActual.tarjetas && mActual.tarjetas[cr.tcVinculada])?mActual.tarjetas[cr.tcVinculada].nombre:null;
   const tcVincBadge=tcVincNombre?'<div style="font-size:11px;color:var(--mut);margin-bottom:6px">Vinculado a tarjeta: <b style="color:var(--txt)">'+esc(tcVincNombre)+'</b></div>':'';
@@ -1639,7 +1749,8 @@ function openCreditoDetalle(id){
     +'</div>'
     +'</div>';
   openWindow(tcVincBadge
-    +'<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
+    +'<div style="display:flex;justify-content:flex-end;gap:14px;margin-bottom:6px">'
+    +abonoBtnHtml
     +'<button onclick="editCredito(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('edit',13)+'Editar crédito</button>'
     +'</div>'
     +creditoHeaderHtml
@@ -1735,25 +1846,50 @@ function saveEditCredito(id){
   }
 
   const nombreViejo=cr.nombre;
-  cr.nombre=nombre; cr.valorPrestamo=valorPrestamo; cr.pctAval=pctAval;
-  cr.cuotas=cuotas; cr.tasa=tasa; cr.fechaInicio=fechaInicio; cr.frecuencia=frecuencia;
-  cr.valorCuotaManual=cuotaManual; cr.esMensualidad=esMensualidad; cr.tcVinculada=tcVinculada;
-  invalidarAmortCache(id); // los campos que definen la tabla de amortización cambiaron
+  function aplicarCambiosEdicion(){
+    cr.nombre=nombre; cr.valorPrestamo=valorPrestamo; cr.pctAval=pctAval;
+    cr.cuotas=cuotas; cr.tasa=tasa; cr.fechaInicio=fechaInicio; cr.frecuencia=frecuencia;
+    cr.valorCuotaManual=cuotaManual; cr.esMensualidad=esMensualidad; cr.tcVinculada=tcVinculada;
+    invalidarAmortCache(id); // los campos que definen la tabla de amortización cambiaron
 
-  // Igual que antes al renombrar: actualizar el nombre en los gastos ya generados que lo referencian
-  if(nombreViejo!==nombre){
-    Object.keys(db).forEach(function(k){
-      var mes=db[k];
-      [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
-        list.forEach(function(g){
-          if(g.creditoId===id && g.nombre===prefijoCredito(cr)+nombreViejo){
-            g.nombre=prefijoCredito(cr)+nombre;
-          }
+    // Igual que antes al renombrar: actualizar el nombre en los gastos ya generados que lo referencian
+    if(nombreViejo!==nombre){
+      Object.keys(db).forEach(function(k){
+        var mes=db[k];
+        [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+          list.forEach(function(g){
+            if(g.creditoId===id && g.nombre===prefijoCredito(cr)+nombreViejo){
+              g.nombre=prefijoCredito(cr)+nombre;
+            }
+          });
         });
       });
-    });
+    }
+    save();render();openCreditoDetalle(id);toast('Crédito actualizado');
   }
-  save();render();openCreditoDetalle(id);toast('Crédito actualizado');
+
+  // Los abonos a capital (cr.abonos) están anclados a la estructura de cuotas anterior — si el
+  // usuario cambia valor/tasa/plazo/fecha, esos índices dejan de tener sentido. Se avisa y se
+  // limpia el historial de abonos antes de aplicar los cambios (los pagos ya marcados no se pierden).
+  if(cr.abonos && cr.abonos.length){
+    _pendingEditCredito={id:id, apply:aplicarCambiosEdicion};
+    openModal('<div class="mtitle">¿Editar crédito?</div>'
+      +'<p style="font-size:13px;color:var(--mut);margin-bottom:16px">Este crédito tiene <b>'+cr.abonos.length+' abono(s) a capital</b> registrados. Editar los datos del crédito elimina el historial de esos abonos (el saldo de las cuotas ya pagadas no se pierde, pero el registro del abono sí). ¿Continuar?</p>'
+      +'<div class="macts">'
+      +'<button class="bcnl" onclick="editCredito(\''+id+'\')">Cancelar</button>'
+      +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmarEditCreditoConAbonos(\''+id+'\')">Continuar</button>'
+      +'</div>');
+    return;
+  }
+  aplicarCambiosEdicion();
+}
+
+function confirmarEditCreditoConAbonos(id){
+  const cr=creditos[id]; if(!cr) return;
+  if(!_pendingEditCredito || _pendingEditCredito.id!==id) return;
+  cr.abonos=[];
+  _pendingEditCredito.apply();
+  _pendingEditCredito=null;
 }
 
 function toggleOcultarPagadas(id){
@@ -1779,6 +1915,7 @@ function toggleCuotaPago(id,idx){
     cr.pagoDetalle[idx]={montoPagado:amort.rows[idx]?amort.rows[idx].valorCuota:0};
   } else if(cr.pagoDetalle){
     delete cr.pagoDetalle[idx];
+    invalidarAmortCache(id); // por si el pago tenía un monto real distinto al teórico (abono)
   }
   // Sincronizar el gasto correspondiente en Q1/Q2 si existe en algún mes
   const numCuota=idx+1;
@@ -1792,6 +1929,70 @@ function toggleCuotaPago(id,idx){
   save();
   render(); // actualizar Q1/Q2 de fondo si el gasto cambió
   openCreditoDetalle(id);
+}
+
+// Abono adicional a capital, independiente de pagar una cuota puntual: reduce el saldo y por
+// lo tanto el número de cuotas restantes (la cuota fija no cambia), ver calcAmortizacionSinCache.
+function openAbonoModal(id){
+  const cr=creditos[id]; if(!cr) return;
+  if(cr.planImportado && cr.planImportado.length){
+    showAlert('Los créditos con plan de pagos importado no admiten abonos a capital.');
+    return;
+  }
+  const estado=calcEstadoCredito(cr);
+  if(estado.proximaIdx===-1){ showAlert('Este crédito ya está pagado.'); return; }
+  openModal('<div class="mtitle">Abonar a capital</div>'
+    +'<p style="font-size:13px;color:var(--mut);margin-bottom:10px">Saldo actual: <b>'+cop(estado.saldoActual)+'</b>. El abono reduce el número de cuotas restantes; el valor de la cuota fija no cambia.</p>'
+    +'<div class="field"><label>Monto del abono</label>'
+    +'<input id="ab-val" type="text" inputmode="numeric" placeholder="Ej: 500.000" oninput="maskMoneyInput(this)"></div>'
+    +'<div class="field"><label>Fecha del abono</label>'
+    +'<input id="ab-fecha" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="confirmarAbono(\''+id+'\')">Confirmar abono</button>'
+    +'</div>');
+}
+function confirmarAbono(id){
+  const cr=creditos[id]; if(!cr) return;
+  const monto=moneyVal('ab-val');
+  const fecha=document.getElementById('ab-fecha').value||new Date().toISOString().slice(0,10);
+  if(!monto||monto<=0){ showAlert('El monto del abono debe ser mayor a 0'); return; }
+  const estado=calcEstadoCredito(cr);
+  if(monto>estado.saldoActual){
+    showAlert('El abono ('+cop(monto)+') no puede ser mayor al saldo actual del crédito ('+cop(estado.saldoActual)+').');
+    return;
+  }
+  if(!cr.abonos) cr.abonos=[];
+  const idxAplicacion=estado.proximaIdx-1; // última cuota ya pagada (-1 si ninguna)
+  cr.abonos.push({id:uid(), idx:idxAplicacion, fecha:fecha, monto:monto});
+  invalidarAmortCache(id);
+  save();render();openCreditoDetalle(id);
+  toast('Abono de '+cop(monto)+' registrado. El plazo del crédito se redujo.');
+}
+
+// abId identifica un abono manual puntual (cr.abonos) a eliminar; abId===null identifica el
+// excedente de esa cuota (Caso 1, no vive en cr.abonos sino en cr.pagoDetalle). Cuando una
+// cuota tiene varios componentes, esto permite indicar exactamente cuál se quiere devolver.
+function confirmarEliminarComponenteAbono(id,idx,abId){
+  showConfirm('Se eliminará este abono a capital. El plazo del crédito puede volver a alargarse. ¿Continuar?',function(){
+    eliminarComponenteAbono(id,idx,abId);
+  });
+}
+function eliminarComponenteAbono(id,idx,abId){
+  const cr=creditos[id]; if(!cr) return;
+  if(abId){
+    if(cr.abonos) cr.abonos=cr.abonos.filter(function(ab){return ab.id!==abId;});
+  } else if(idx>=0 && cr.pagos && cr.pagos[idx] && cr.pagoDetalle && cr.pagoDetalle[idx] && cr.pagoDetalle[idx].montoPagado!=null){
+    // Era el excedente de esta cuota: resetea el monto pagado al valor teórico de la cuota fija.
+    const amortAntes=calcAmortizacion(cr);
+    var teorico=amortAntes.valorCuota;
+    if(cr.pagoDetalle[idx].montoPagado-teorico>1){
+      cr.pagoDetalle[idx]={montoPagado:teorico};
+    }
+  }
+  invalidarAmortCache(id);
+  save();render();openCreditoDetalle(id);
+  toast('Abono eliminado');
 }
 
 function confirmDeleteCredito(id){
@@ -3106,7 +3307,7 @@ function renderTC(m) {
       var estado=calcEstadoCredito(cr);
       return '<div onclick="openCreditoDetalle(\''+cid+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--brd);cursor:pointer">'
         +'<div><div style="font-size:12px;font-weight:600;color:var(--txt)">'+esc(cr.nombre)+'</div>'
-        +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+estado.pagadasVisual+'/'+cr.cuotas+' cuotas pagadas</div></div>'
+        +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+estado.pagadasVisual+'/'+estado.amort.rows.length+' cuotas pagadas</div></div>'
         +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(estado.saldoActual)+'</div>'
         +'</div>';
     }).join('');
@@ -3463,7 +3664,7 @@ function renderNom(m) {
     const esSuma=d.tipo==='suma';
     const val=d.porcentaje?bq*d.porcentaje:(d.valor_fijo||0);
     const base=d.porcentaje?Math.round(d.porcentaje*100)+'%':'Fijo';
-    const credBadge=(d.creditoId&&creditos[d.creditoId])?' · Cuota '+d.numCuota+'/'+creditos[d.creditoId].cuotas:'';
+    const credBadge=(d.creditoId&&creditos[d.creditoId])?' · Cuota '+d.numCuota+'/'+calcAmortizacion(creditos[d.creditoId]).rows.length:'';
     return '<div class="nom-row" onclick="editDed(event,\''+lbl+'\','+i+')" style="cursor:pointer">'
       +'<div class="nom-row-info"><div class="nom-row-name">'+esc(d.nombre)+' <span class="nom-row-badge">'+base+credBadge+'</span></div></div>'
       +'<div class="nom-row-val" style="color:var(--'+(esSuma?'grn':'red')+')">'+(esSuma?'+':'-')+cop(val)+'</div>'
@@ -4196,7 +4397,7 @@ function toggleP(e,id,which){
     if(g.creditoId && creditos[g.creditoId]){
       var cr=creditos[g.creditoId];
       if(cr.pagos) cr.pagos[g.numCuota-1]=false;
-      if(cr.pagoDetalle) delete cr.pagoDetalle[g.numCuota-1];
+      if(cr.pagoDetalle){ delete cr.pagoDetalle[g.numCuota-1]; invalidarAmortCache(g.creditoId); }
     }
     if(g.parentId){
       const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
@@ -4249,6 +4450,7 @@ function toggleP(e,id,which){
       cr2.pagos[g.numCuota-1]=true;
       if(!cr2.pagoDetalle) cr2.pagoDetalle={};
       cr2.pagoDetalle[g.numCuota-1]={montoPagado:Math.abs(g.presupuesto||0)};
+      invalidarAmortCache(g.creditoId);
     }
     save();render();
   }
@@ -4321,16 +4523,31 @@ function confirmarPago(id,which){
   if(mens!==null) g.mensualidad=mens;
 
   const montoAbono=val||Math.abs(g.presupuesto||0);
+  var excedenteAbono=0;
 
   if(g.creditoId && creditos[g.creditoId]){
     var cr=creditos[g.creditoId];
+    // Valor teórico vigente ANTES de registrar este pago, para detectar si se pagó de más
+    // (hay que leerlo antes de mutar pagoDetalle, porque después amort.rows ya reflejaría el
+    // monto real pagado en vez del teórico).
+    var valorTeoricoAntes=null;
+    if(!(cr.planImportado && cr.planImportado.length)){
+      var amortAntes=calcAmortizacion(cr);
+      var rowAntes=amortAntes.rows[g.numCuota-1];
+      valorTeoricoAntes=rowAntes?rowAntes.valorCuota:null;
+    }
     if(!cr.pagos) cr.pagos=[];
     cr.pagos[g.numCuota-1]=true;
     // Registra el monto REALMENTE pagado (puede ser distinto al valor teórico de la cuota:
-    // pago parcial o abono extra) para que calcEstadoCredito recalcule el saldo con el pago
-    // real en vez de asumir siempre el valor de cuota completo.
+    // pago parcial o abono extra) para que calcAmortizacion/calcEstadoCredito recalculen el
+    // saldo y el plazo con el pago real en vez de asumir siempre el valor de cuota completo.
     if(!cr.pagoDetalle) cr.pagoDetalle={};
     cr.pagoDetalle[g.numCuota-1]={montoPagado:montoAbono};
+    invalidarAmortCache(g.creditoId); // el monto real de esta cuota cambió
+
+    if(valorTeoricoAntes!=null && montoAbono-valorTeoricoAntes>1){
+      excedenteAbono=montoAbono-valorTeoricoAntes;
+    }
   }
 
   if(g.parentId){
@@ -4352,7 +4569,12 @@ function confirmarPago(id,which){
     }
   }
 
-  save();closeModal();render();toast('Pago registrado');
+  save();closeModal();render();
+  if(excedenteAbono>0){
+    toast('Pago registrado. El excedente de '+cop(excedenteAbono)+' se aplicó como abono a capital y redujo el plazo del crédito.', 6000);
+  } else {
+    toast('Pago registrado');
+  }
 }
 
 // ── CRUD Tarjeta ──────────────────────────────────────────────────────────────
@@ -4715,7 +4937,7 @@ function saveDed(lbl,i){
     const crAnt=creditos[anterior.creditoId];
     if(crAnt&&crAnt.pagos){
       crAnt.pagos[anterior.numCuota-1]=false;
-      if(crAnt.pagoDetalle) delete crAnt.pagoDetalle[anterior.numCuota-1];
+      if(crAnt.pagoDetalle){ delete crAnt.pagoDetalle[anterior.numCuota-1]; invalidarAmortCache(anterior.creditoId); }
     }
   }
   if(creditoId){
@@ -4749,7 +4971,7 @@ function delDed(lbl,i){
       const cr=creditos[d.creditoId];
       if(cr&&cr.pagos){
         cr.pagos[d.numCuota-1]=false;
-        if(cr.pagoDetalle) delete cr.pagoDetalle[d.numCuota-1];
+        if(cr.pagoDetalle){ delete cr.pagoDetalle[d.numCuota-1]; invalidarAmortCache(d.creditoId); }
       }
     }
     deds.splice(i,1);save();closeModal();render();toast('Eliminada');
@@ -5597,12 +5819,13 @@ function avanzarDeduccionesCredito(nm){
       var rowActual=amortActual.rows.find(function(r){return r.numero===d.numCuota;});
       cr.pagos[d.numCuota-1]=true;
       cr.pagoDetalle[d.numCuota-1]={montoPagado:rowActual?rowActual.valorCuota:(d.valor_fijo||0)};
+      invalidarAmortCache(d.creditoId); // el monto real de esta cuota cambió, recalcular plazo/filas
       var siguiente=d.numCuota+1;
-      if(siguiente>(cr.cuotas||0)){
+      var amort=calcAmortizacion(cr);
+      if(siguiente>amort.rows.length){
         list.splice(idx,1);
         continue;
       }
-      var amort=calcAmortizacion(cr);
       var row=amort.rows.find(function(r){return r.numero===siguiente;});
       d.numCuota=siguiente;
       if(row) d.valor_fijo=row.valorCuota;
@@ -5610,6 +5833,7 @@ function avanzarDeduccionesCredito(nm){
       // automática), consistente con lo que ya hace saveDed() al crear el vínculo.
       cr.pagos[siguiente-1]=true;
       cr.pagoDetalle[siguiente-1]={montoPagado:row?row.valorCuota:0};
+      invalidarAmortCache(d.creditoId);
     }
   });
 }
