@@ -176,10 +176,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .qcards{display:flex;gap:8px;flex-shrink:0;margin-bottom:10px}
 .qcard{flex:1;min-width:0;background:var(--surf);border:1.5px solid rgba(148,163,184,.16);border-radius:16px;padding:11px 12px;cursor:pointer;transition:.15s}
 .qcard.active{background:rgba(34,211,238,.08);border-color:var(--acc)}
-.qcard.done{background:var(--surf);border-color:var(--brd2)}
-.qcard.active.done{border-color:var(--acc)}
-.qcard.done .qcard-lbl{color:var(--mut)}
-.qcard.done .qcard-disp-val{color:var(--mut)}
 .qcard-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
 .qcard-lbl{font-size:11px;font-weight:800;color:var(--mut)}
 .qcard-lbl.active{color:var(--acc)}

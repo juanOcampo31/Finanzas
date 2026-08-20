@@ -2781,29 +2781,7 @@ function selectHomeQ(q){
 // Panel de tarjetas Q1/Q2 (compartido entre Inicio e Ingresos) — misma tarjeta visual,
 // pero el valor grande y su etiqueta son configurables (disponible vs. ingresos).
 
-// true cuando ya no queda ningún gasto pendiente en esa quincena (todos los activos —no
-// aplazados— están pagados; un grupo cuenta como pagado solo si todos sus subgastos
-// activos lo están). Una quincena sin gastos no se considera "lista".
-function quincenaCompletada(m,which){
-  const gastos=(which==='q1'?m.q1_gastos:m.q2_gastos)||[];
-  const subMap={};
-  const top=[];
-  gastos.forEach(function(g){
-    if(g.parentId){ (subMap[g.parentId]=subMap[g.parentId]||[]).push(g); }
-    else top.push(g);
-  });
-  const activos=top.filter(function(g){return !g.sinpagar;});
-  if(!activos.length) return false;
-  return activos.every(function(g){
-    if(g.esGrupo){
-      var subs=(subMap[g.id]||[]).filter(function(s){return !s.sinpagar;});
-      return subs.length>0 && subs.every(function(s){return s.pagado_flag;});
-    }
-    return g.pagado_flag;
-  });
-}
-
-function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,vencQ2,doneQ1,doneQ2){
+function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,vencQ2){
   const mi=MESES.indexOf(m.nombre);
   const miSafe=mi>=0?mi:0;
   const {q1,q2}=getPago(m.año,miSafe);
@@ -2817,24 +2795,23 @@ function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,venc
   }
   const pagoQ1=pagoInfo(q1), pagoQ2=pagoInfo(q2);
 
-  function qCard(qKey,label,rango,val,pago,venc,done){
+  function qCard(qKey,label,rango,val,pago,venc){
     const active=activeQ===qKey;
     const negIcon=val<0?'<span title="Disponible negativo" style="color:var(--red);display:inline-flex;vertical-align:-2px;margin-left:5px">'+icon('alertTriangle',13)+'</span>':'';
     const vencIcon=(!negIcon&&venc&&venc.length)?'<span title="Cuota de crédito vencida" style="color:var(--amb);display:inline-flex;vertical-align:-2px;margin-left:5px">'+icon('alertTriangle',13)+'</span>':'';
     const sepHtml='<div class="qcard-sep"></div>';
-    // El texto "Pago ..." sigue el mismo color que el disponible (gris cuando la Q está
-    // paga) salvo que esta sea la Q activa: ahí manda el azul de selección, para que siga
-    // siendo obvio en qué quincena estamos aunque ya esté todo pagado.
-    const pagoTxtColor=active?'var(--acc)':(done?'var(--mut)':'var(--txt)');
-    return '<div class="qcard'+(active?' active':'')+(done?' done':'')+'" onclick="'+selectFn+'(\''+qKey+'\')">'
+    const pagoTxtColor=active?'var(--acc)':'var(--txt)';
+    // Solo la palabra "pagado" del sub-texto (fecha de pago ya en el pasado) se pinta de rojo.
+    const pagoSubStyle=pago.sub==='pagado'?' style="color:var(--red)"':'';
+    return '<div class="qcard'+(active?' active':'')+'" onclick="'+selectFn+'(\''+qKey+'\')">'
       +'<div class="qcard-top"><span class="qcard-lbl'+(active?' active':'')+'">'+label+'</span><span class="qcard-range">'+rango+'</span></div>'
       +'<div class="qcard-disp-lbl">'+valueLbl+'</div>'
       +'<div class="qcard-disp-val"><span class="qcard-cur">$</span>'+(val<0?'-':'')+Math.abs(Math.round(val)).toLocaleString('es-CO')+negIcon+vencIcon+'</div>'
       +sepHtml
-      +'<div class="qcard-pago-row"><span class="qcard-dot'+(active?' active':'')+'"></span><span class="qcard-pago-txt" style="color:'+pagoTxtColor+'">Pago '+pago.fecha+'</span><span class="qcard-pago-sub">'+pago.sub+'</span></div>'
+      +'<div class="qcard-pago-row"><span class="qcard-dot'+(active?' active':'')+'"></span><span class="qcard-pago-txt" style="color:'+pagoTxtColor+'">Pago '+pago.fecha+'</span><span class="qcard-pago-sub"'+pagoSubStyle+'>'+pago.sub+'</span></div>'
       +'</div>';
   }
-  return '<div class="qcards">'+qCard('q1','Q1',rangoQ1,valueQ1,pagoQ1,vencQ1,doneQ1)+qCard('q2','Q2',rangoQ2,valueQ2,pagoQ2,vencQ2,doneQ2)+'</div>';
+  return '<div class="qcards">'+qCard('q1','Q1',rangoQ1,valueQ1,pagoQ1,vencQ1)+qCard('q2','Q2',rangoQ2,valueQ2,pagoQ2,vencQ2)+'</div>';
 }
 
 // Mini-tarjeta compacta de crédito (compartida entre Inicio y la pestaña Tarjeta).
@@ -2889,7 +2866,7 @@ function buildTcPickerHtml(m,tcIds,activeTid,showNew){
 }
 
 function renderInicio(m){
-  const qcardsHtml=buildQCardsHtml(m,homeQ,'selectHomeQ','DISPONIBLE',calcDisponibleQuincena(m,'q1'),calcDisponibleQuincena(m,'q2'),calcVencidosQuincena(m,'q1'),calcVencidosQuincena(m,'q2'),quincenaCompletada(m,'q1'),quincenaCompletada(m,'q2'));
+  const qcardsHtml=buildQCardsHtml(m,homeQ,'selectHomeQ','DISPONIBLE',calcDisponibleQuincena(m,'q1'),calcDisponibleQuincena(m,'q2'),calcVencidosQuincena(m,'q1'),calcVencidosQuincena(m,'q2'));
 
   // Tarjeta de crédito (reutiliza los mismos datos de la pestaña Tarjeta y la selección
   // actual de tarjeta, curTC, para mostrar la misma que se eligió ahí o desde el picker)
