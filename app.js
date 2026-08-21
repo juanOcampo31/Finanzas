@@ -2227,7 +2227,7 @@ function pintarEstadoGasto(valor,wh){
   if(cardSP){ cardSP.style.background=estiloSP.background; cardSP.style.borderColor=estiloSP.borderColor; }
   if(tituloSP) tituloSP.style.color=estiloSP.titulo;
   if(cardPD){ cardPD.style.background=estiloPD.background; cardPD.style.borderColor=estiloPD.borderColor; }
-  if(tituloPD) tituloPD.style.color=estiloPD.titulo;
+  if(tituloPD){ tituloPD.style.color=estiloPD.titulo; tituloPD.textContent=(valor==='pagado')?'Pagado':'Pagar'; }
   togglePagadoRealLine(valor==='pagado');
 }
 // Para un gasto ligado a un crédito: mientras escribes en "Valor" no se te pisa el campo (ver
@@ -4197,14 +4197,16 @@ function openGasto(g,which,parentId){
   const tituloSinPagarColor=estadoInicial==='sinpagar'?'#FBBF24':'#94A3B8';
   // La tarjeta "Sin pagar" muestra un solo rótulo (sin subtítulo aparte): en Q1 dice "Mover a
   // Q2" (la acción que en verdad va a pasar), en Q2 dice "Sin pagar" (no hay adónde moverlo,
-  // queda como recordatorio).
+  // queda como recordatorio). La primera tarjeta dice "Pagar" cuando todavía no está marcada
+  // (invita a la acción) y "Pagado" cuando ya lo está (describe el hecho) — mismo criterio en
+  // vivo al seleccionarla/deseleccionarla, ver pintarEstadoGasto().
   const labelSinPagar=wh==='q1'?'Mover a Q2':'Sin pagar';
+  const labelPagado=estadoInicial==='pagado'?'Pagado':'Pagar';
   const estadoSectionHtml='<div style="padding:16px 2px 4px;border-top:1px solid var(--brd)">'
-    +'<div style="font-size:12px;font-weight:600;color:var(--mut);margin-bottom:8px">Estado</div>'
     +'<input type="hidden" id="g-estado" value="'+(estadoInicial||'')+'">'
     +'<div style="display:flex;gap:10px">'
     +'<div id="g-card-pagado" onclick="seleccionarEstadoGasto(\'pagado\',\''+wh+'\',\''+eid+'\',\''+pid+'\')" style="'+(estadoInicial==='pagado'?CARD_PAGADO_ON:CARD_ESTADO_BASE)+'">'
-    +'<div id="g-card-pagado-titulo" style="font-size:14px;font-weight:800;color:'+tituloPagadoColor+'">Pagado</div>'
+    +'<div id="g-card-pagado-titulo" style="font-size:14px;font-weight:800;color:'+tituloPagadoColor+'">'+labelPagado+'</div>'
     +'</div>'
     +'<div id="g-card-sinpagar" onclick="seleccionarEstadoGasto(\'sinpagar\',\''+wh+'\',\''+eid+'\',\''+pid+'\')" style="'+(estadoInicial==='sinpagar'?CARD_SINPAGAR_ON:CARD_ESTADO_BASE)+'">'
     +'<div id="g-card-sinpagar-titulo" style="font-size:14px;font-weight:800;color:'+tituloSinPagarColor+'">'+labelSinPagar+'</div>'
@@ -4236,7 +4238,8 @@ function openGasto(g,which,parentId){
   ):'';
 
   // Una sola hoja continua (sin tarjetas ni encabezados de sección), como en el mockup de
-  // rediseño: Valor, Nombre, Forma de pago, Grupo, plantilla/agrupar (solo al crear), Estado y
+  // rediseño: Valor, Estado (justo debajo del valor de la cuota — es lo primero que se decide
+  // al revisar un gasto), Nombre, Forma de pago, Grupo, plantilla/agrupar (solo al crear) y
   // Más opciones, separados por líneas finas en vez de tarjetas independientes.
   // "Valor real pagado" ya no es un campo visible del formulario, pero sigue existiendo como
   // dato del gasto (pagado_real) — lo siguen leyendo saveG() y sincronizarCreditoDesdeGasto().
@@ -4248,12 +4251,12 @@ function openGasto(g,which,parentId){
   const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
     +realHiddenInput
     +valorBlockHtml
+    +estadoSectionHtml
     +nameFieldHtml
     +formaPagoRowHtml
     +templateField
     +moverGrupoField
     +grupoCreacionField
-    +estadoSectionHtml
     +masOpcionesSectionHtml
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
