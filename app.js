@@ -803,6 +803,7 @@ async function loadAppData(){
     loadLegacyPlaintext();
   }
   Object.keys(db).forEach(k => { db[k] = migrateMonth(db[k]); });
+  migrarEstadoGastos();
   // Repara gastos huérfanos de un grupo: buildDraftMonth() (crear mes nuevo) tenía un bug
   // donde un gasto ligado por parentId a un grupo (ej. "tarjeta") que vivía en la OTRA
   // quincena quedaba con un parentId apuntando a un id que ya no existía en el mes nuevo —
@@ -1149,7 +1150,7 @@ function renderCreditos(m){
   proximoPagoList.sort(function(a,b){ return a.dias-b.dias; });
   var proximoPagoExpandHtml=proximoPagoList.map(function(p){
     var f=new Date(p.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
-    return '<div class="cal-event" onclick="openCreditoDetalle(\''+p.id+'\')">'
+    return '<div class="cal-event" onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+p.id+'\')">'
       +'<div class="cal-ev-left">'
       +'<div class="cal-ev-dot" style="background:var(--'+(p.st.dcls==='du'?'red':p.st.dcls==='ds'?'amb':'grn')+')"></div>'
       +'<div>'
@@ -1210,7 +1211,7 @@ function renderCreditos(m){
       +'<span>'+x.pagadas+' / '+amort.rows.length+' cuotas pagadas</span>'
       +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
       +'</div></div>'
-      +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
+      +'<button onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
       +'</div>';
   }).join('');
 
@@ -1271,7 +1272,7 @@ function openCreditosMenu(){
   proximoPagoList.sort(function(a,b){ return a.dias-b.dias; });
   var proximoPagoExpandHtml=proximoPagoList.map(function(p){
     var f=new Date(p.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
-    return '<div class="cal-event" onclick="closeModal();openCreditoDetalle(\''+p.id+'\')">'
+    return '<div class="cal-event" onclick="creditoDetalleDesdeModal=true;closeModal();openCreditoDetalle(\''+p.id+'\')">'
       +'<div class="cal-ev-left">'
       +'<div class="cal-ev-dot" style="background:var(--'+(p.st.dcls==='du'?'red':p.st.dcls==='ds'?'amb':'grn')+')"></div>'
       +'<div>'
@@ -1324,7 +1325,7 @@ function openCreditosMenu(){
       +'<span>'+x.pagadas+' / '+amort.rows.length+' cuotas pagadas</span>'
       +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
       +'</div></div>'
-      +'<button onclick="openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
+      +'<button onclick="creditoDetalleDesdeModal=true;openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
       +'</div>';
   }).join(''):'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('dollar',36)+'</div><p>Sin créditos. Crea uno nuevo.</p></div>';
 
@@ -1594,6 +1595,20 @@ function confirmImportCreditoPlan(){
 
 let creditoOcultarPagadas=true;
 let _pendingEditCredito=null; // {id, apply()} — cambios de saveEditCredito pendientes de confirmar cuando hay abonos registrados
+// true cuando se entró al detalle del crédito desde el modal "Créditos" (openCreditosMenu,
+// atajo del dashboard); false cuando se entró desde la pestaña Créditos/tarjeta (vista de
+// fondo, no modal). El botón "Volver" del detalle lo usa para decidir si debe reabrir ese
+// modal o simplemente cerrarse y dejar ver la pestaña que ya estaba detrás — antes siempre
+// reabría el modal, así que volver desde la pestaña mostraba un modal de créditos encima.
+let creditoDetalleDesdeModal=false;
+// Comparte la misma decisión con el botón "Volver" del pie del detalle y el "‹ Créditos" fijo
+// del encabezado de la ventana (index.html, #wbg .wback) — antes este último tenía su propio
+// onclick="closeWindow();openCreditosMenu()" hardcodeado, así que siempre forzaba el modal
+// aunque se hubiera entrado al detalle desde la pestaña Créditos/tarjeta.
+function volverDesdeCreditoDetalle(){
+  closeWindow();
+  if(creditoDetalleDesdeModal) openCreditosMenu(); else render();
+}
 
 function openCreditoDetalle(id){
   const cr=creditos[id]; if(!cr) return;
@@ -1769,7 +1784,7 @@ function openCreditoDetalle(id){
     +'</div>'
     +'<div id="cr-list" style="max-height:380px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2)">'+rowsHtml+'</div>'
     +'<div class="macts" style="margin-top:14px">'
-    +'<button class="bcnl" onclick="closeWindow();openCreditosMenu()">Volver</button>'
+    +'<button class="bcnl" onclick="volverDesdeCreditoDetalle()">Volver</button>'
     +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmDeleteCredito(\''+id+'\')">Eliminar</button>'
     +'</div>');
 
@@ -1923,7 +1938,7 @@ function toggleCuotaPago(id,idx){
     var mes=db[k];
     [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
       var g=list.find(function(x){return x.creditoId===id&&x.numCuota===numCuota;});
-      if(g){ g.pagado_flag=cr.pagos[idx]; }
+      if(g){ setGastoEstado(g,cr.pagos[idx]?'pagado':null); }
     });
   });
   save();
@@ -2175,6 +2190,78 @@ function maskMoneyInput(el){
 function setMoneyValue(el, v){
   if(!el) return;
   el.value=moneyInputFmt(v);
+}
+// Si desmarcas "Pagado" sin cerrar el formulario de un gasto ligado a un crédito, "Pagaste $X"
+// (debajo de Valor) debe desaparecer al toque en vez de quedar colgado hasta guardar y reabrir
+// — el dato en sí (pagado_real) solo se limpia de verdad al guardar (sincronizarCreditoDesdeGasto).
+function togglePagadoRealLine(estaPagado){
+  const line=document.getElementById('g-pagado-real-line');
+  if(line) line.style.display=estaPagado?'':'none';
+}
+// Campo "Estado" del formulario de gasto: dos tarjetas deseleccionables, mutuamente
+// excluyentes, para un dato de tres valores (null "sin definir" | 'sinpagar' | 'pagado') — ver
+// comentario junto a estadoSectionHtml en openGasto. Tocar la tarjeta ya activa la apaga
+// (vuelve a null); tocar la otra la activa y apaga la que estuviera prendida. Nunca hay un
+// estado imposible ni ambigüedad entre "no lo he revisado" y "decidí que está pendiente".
+// Elegir "Sin pagar" en Q1 (donde la tarjeta ya dice "Mover a Q2", ver labelSinPagar en
+// openGasto) guarda el formulario de inmediato — mismo saveG de siempre — así que abre directo
+// el diálogo "¿Mover a Q2?" (ofrecerCopiarQ2, sin cambios en esa lógica) sin necesidad de un
+// botón aparte para confirmarlo. Solo pasa al SELECCIONAR (no al desmarcar la tarjeta activa).
+function seleccionarEstadoGasto(valor,wh,eid,pid){
+  const hidden=document.getElementById('g-estado');
+  if(!hidden) return;
+  const actual=hidden.value||null;
+  const nuevo=(actual===valor)?null:valor;
+  hidden.value=nuevo||'';
+  pintarEstadoGasto(nuevo,wh);
+  if(nuevo==='sinpagar' && wh==='q1') saveG(eid,wh,pid);
+}
+function pintarEstadoGasto(valor,wh){
+  const BASE={background:'#0B1526',borderColor:'#22304F',titulo:'#94A3B8'};
+  const ON_SINPAGAR={background:'#2A1D06',borderColor:'#F59E0B',titulo:'#FBBF24'};
+  const ON_PAGADO={background:'#062B33',borderColor:'#22D3EE',titulo:'#67E8F9'};
+  const cardSP=document.getElementById('g-card-sinpagar'), tituloSP=document.getElementById('g-card-sinpagar-titulo');
+  const cardPD=document.getElementById('g-card-pagado'), tituloPD=document.getElementById('g-card-pagado-titulo');
+  const estiloSP=valor==='sinpagar'?ON_SINPAGAR:BASE;
+  const estiloPD=valor==='pagado'?ON_PAGADO:BASE;
+  if(cardSP){ cardSP.style.background=estiloSP.background; cardSP.style.borderColor=estiloSP.borderColor; }
+  if(tituloSP) tituloSP.style.color=estiloSP.titulo;
+  if(cardPD){ cardPD.style.background=estiloPD.background; cardPD.style.borderColor=estiloPD.borderColor; }
+  if(tituloPD) tituloPD.style.color=estiloPD.titulo;
+  togglePagadoRealLine(valor==='pagado');
+}
+// Para un gasto ligado a un crédito: mientras escribes en "Valor" no se te pisa el campo (ver
+// comentario en openGasto/saveG), pero si lo que llevas escrito ya no coincide con la cuota fija
+// del crédito, se muestra "Cuota original: $X" como referencia — sin modificar nada, solo para
+// que no pierdas de vista cuál es la cuota real mientras registras un pago distinto. Si además
+// escribiste más que la cuota (p.ej. cuota 120, escribes 140), al lado se muestra "Pago extra:
+// $20" con la diferencia — mismo criterio que usa saveG al guardar (solo cuenta si es mayor).
+// Escribir más que la cuota es, en sí, la señal de que se pagó: la tarjeta "Pagado" del campo
+// Estado se selecciona en vivo (mismo criterio que saveG al guardar), sin esperar a guardar y
+// reabrir el formulario. No se desmarca sola si vuelves a bajar el valor — eso lo decide el
+// usuario a mano, tocando la tarjeta.
+function mostrarCuotaOriginalSiCambia(el,cuotaValor,wh){
+  const digits=(el.value||'').replace(/\D/g,'');
+  const typed=digits?parseInt(digits):0;
+  const line=document.getElementById('g-cuota-original-line');
+  if(!line) return;
+  line.style.display=(typed!==cuotaValor)?'':'none';
+  const extraSpan=document.getElementById('g-pago-extra-span');
+  if(extraSpan){
+    if(typed>cuotaValor){
+      extraSpan.style.display='';
+      extraSpan.textContent=' · Pago extra: '+cop(typed-cuotaValor);
+    } else {
+      extraSpan.style.display='none';
+    }
+  }
+  if(typed>cuotaValor){
+    const hidden=document.getElementById('g-estado');
+    if(hidden && hidden.value!=='pagado'){
+      hidden.value='pagado';
+      pintarEstadoGasto('pagado',wh);
+    }
+  }
 }
 function moneyVal(id){
   const el=document.getElementById(id);
@@ -2492,6 +2579,11 @@ function syncIngresosDed(m, which){
 // al pagar la tarjeta. Si se contaran como cualquier gasto suelto, se quedarían pendientes
 // para siempre y arrastrarían el % del mes hacia abajo aunque el usuario no tenga nada
 // realmente atrasado — por eso se excluyen del cálculo igual que el grupo mismo.
+//
+// Estado null ("sin definir", el gasto todavía no se ha revisado): pagado_flag y sinpagar
+// quedan ambos en false para ese gasto (ver setGastoEstado), así que este cálculo lo cuenta
+// como pendiente — decisión explícita: "no lo he revisado" no debe adelantar el % de avance
+// del mes, a diferencia de "sinpagar" (decisión YA tomada de que no se paga acá, ver arriba).
 function calcPctPagadoMes(mes){
   const q1=mes.q1_gastos||[], q2=mes.q2_gastos||[];
   const tcGrupoIds=new Set([...q1,...q2].filter(function(g){return g.esGrupo&&g.tcCardId;}).map(function(g){return g.id;}));
@@ -3282,7 +3374,7 @@ function renderTC(m) {
     var filas=creditosVinculados.map(function(cid){
       var cr=creditos[cid];
       var estado=calcEstadoCredito(cr);
-      return '<div onclick="openCreditoDetalle(\''+cid+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--brd);cursor:pointer">'
+      return '<div onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+cid+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--brd);cursor:pointer">'
         +'<div><div style="font-size:12px;font-weight:600;color:var(--txt)">'+esc(cr.nombre)+'</div>'
         +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+estado.pagadasVisual+'/'+estado.amort.rows.length+' cuotas pagadas</div></div>'
         +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(estado.saldoActual)+'</div>'
@@ -3748,16 +3840,152 @@ function sugerirCuotaCredito(){
   if(pEl) setMoneyValue(pEl,row.valorCuota);
 }
 
+// Contexto temporal para los pickers de "Forma de pago" y "Grupo" del formulario de gasto: la
+// app solo tiene UN modal a la vez (openModal reemplaza todo #mc, no apila), así que abrir un
+// picker sobre el formulario de gasto pierde ese formulario. En vez de eso, se captura lo que
+// el usuario ya había escrito/marcado (capturarEstadoFormGasto), se guarda acá mientras el
+// picker está abierto, y al elegir una opción se reabre openGasto con esos datos + la elección
+// nueva — como si nunca se hubiera ido del formulario.
+let _gastoFormPending=null;
+function buscarGastoPorId(id,which){
+  const list=which==='q1'?(getM().q1_gastos||[]):(getM().q2_gastos||[]);
+  return (list||[]).find(function(x){return x.id===id;});
+}
+function capturarEstadoFormGasto(baseG,isE){
+  const data=Object.assign({},baseG||{});
+  const nEl=document.getElementById('g-n');
+  if(nEl){ if(!isE) data.nombre=nEl.value; data.catTipoId=nEl.dataset.catTipoId||null; }
+  if(document.getElementById('g-p')) data.presupuesto=moneyVal('g-p');
+  if(document.getElementById('g-r')) data.pagado_real=moneyVal('g-r')||null;
+  const mEl=document.getElementById('g-m'); if(mEl) data.metodo=mEl.value;
+  const estadoEl=document.getElementById('g-estado');
+  if(estadoEl) setGastoEstado(data,estadoEl.value||null);
+  const gEl=document.getElementById('g-grupo-destino'); if(gEl) data.parentId=gEl.value||null;
+  const cEl=document.getElementById('g-esCuotas');
+  if(cEl){
+    data.cuotas_total=cEl.checked?(parseInt(document.getElementById('g-ct')?.value)||0):0;
+    data.cuota_actual=cEl.checked?(parseInt(document.getElementById('g-ca')?.value)||0):(data.cuota_actual||0);
+  }
+  return data;
+}
+function reabrirGastoDesdePending(){
+  if(!_gastoFormPending) return;
+  const {data,wh,pid}=_gastoFormPending;
+  _gastoFormPending=null;
+  openGasto(data,wh,pid);
+}
+function cerrarPickerYVolver(){
+  if(_gastoFormPending) reabrirGastoDesdePending(); else closeModal();
+}
+function abrirPickerFormaPago(eid,wh,pid){
+  const isE=!!eid;
+  const baseG=isE?buscarGastoPorId(eid,wh):null;
+  _gastoFormPending={data:capturarEstadoFormGasto(baseG,isE),wh:wh,pid:pid,eid:eid};
+  const current=_gastoFormPending.data.metodo;
+  const itemsHtml=catMetodos.map(function(m,i){
+    const sel=m.nombre===current;
+    return '<div onclick="elegirFormaPago('+i+')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--brd);cursor:pointer">'
+      +'<span style="font-size:15px;font-weight:'+(sel?'700':'500')+';color:'+(sel?'var(--acc)':'var(--txt)')+'">'+esc(m.nombre)+'</span>'
+      +(sel?('<span style="color:var(--acc);display:flex">'+icon('check',16)+'</span>'):'')
+      +'</div>';
+  }).join('');
+  openModal('<div class="mtitle">Forma de pago</div>'
+    +'<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+itemsHtml+'</div>'
+    +'<button onclick="abrirNuevaFormaPagoDesdePicker()" style="width:100%;background:none;border:1px dashed var(--brd2);border-radius:var(--r2);padding:11px;color:var(--acc);font-size:13px;cursor:pointer;margin-bottom:14px">+ Nueva forma de pago</button>'
+    +'<button class="bcnl" style="width:100%" onclick="cerrarPickerYVolver()">Cancelar</button>');
+}
+function elegirFormaPago(idx){
+  const m=catMetodos[idx];
+  if(!m||!_gastoFormPending) return;
+  _gastoFormPending.data.metodo=m.nombre;
+  reabrirGastoDesdePending();
+}
+// "+ Nueva forma de pago" ya no vive en el formulario de gasto en sí (ver formaPagoRowHtml):
+// ahora es una acción dentro del picker de Forma de pago, y al guardar vuelve directo al
+// formulario de gasto con la nueva forma ya seleccionada, en vez de perder lo que se llevaba
+// editado (como pasaba antes con openNewMetodoInline/saveNewMetodoInline).
+function abrirNuevaFormaPagoDesdePicker(){
+  openModal('<div class="mtitle">Nueva forma de pago</div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Daviplata, Efectivo..."></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="abrirPickerFormaPago(\''+(_gastoFormPending?_gastoFormPending.eid:'')+'\',\''+(_gastoFormPending?_gastoFormPending.wh:'q1')+'\',\''+(_gastoFormPending?_gastoFormPending.pid:'')+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="guardarNuevaFormaPagoDesdePicker()">Guardar</button>'
+    +'</div>');
+}
+function guardarNuevaFormaPagoDesdePicker(){
+  const nombre=document.getElementById('cat-nombre').value.trim();
+  if(!nombre){showAlert('Escribe un nombre');return;}
+  if(catMetodos.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
+    showAlert('Ya existe esa forma de pago');return;
+  }
+  catMetodos.push({id:uid(),nombre:nombre});
+  save();
+  if(_gastoFormPending){ _gastoFormPending.data.metodo=nombre; reabrirGastoDesdePending(); }
+  else { closeModal(); toast('Agregado.'); }
+}
+function abrirPickerGrupo(eid,wh,pid){
+  const isE=!!eid;
+  const baseG=isE?buscarGastoPorId(eid,wh):null;
+  _gastoFormPending={data:capturarEstadoFormGasto(baseG,isE),wh:wh,pid:pid,eid:eid};
+  const listNow2=wh==='q1'?(getM().q1_gastos||[]):(getM().q2_gastos||[]);
+  const gruposNow=(listNow2||[]).filter(function(x){return x.esGrupo&&x.id!==eid;});
+  const current=_gastoFormPending.data.parentId||null;
+  function itemRow(gid,label){
+    const sel=(current||'')===gid;
+    return '<div onclick="elegirGrupo(\''+gid+'\')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--brd);cursor:pointer">'
+      +'<span style="font-size:15px;font-weight:'+(sel?'700':'500')+';color:'+(sel?'var(--acc)':'var(--txt)')+'">'+esc(label)+'</span>'
+      +(sel?('<span style="color:var(--acc);display:flex">'+icon('check',16)+'</span>'):'')
+      +'</div>';
+  }
+  const itemsHtml=itemRow('','Gasto independiente (sin grupo)')
+    +gruposNow.map(function(gr){return itemRow(gr.id,nombreGasto(gr));}).join('');
+  openModal('<div class="mtitle">Grupo</div>'
+    +'<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+itemsHtml+'</div>'
+    +'<button class="bcnl" style="width:100%" onclick="cerrarPickerYVolver()">Cancelar</button>');
+}
+function elegirGrupo(gid){
+  if(!_gastoFormPending) return;
+  _gastoFormPending.data.parentId=gid||null;
+  reabrirGastoDesdePending();
+}
 function openGasto(g,which,parentId){
-  const e=g||{nombre:'',presupuesto:0,metodo:'',pagado_real:null,pagado_flag:false};
-  const isE=!!g;
+  const e=g||{nombre:'',presupuesto:0,metodo:'',pagado_real:null,estado:null,pagado_flag:false};
+  // isE (¿existe ya el gasto?) se basa en si trae id, no solo en si "g" es un objeto — al
+  // reabrir el formulario tras elegir algo en el picker de Forma de pago/Grupo (ver
+  // reabrirGastoDesdePending) se pasa un objeto con los datos capturados EN CURSO, que para un
+  // gasto todavía no guardado no trae id; si isE se basara en "!!g" quedaría mal marcado como
+  // edición (nombre bloqueado, aparecería "Eliminar gasto", etc.) solo por reabrir el formulario.
+  const isE=!!(g&&g.id);
   const pid=parentId||'';
   const eid=isE?e.id:'';
   const wh=which||'q1';
 
-  const spLabel=wh==='q1'?'Mover a Q2':'Sin pagar (recordatorio)';
-  const spChecked=e.sinpagar?' checked':'';
-  const pdChecked=e.pagado_flag?' checked':'';
+  // Si el gasto está ligado a un crédito, "Valor" arranca mostrando el valor de ESA cuota (el
+  // valor no lo decide el usuario, lo decide la tabla de amortización). El campo se puede
+  // seguir editando: si el usuario escribe un número mayor, mientras la ventana esté abierta se
+  // respeta tal cual lo que escribió (no se le pisa el campo en vivo) — solo AL GUARDAR (ver
+  // saveG) ese excedente se traslada a "valor real pagado" y el campo vuelve a fijarse en la
+  // cuota. Un valor igual o menor no dispara nada especial.
+  var creditoLigado=(e.creditoId&&creditos[e.creditoId])?creditos[e.creditoId]:null;
+  var cuotaValorActual=null, cuotaNumActual=null, cuotaTotalActual=null;
+  if(creditoLigado){
+    var amortLigado=calcAmortizacion(creditoLigado);
+    cuotaNumActual=e.numCuota||1;
+    var rowLigado=amortLigado.rows[cuotaNumActual-1];
+    // OJO: rowLigado.valorCuota NO sirve acá si esta cuota ya se pagó con un abono mayor —
+    // calcAmortizacionSinCache reemplaza el valor de la fila por el monto REAL pagado
+    // (pagoDetalle[k].montoPagado) una vez registrado, así que después de un abono mayor
+    // rowLigado.valorCuota deja de ser "la cuota" y pasa a ser "lo que ya pagaste". El valor
+    // fijo/teórico de la cuota es amort.valorCuota (constante para todo el plazo, salvo la
+    // última cuota si cierra antes por abonos previos — caso borde que no cubre este cálculo).
+    cuotaValorActual=amortLigado.valorCuota||(rowLigado?rowLigado.valorCuota:e.presupuesto);
+    cuotaTotalActual=amortLigado.rows.length;
+  }
+  var valorMostrado=creditoLigado?cuotaValorActual:e.presupuesto;
+  // Si ya se pagó esta cuota con un valor distinto al fijo (abono mayor), se muestra como dato
+  // adicional debajo de "Valor" — que siempre sigue mostrando la cuota, no lo realmente pagado.
+  var pagadoRealDistinto=creditoLigado&&e.pagado_real!=null&&e.pagado_real!==cuotaValorActual;
+
   var defaultMetodo=e.metodo||(catMetodos[0]?catMetodos[0].nombre:'');
   var suggestedCuota=e.cuota_actual||0;
   if(!e.id&&!suggestedCuota&&e.cuotas_total>0){
@@ -3789,6 +4017,9 @@ function openGasto(g,which,parentId){
   // Mover un gasto existente (independiente o de otro grupo) a un grupo desplegable ya
   // creado, sin tener que borrarlo y volver a crearlo como subgasto. No aplica al editar
   // el grupo mismo (no se puede anidar un grupo dentro de otro).
+  // "Grupo" abre un picker de pantalla completa (abrirPickerGrupo) en vez de un <select> nativo,
+  // igual que "Forma de pago" — más legible con listas largas y consistente con el mockup de
+  // rediseño. El <select> real queda oculto solo para que saveG() lo siga leyendo tal cual.
   var moverGrupoField='';
   if(isE && !e.esGrupo){
     const listNow2=wh==='q1'?(getM().q1_gastos||[]):(getM().q2_gastos||[]);
@@ -3797,7 +4028,15 @@ function openGasto(g,which,parentId){
       var grupoOpts='<option value="">— Gasto independiente (sin grupo) —</option>'+gruposNow.map(function(gr){
         return '<option value="'+gr.id+'"'+(e.parentId===gr.id?' selected':'')+'>'+esc(nombreGasto(gr))+'</option>';
       }).join('');
-      moverGrupoField='<div class="field"><label>Grupo</label><select id="g-grupo-destino">'+grupoOpts+'</select></div>';
+      var grupoActual=e.parentId?(gruposNow.find(function(gr){return gr.id===e.parentId;})):null;
+      var grupoLabel=grupoActual?nombreGasto(grupoActual):'Independiente';
+      moverGrupoField='<select id="g-grupo-destino" style="display:none">'+grupoOpts+'</select>'
+        +'<div onclick="abrirPickerGrupo(\''+eid+'\',\''+wh+'\',\''+pid+'\')" style="padding:13px 2px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
+        +'<div style="font-size:15px;font-weight:600;color:var(--txt)">Grupo</div>'
+        +'<div style="display:flex;align-items:center;gap:6px">'
+        +'<span style="font-size:15px;font-weight:700;color:var(--mut)">'+esc(grupoLabel)+'</span>'
+        +'<span style="font-size:15px;color:var(--mut)">›</span>'
+        +'</div></div>';
     }
   }
 
@@ -3848,18 +4087,29 @@ function openGasto(g,which,parentId){
           +'<button class="bdel" style="margin-top:6px" onclick="delGrupo(\''+eid+'\',\''+wh+'\')">Eliminar grupo (y subgastos)</button>';
   }
 
-  // Campo Nombre: si el gasto está vinculado a una plantilla del catálogo, se bloquea
-  // para garantizar que siempre coincida con el catálogo (integridad). Se puede
-  // desvincular manualmente si se necesita un nombre libre para este gasto puntual.
-  var linkedItem = e.catTipoId ? catTipos.find(function(t){return t.id===e.catTipoId;}) : null;
+  // Campo Nombre: al EDITAR un gasto ya existente no se puede renombrar desde aquí (se
+  // muestra como texto fijo, sin caja de input) — evita relacionar mal un gasto ya en curso
+  // (p.ej. una cuota de crédito o algo vinculado a un catálogo) con un nombre distinto al que
+  // tiene en el resto de la app. Al CREAR uno nuevo sigue siendo editable como siempre,
+  // incluida la lógica de vínculo a catálogo (readonly + nota para desvincular).
   var nameFieldHtml;
-  if(linkedItem){
-    nameFieldHtml = '<div class="field" style="margin:0"><label>Nombre</label>'
-      +'<input id="g-n" value="'+esc(linkedItem.nombre)+'" readonly data-cat-tipo-id="'+linkedItem.id+'" style="opacity:.7;cursor:not-allowed">'
-      +'<div id="g-n-note" style="font-size:11px;color:var(--acc);margin-top:4px">Vinculado al catálogo "'+esc(linkedItem.nombre)+'". Para renombrarlo edita el catálogo, o <span onclick="unlinkGastoNameField()" style="text-decoration:underline;cursor:pointer">desvincúlalo aquí</span>.</div>'
-      +'</div>';
+  if(isE){
+    nameFieldHtml='<div style="padding:13px 2px;border-top:1px solid var(--brd);display:flex;flex-direction:column;gap:3px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--mut)">Nombre</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
+      +'<input id="g-n" value="'+esc(e.nombre)+'" readonly data-cat-tipo-id="'+(e.catTipoId||'')+'" style="font-family:inherit;background:transparent;border:none;outline:none;font-size:17px;font-weight:700;color:var(--txt);padding:0;cursor:default;flex:1;min-width:0">'
+      +(creditoLigado?('<span onclick="creditoDetalleDesdeModal=false;closeModal();openCreditoDetalle(\''+e.creditoId+'\')" style="font-size:11px;font-weight:600;color:var(--acc);cursor:pointer;text-decoration:underline;text-underline-offset:2px;white-space:nowrap;flex-shrink:0">Ver detalle '+etiquetaCredito(creditoLigado)+' · '+esc(creditoLigado.nombre)+'</span>'):'')
+      +'</div></div>';
   } else {
-    nameFieldHtml = '<div class="field" style="margin:0"><label>Nombre</label><input id="g-n" value="'+esc(e.nombre)+'" data-cat-tipo-id="" placeholder="Arriendo, Mercado, Luz..."></div>';
+    var linkedItem = e.catTipoId ? catTipos.find(function(t){return t.id===e.catTipoId;}) : null;
+    if(linkedItem){
+      nameFieldHtml = '<div style="padding:13px 2px;border-top:1px solid var(--brd)"><div class="field" style="margin:0"><label>Nombre</label>'
+        +'<input id="g-n" value="'+esc(linkedItem.nombre)+'" readonly data-cat-tipo-id="'+linkedItem.id+'" style="opacity:.7;cursor:not-allowed">'
+        +'<div id="g-n-note" style="font-size:11px;color:var(--acc);margin-top:4px">Vinculado al catálogo "'+esc(linkedItem.nombre)+'". Para renombrarlo edita el catálogo, o <span onclick="unlinkGastoNameField()" style="text-decoration:underline;cursor:pointer">desvincúlalo aquí</span>.</div>'
+        +'</div></div>';
+    } else {
+      nameFieldHtml = '<div style="padding:13px 2px;border-top:1px solid var(--brd)"><div class="field" style="margin:0"><label>Nombre</label><input id="g-n" value="'+esc(e.nombre)+'" data-cat-tipo-id="" placeholder="Arriendo, Mercado, Luz..."></div></div>';
+    }
   }
 
   // "Crear crédito nuevo": un gasto a cuotas fijas se maneja como un crédito interno con tasa 0
@@ -3868,16 +4118,14 @@ function openGasto(g,which,parentId){
   // check, porque no es un estado del gasto sino una acción: navega directo a Créditos para
   // crearlo ahí (con su plazo, frecuencia y fecha reales) y, al guardar el crédito, este mismo
   // gasto (en la Q en la que se estaba creando) se agrega automáticamente ya vinculado — no hay
-  // que volver a este formulario. Vive en "Información del gasto" junto a nombre/valor porque
-  // es sobre ESE gasto puntual, no una característica adicional. El enlace "Ver detalle del
-  // crédito" (para gastos YA vinculados) sí va en "Características del gasto", porque describe
-  // una característica del gasto (está atado a un crédito), no un dato propio suyo. Los gastos
-  // legacy (con cuotas_total pero sin creditoId) conservan el editor manual de siempre.
+  // que volver a este formulario. Los gastos legacy (con cuotas_total pero sin creditoId)
+  // conservan el editor manual de siempre. El enlace "Ver detalle del crédito" para gastos YA
+  // vinculados vive junto al nombre del crédito, debajo de "Valor" (ver valorBlockHtml) — no
+  // aquí en Más opciones, porque es la info más relevante de ESE gasto puntual.
   var cuotasField='';
   var crearCreditoLinkHtml='';
-  var verCreditoDetalleHtml='';
   if(e.creditoId && creditos[e.creditoId]){
-    verCreditoDetalleHtml='<button onclick="event.preventDefault();closeModal();openCreditoDetalle(\''+e.creditoId+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-bottom:10px">'+btnIcon('bank',12)+'Ver detalle '+etiquetaCredito(creditos[e.creditoId])+' · '+esc(creditos[e.creditoId].nombre)+'</button>';
+    // nada que agregar acá: ver comentario arriba.
   } else if(!isE){
     crearCreditoLinkHtml='<button onclick="event.preventDefault();irCrearCreditoDesdeGasto(\''+wh+'\',\''+pid+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-top:4px">+ Crear crédito nuevo (cuotas fijas)</button>';
   } else {
@@ -3891,74 +4139,134 @@ function openGasto(g,which,parentId){
       +'</div>';
   }
 
-  // Ícono pequeño en el encabezado de cada tarjeta, referente a su contenido.
-  function cheadIcon(iconName, titulo){
-    return '<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
-      +'<div class="tcic" style="width:26px;height:26px;background:var(--acc-d);color:var(--acc)">'+icon(iconName,13)+'</div>'
-      +'<span class="ctitle">'+titulo+'</span></div></div>';
-  }
-
-  // Sección "Información del gasto": Nombre/Valor y Valor real/Forma de pago en 2 columnas;
-  // "Usar gasto guardado" queda como última fila, de ancho completo.
-  const infoGastoCard='<div class="card" style="margin-bottom:12px">'
-    +cheadIcon('fileText','Información del gasto')
-    +'<div style="padding:4px 14px 12px">'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
-    +nameFieldHtml
-    +'<div class="field" style="margin:0"><label>Valor</label><input id="g-p" type="text" inputmode="numeric" value="'+moneyInputFmt(e.presupuesto)+'" oninput="maskMoneyInput(this)"></div>'
+  // Bloque "Valor": número grande centrado con línea de acento debajo, como el mockup de
+  // rediseño (Editar Gasto.dc.html, tarjeta 2A). "Valor" siempre representa el valor de la
+  // cuota vigente para este período (para un gasto ligado a un crédito, la cuota real de la
+  // tabla de amortización; para cualquier otro, el presupuesto de ese gasto en esta quincena).
+  // El enlace "Ver detalle del crédito" va junto al nombre del gasto (ver nameFieldHtml), no
+  // acá — acá solo queda el subtítulo "Cuota N de M".
+  const valorSubtitulo=creditoLigado
+    ?('Cuota '+cuotaNumActual+' de '+cuotaTotalActual)
+    :'COP · valor de la cuota';
+  const valorBlockHtml='<div style="padding:4px 4px 18px;display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center">'
+    +'<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)">Valor</div>'
+    +'<div style="display:flex;align-items:baseline;gap:6px;padding-bottom:6px;border-bottom:2px solid var(--acc)">'
+    +'<span style="font-size:22px;font-weight:600;color:var(--mut)">$</span>'
+    +'<input id="g-p" type="text" inputmode="numeric" value="'+moneyInputFmt(valorMostrado)+'" oninput="maskMoneyInput(this);'
+    +(creditoLigado?('mostrarCuotaOriginalSiCambia(this,'+cuotaValorActual+',\''+wh+'\')'):'')
+    +'"'
+    +' style="font-family:inherit;width:180px;background:transparent;border:none;outline:none;font-size:38px;font-weight:800;color:var(--txt);letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:center;padding:0">'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
-    +'<div class="field" style="margin:0"><label>Valor real pagado (opcional)</label><input id="g-r" type="text" inputmode="numeric" value="'+moneyInputFmt(e.pagado_real)+'" oninput="maskMoneyInput(this)"></div>'
-    +'<div class="field" style="margin:0"><label>Forma de pago</label><select id="g-m">'+opts+'</select>'
-    +'<button onclick="event.preventDefault();openNewMetodoInline()" style="background:none;border:none;color:var(--acc);font-size:11px;cursor:pointer;margin-top:4px;padding:0">+ Nueva forma de pago</button></div>'
+    +'<div style="font-size:11px;color:var(--mut)">'+valorSubtitulo
+    +(creditoLigado?('<span id="g-cuota-original-line" style="display:none"> · Cuota original: '+cop(cuotaValorActual)+'</span>'):'')
+    +(creditoLigado?'<span id="g-pago-extra-span" style="display:none;color:var(--acc);font-weight:600"></span>':'')
+    +(pagadoRealDistinto?(' · <span id="g-pagado-real-line" style="color:var(--acc);font-weight:600">Pagaste '+cop(e.pagado_real)+'</span>'):'')
     +'</div>'
-    +templateField
-    +crearCreditoLinkHtml
-    +'</div></div>';
-
-  // Sección "Características del gasto": crédito, cuotas.
-  const caracteristicasInner='<div style="padding:4px 14px 12px">'
-    +moverGrupoField
-    +creditoField
-    +verCreditoDetalleHtml
-    +cuotasField
     +'</div>';
 
-  // Sección "Organización del gasto": agrupar en un grupo desplegable (solo al crear un gasto
-  // de nivel superior). Se omite por completo si no aplica (edición, subgastos).
-  const showOrganizacion=!!grupoCreacionField;
-  const organizacionInner=showOrganizacion?('<div style="padding:4px 14px 12px">'+grupoCreacionField+'</div>'):'';
-
-  // Características y Organización van lado a lado; si Organización no aplica, Características
-  // ocupa el ancho completo en vez de dejar una columna vacía.
-  const caracteristicasCard='<div class="card" style="'+(showOrganizacion?'margin-bottom:0;height:100%;box-sizing:border-box':'margin-bottom:12px')+'">'
-    +cheadIcon('settings','Características del gasto')
-    +caracteristicasInner+'</div>';
-  const organizacionCard=showOrganizacion?(
-    '<div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box">'
-    +cheadIcon('folder','Organización del gasto')
-    +organizacionInner+'</div>'
-  ):'';
-  const caracOrgRow=showOrganizacion
-    ?('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;align-items:stretch">'+caracteristicasCard+organizacionCard+'</div>')
-    :caracteristicasCard;
-
-  // Sección "Estado del gasto": pagado / sin pagar.
-  const estadoCard='<div class="card" style="margin-bottom:12px">'
-    +cheadIcon('flag','Estado del gasto')
-    +'<div style="padding:4px 14px 12px">'
-    +'<div class="cbx-row"><input type="checkbox" id="g-pd"'+pdChecked+'><label for="g-pd" style="font-size:13px;color:var(--txt)">Pagado</label></div>'
-    +'<div class="cbx-row"><input type="checkbox" id="g-sp"'+spChecked+'><label for="g-sp" style="font-size:13px;color:var(--amb)">'+spLabel+'</label></div>'
+  // Forma de pago: fila que abre un picker de pantalla completa (abrirPickerFormaPago) con la
+  // lista de formas de pago, en vez de un <select> nativo — más legible y es donde ahora vive
+  // "+ Nueva forma de pago" (ya no ocupa espacio propio en el formulario de gasto). El <select>
+  // real queda oculto solo para que saveG() lo siga leyendo tal cual.
+  const formaPagoRowHtml='<select id="g-m" style="display:none">'+opts+'</select>'
+    +'<div onclick="abrirPickerFormaPago(\''+eid+'\',\''+wh+'\',\''+pid+'\')" style="padding:13px 2px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
+    +'<div style="font-size:15px;font-weight:600;color:var(--txt)">Forma de pago</div>'
+    +'<div style="display:flex;align-items:center;gap:6px">'
+    +'<span style="font-size:15px;font-weight:700;color:var(--txt)">'+esc(defaultMetodo)+'</span>'
+    +'<span style="font-size:15px;color:var(--mut)">›</span>'
     +'</div></div>';
 
+  // Sección "Estado": campo único de tres valores mutuamente excluyentes — null ("sin
+  // definir", el estado por defecto de un gasto nuevo, todavía no revisado), 'sinpagar'
+  // (decidí que está pendiente) o 'pagado' (el dinero ya salió). Se muestra como dos tarjetas
+  // deseleccionables: tocar la inactiva la activa y apaga la otra; tocar la ACTIVA la
+  // desmarca y vuelve a "sin definir". Reemplaza los dos checkboxes independientes de antes
+  // (g-pd/g-sp), que permitían guardar el estado imposible "pagado y sin pagar a la vez".
+  // El rótulo de la segunda tarjeta cambia según la quincena (labelSinPagar, más abajo): "Mover
+  // a Q2" en Q1, "Sin pagar" en Q2. En Q1, seleccionar esa tarjeta guarda el formulario de una
+  // vez (mismo saveG de siempre) y por lo tanto abre directo "¿Mover a Q2?" — no hace falta un
+  // botón aparte para eso, ver seleccionarEstadoGasto().
+  // Altura de las tarjetas igualada a la de los botones de la app (.bpri/.bcnl: padding
+  // 11px) — por eso padding vertical chico + altura fija con contenido centrado, en vez del
+  // padding amplio de antes (pensado para dos líneas de texto en ambas tarjetas).
+  const CARD_ESTADO_BASE='flex:1;height:44px;padding:0 10px;border-radius:14px;background:#0B1526;border:1px solid #22304F;display:flex;flex-direction:column;justify-content:center;gap:2px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
+  const CARD_SINPAGAR_ON='flex:1;height:44px;padding:0 10px;border-radius:14px;background:#2A1D06;border:1px solid #F59E0B;display:flex;flex-direction:column;justify-content:center;gap:2px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
+  const CARD_PAGADO_ON='flex:1;height:44px;padding:0 10px;border-radius:14px;background:#062B33;border:1px solid #22D3EE;display:flex;flex-direction:column;justify-content:center;gap:2px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
+  const estadoInicial=gastoEstado(e);
+  const tituloPagadoColor=estadoInicial==='pagado'?'#67E8F9':'#94A3B8';
+  const tituloSinPagarColor=estadoInicial==='sinpagar'?'#FBBF24':'#94A3B8';
+  // La tarjeta "Sin pagar" muestra un solo rótulo (sin subtítulo aparte): en Q1 dice "Mover a
+  // Q2" (la acción que en verdad va a pasar), en Q2 dice "Sin pagar" (no hay adónde moverlo,
+  // queda como recordatorio).
+  const labelSinPagar=wh==='q1'?'Mover a Q2':'Sin pagar';
+  const estadoSectionHtml='<div style="padding:16px 2px 4px;border-top:1px solid var(--brd)">'
+    +'<div style="font-size:12px;font-weight:600;color:var(--mut);margin-bottom:8px">Estado</div>'
+    +'<input type="hidden" id="g-estado" value="'+(estadoInicial||'')+'">'
+    +'<div style="display:flex;gap:10px">'
+    +'<div id="g-card-pagado" onclick="seleccionarEstadoGasto(\'pagado\',\''+wh+'\',\''+eid+'\',\''+pid+'\')" style="'+(estadoInicial==='pagado'?CARD_PAGADO_ON:CARD_ESTADO_BASE)+'">'
+    +'<div id="g-card-pagado-titulo" style="font-size:14px;font-weight:800;color:'+tituloPagadoColor+'">Pagado</div>'
+    +'</div>'
+    +'<div id="g-card-sinpagar" onclick="seleccionarEstadoGasto(\'sinpagar\',\''+wh+'\',\''+eid+'\',\''+pid+'\')" style="'+(estadoInicial==='sinpagar'?CARD_SINPAGAR_ON:CARD_ESTADO_BASE)+'">'
+    +'<div id="g-card-sinpagar-titulo" style="font-size:14px;font-weight:800;color:'+tituloSinPagarColor+'">'+labelSinPagar+'</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+
+  // Sección "Más opciones": lo que se usa rara vez (asociar/crear/ver crédito, cuotas manuales
+  // legacy, convertir en grupo desplegable) vive plegado detrás de un toggle en vez de ocupar
+  // espacio en cada edición. Se abre plegada por defecto al crear un gasto nuevo; al editar uno
+  // que YA tiene alguno de estos datos, se abre desplegada para no esconder información que ya
+  // existe. El "valor real pagado" ya no vive aquí como campo aparte: para un gasto ligado a un
+  // crédito se captura escribiendo un valor mayor directamente en "Valor" (se procesa al
+  // guardar, ver saveG).
+  var masOpcionesInner=creditoField+crearCreditoLinkHtml+cuotasField+grpBtn;
+  const hayDatosAvanzados=isE&&(e.cuotas_total>0||!!e.creditoId||!!e.esGrupo);
+  const masOpDisplay=hayDatosAvanzados?'block':'none';
+  const masOpChevron=hayDatosAvanzados?'⌃':'⌄';
+  const masOpcionesSectionHtml=masOpcionesInner?(
+    '<div style="border-top:1px solid var(--brd)">'
+    +'<div onclick="toggleMasOpciones()" style="padding:16px 2px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
+    +'<div><div style="font-size:15px;font-weight:700;color:var(--txt)">Más opciones</div>'
+    +'<div style="font-size:12px;color:var(--mut);margin-top:2px">Crédito · cuotas · convertir en grupo</div></div>'
+    +'<span id="g-masop-chevron" style="font-size:15px;color:var(--acc);font-weight:800;flex-shrink:0">'+masOpChevron+'</span>'
+    +'</div>'
+    +'<div id="g-masop-body" style="display:'+masOpDisplay+';padding:2px 2px 12px">'
+    +masOpcionesInner
+    +'</div></div>'
+  ):'';
+
+  // Una sola hoja continua (sin tarjetas ni encabezados de sección), como en el mockup de
+  // rediseño: Valor, Nombre, Forma de pago, Grupo, plantilla/agrupar (solo al crear), Estado y
+  // Más opciones, separados por líneas finas en vez de tarjetas independientes.
+  // "Valor real pagado" ya no es un campo visible del formulario, pero sigue existiendo como
+  // dato del gasto (pagado_real) — lo siguen leyendo saveG() y sincronizarCreditoDesdeGasto().
+  // Este input oculto solo sirve de valor por defecto al abrir el formulario (y para que los
+  // pickers de Forma de pago/Grupo lo preserven vía capturarEstadoFormGasto); saveG() calcula
+  // el valor real a guardar directamente a partir de lo escrito en "Valor", no de este campo.
+  const realHiddenInput='<input type="hidden" id="g-r" value="'+moneyInputFmt(e.pagado_real)+'">';
+
   const html='<div class="mtitle">'+(isE?'Editar gasto':'Nuevo gasto')+'</div>'
-    +infoGastoCard
-    +caracOrgRow
-    +estadoCard
+    +realHiddenInput
+    +valorBlockHtml
+    +nameFieldHtml
+    +formaPagoRowHtml
+    +templateField
+    +moverGrupoField
+    +grupoCreacionField
+    +estadoSectionHtml
+    +masOpcionesSectionHtml
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
-    +delBtn+grpBtn;
+    +delBtn;
   openModal(html);
+}
+function toggleMasOpciones(){
+  const body=document.getElementById('g-masop-body');
+  const chev=document.getElementById('g-masop-chevron');
+  if(!body) return;
+  const opening=body.style.display==='none';
+  body.style.display=opening?'block':'none';
+  if(chev) chev.textContent=opening?'⌃':'⌄';
 }
 
 function toggleCuotasField(){
@@ -3998,7 +4306,7 @@ function crearGastoDesdeCredito(creditoId,ctx){
   const gasto={
     id:uid(),nombre:prefijoCredito(cr)+cr.nombre,presupuesto:row.valorCuota,
     metodo:ctx.metodo||(catMetodos[0]?catMetodos[0].nombre:''),
-    pagado_real:null,pagado_flag:false,sinpagar:false,parentId:ctx.parentId||null,
+    pagado_real:null,estado:null,pagado_flag:false,sinpagar:false,parentId:ctx.parentId||null,
     cuotas_total:cr.cuotas,cuota_actual:1,creditoId:creditoId,numCuota:1,mensualidad:null
   };
   list.push(gasto);
@@ -4159,47 +4467,56 @@ function unlinkGastoNameField(){
   if(note) note.remove();
 }
 
-function openNewMetodoInline(){
-  openModal('<div class="mtitle">Nueva forma de pago</div>'
-    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Daviplata, Efectivo..."></div>'
-    +'<div class="macts">'
-    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="saveNewMetodoInline()">Guardar</button>'
-    +'</div>');
-}
-
-function saveNewMetodoInline(){
-  const nombre=document.getElementById('cat-nombre').value.trim();
-  if(!nombre){showAlert('Escribe un nombre');return;}
-  if(catMetodos.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
-    showAlert('Ya existe esa forma de pago');return;
-  }
-  catMetodos.push({id:uid(),nombre:nombre});
-  save();
-  closeModal();
-  toast('Agregado. Vuelve a abrir el formulario para usarlo.');
-}
-
 function saveG(id,which,parentId){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
   const nEl=document.getElementById('g-n');
   const nombre=nEl.value.trim();
   const catTipoIdSel=nEl.dataset.catTipoId||null;
   const presup=moneyVal('g-p');
-  const real=moneyVal('g-r')||null;
+  let real=moneyVal('g-r')||null;
   const metodo=document.getElementById('g-m').value;
-  const paid=document.getElementById('g-pd').checked;
+  // Estado: campo único ('pagado' | 'sinpagar' | null vía cadena vacía) que viene de las dos
+  // tarjetas deseleccionables de Estado (ver openGasto) — reemplaza los checkboxes g-pd/g-sp
+  // independientes, que permitían dejar guardado el estado imposible "pagado y sin pagar" a
+  // la vez. paid/sinpagar se siguen derivando acá porque el resto de saveG (y sincronizarCreditoDesdeGasto)
+  // todavía los usa como booleanos.
+  const estadoSelEl=document.getElementById('g-estado');
+  let paid=estadoSelEl?estadoSelEl.value==='pagado':false;
+  let sinpagar=estadoSelEl?estadoSelEl.value==='sinpagar':false;
   const manejaCuotas=document.getElementById('g-esCuotas')?.checked||false;
   const cuotas_total=manejaCuotas?(parseInt(document.getElementById('g-ct')?.value)||0):0;
   const cuota_actual_input=manejaCuotas?(parseInt(document.getElementById('g-ca')?.value)||0):0;
-  const sinpagar=document.getElementById('g-sp')?.checked||false;
   const creditoSel=document.getElementById('g-credito');
   const creditoIdSel=creditoSel?creditoSel.value||null:null;
   if(!nombre){showAlert('Escribe un nombre');return;}
   let gasto;
   if(id){
     gasto=list.find(x=>x.id===id);
-    if(gasto){gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.presupuesto=presup;gasto.pagado_real=real;gasto.metodo=metodo;gasto.pagado_flag=paid;gasto.sinpagar=sinpagar;
+    if(gasto){
+      const estadoAntes=gastoEstado(gasto);
+      // "Valor" de un gasto ligado a un crédito no es libre: lo fija la cuota de la tabla de
+      // amortización (ver comentario de creditoLigado en openGasto). Mientras el formulario
+      // está abierto se respeta lo que el usuario escriba (no se le pisa el campo en vivo);
+      // recién ACÁ, al guardar, si lo escrito supera la cuota se traslada a "valor real pagado"
+      // y "Valor" queda fijado en la cuota — sin esto último, cualquier número que se hubiera
+      // escrito de más quedaría guardado como presupuesto en vez de como pago real.
+      let presupFinal=presup;
+      if(gasto.creditoId && creditos[gasto.creditoId]){
+        const amortG=calcAmortizacion(creditos[gasto.creditoId]);
+        const rowG=amortG.rows[(gasto.numCuota||1)-1];
+        // amortG.valorCuota (fijo/teórico) en vez de rowG.valorCuota: si esta cuota ya se pagó
+        // con un abono mayor, rowG.valorCuota pasa a ser el monto REAL pagado (ver comentario
+        // en openGasto), y pinear presupuesto a eso reintroduciría el mismo dato equivocado.
+        const cuotaValorG=amortG.valorCuota||(rowG?rowG.valorCuota:presup);
+        // Siempre (no solo si "real" venía vacío): si ya había un abono mayor registrado y el
+        // usuario escribe un número distinto, ese nuevo número es el que debe quedar guardado.
+        // Escribir un valor mayor a la cuota es, en sí, la señal de que esta cuota se pagó, así
+        // que también marca "Pagado" (estado), sin obligar a tocar la tarjeta de Estado aparte.
+        if(presup>cuotaValorG){ real=presup; paid=true; sinpagar=false; }
+        presupFinal=cuotaValorG;
+      }
+      gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.presupuesto=presupFinal;gasto.pagado_real=real;gasto.metodo=metodo;
+      setGastoEstado(gasto,paid?'pagado':(sinpagar?'sinpagar':null));
       // El editor de "Total cuotas"/"Cuota actual" solo existe en el formulario para gastos
       // legacy sin creditoId — si el gasto está ligado a un crédito ese bloque ni se renderiza,
       // así que no hay que tocar cuotas_total/cuota_actual (los controla el crédito).
@@ -4211,6 +4528,7 @@ function saveG(id,which,parentId){
       gasto.comprobante=document.getElementById('g-cmp')?.value.trim()||gasto.comprobante||null;
       const grupoDestinoEl=document.getElementById('g-grupo-destino');
       if(grupoDestinoEl) gasto.parentId=grupoDestinoEl.value||null;
+      if(!sincronizarCreditoDesdeGasto(gasto,estadoAntes)) return;
     }
   } else {
     // If this is a subgasto, inherit parent group's metodo
@@ -4231,7 +4549,7 @@ function saveG(id,which,parentId){
         else cuota_auto=1;
       } else { cuota_auto=1; }
     }
-    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0};
+    gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,estado:paid?'pagado':(sinpagar?'sinpagar':null),pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:cuotas_total||0,cuota_actual:cuota_auto||0};
     if(catTipoIdSel){ gasto.catTipoId=catTipoIdSel; }
     if(creditoIdSel){
       gasto.creditoId=creditoIdSel;
@@ -4245,6 +4563,7 @@ function saveG(id,which,parentId){
       // gastos que genera generarGastosCredito() automáticamente los meses siguientes.
       var crAsoc=creditos[creditoIdSel];
       if(crAsoc){ gasto.cuotas_total=crAsoc.cuotas; gasto.cuota_actual=gasto.numCuota; }
+      if(!sincronizarCreditoDesdeGasto(gasto,null)) return;
     }
     // Crear directamente como grupo desplegable (checkbox "Asociar a grupo desplegable" en
     // el propio formulario de creación), en vez de tener que crear el gasto, editarlo y luego
@@ -4289,7 +4608,7 @@ function copiarGastoQ2(id) {
   const m=getM();
   const g=m.q1_gastos.find(x=>x.id===id);
   if(!g){closeModal();return;}
-  const copia={id:uid(),nombre:g.nombre,catTipoId:g.catTipoId||null,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,pagado_flag:false,sinpagar:false};
+  const copia={id:uid(),nombre:g.nombre,catTipoId:g.catTipoId||null,presupuesto:g.presupuesto,metodo:g.metodo,pagado_real:null,estado:null,pagado_flag:false,sinpagar:false};
   // Si el gasto viene de un crédito, la copia en Q2 debe heredar el vínculo (creditoId/numCuota)
   // para que siga representando la misma cuota — de lo contrario el crédito queda con esa cuota
   // pendiente sin ningún gasto que permita marcarla como pagada, y la copia en Q2 pierde toda
@@ -4360,6 +4679,39 @@ function bloquearPagoFueraDeOrden(g){
   }
   return false;
 }
+// Mantiene cr.pagos/cr.pagoDetalle sincronizados cuando el estado de pago de un gasto ligado
+// a un crédito cambia desde el formulario de edición (saveG) — toggleP/confirmarPago ya lo
+// hacían para la lista de gastos, pero editar el gasto directamente (p.ej. ingresar "valor
+// real pagado") lo dejaba pagado en el gasto sin reflejarse en la cuota del crédito, y sin
+// validar el orden de pago. Devuelve false (y revierte el estado a estadoAntes — null o
+// 'sinpagar', lo que fuera antes de este intento de guardado) si el pago se bloquea por haber
+// una cuota anterior sin pagar.
+function sincronizarCreditoDesdeGasto(gasto,estadoAntes){
+  if(!gasto.creditoId||!creditos[gasto.creditoId]||!gasto.numCuota) return true;
+  var cr=creditos[gasto.creditoId];
+  var idx=gasto.numCuota-1;
+  var wasPaidBefore=estadoAntes==='pagado';
+  if(gasto.pagado_flag && !wasPaidBefore && bloquearPagoFueraDeOrden(gasto)){
+    setGastoEstado(gasto,estadoAntes);
+    return false;
+  }
+  if(gasto.pagado_flag){
+    if(!cr.pagos) cr.pagos=[];
+    cr.pagos[idx]=true;
+    if(!cr.pagoDetalle) cr.pagoDetalle={};
+    cr.pagoDetalle[idx]={montoPagado:Math.abs(gasto.pagado_real!=null?gasto.pagado_real:(gasto.presupuesto||0))};
+    invalidarAmortCache(gasto.creditoId);
+  } else if(wasPaidBefore){
+    if(cr.pagos) cr.pagos[idx]=false;
+    if(cr.pagoDetalle) delete cr.pagoDetalle[idx];
+    invalidarAmortCache(gasto.creditoId);
+    // Al desmarcar como pagada una cuota de crédito, "lo realmente pagado" deja de existir —
+    // si no se limpia, "Pagaste $X" seguía apareciendo en el formulario aunque la cuota ya no
+    // estuviera pagada (quedaba el valor viejo colgado en gasto.pagado_real).
+    gasto.pagado_real=null;
+  }
+  return true;
+}
 function toggleP(e,id,which){
   e.stopPropagation();
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
@@ -4370,11 +4722,14 @@ function toggleP(e,id,which){
     return;
   }
   if(g.pagado_flag){
-    g.pagado_flag=false;
+    setGastoEstado(g,null);
     if(g.creditoId && creditos[g.creditoId]){
       var cr=creditos[g.creditoId];
       if(cr.pagos) cr.pagos[g.numCuota-1]=false;
       if(cr.pagoDetalle){ delete cr.pagoDetalle[g.numCuota-1]; invalidarAmortCache(g.creditoId); }
+      // Igual que en sincronizarCreditoDesdeGasto: sin esto, "Pagaste $X" seguía mostrando el
+      // valor viejo en el formulario de edición aunque la cuota ya no estuviera pagada.
+      g.pagado_real=null;
     }
     if(g.parentId){
       const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
@@ -4402,7 +4757,7 @@ function toggleP(e,id,which){
     openPagoModal(g,which);
   } else {
     if(bloquearPagoFueraDeOrden(g)) return;
-    g.pagado_flag=true;
+    setGastoEstado(g,'pagado');
     if(g.parentId){
       const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
       const parent=allGastos.find(x=>x.id===g.parentId);
@@ -4493,7 +4848,7 @@ function confirmarPago(id,which){
   const comp=document.getElementById('pg-comp').value.trim()||null;
   const mensEl=document.getElementById('pg-mens');
   const mens=mensEl?mensEl.value||null:null;
-  g.pagado_flag=true;
+  setGastoEstado(g,'pagado');
   g.pagado_real=val;
   g.fecha_pago=fecha;
   g.comprobante=comp;
@@ -4739,7 +5094,7 @@ function syncTCGrupo(m){
       } else {
         list.push({
           id:uid(),nombre:'Abono TC',presupuesto:saldo,
-          metodo:g.metodo||'BBVA',pagado_real:null,pagado_flag:false,
+          metodo:g.metodo||'BBVA',pagado_real:null,estado:null,pagado_flag:false,
           sinpagar:false,parentId:g.id,esGrupo:false,tcLinked:false,
           cuotas_total:0,cuota_actual:0
         });
@@ -5629,6 +5984,7 @@ function generarGastosCredito(nm){
             presupuesto:row.valorCuota,
             metodo:'Nequi',
             pagado_real:null,
+            estado:(cr.pagos&&cr.pagos[idx])?'pagado':null,
             pagado_flag:!!(cr.pagos&&cr.pagos[idx]),
             sinpagar:false,
             parentId:null,
@@ -5642,6 +5998,40 @@ function generarGastosCredito(nm){
           });
         }
       }
+    });
+  });
+}
+
+// ── Estado del gasto: null | 'sinpagar' | 'pagado' ──────────────────────────────────────
+// Único campo de verdad para "qué es" un gasto — reemplaza los dos checkboxes independientes
+// pagado_flag/sinpagar (que permitían las 4 combinaciones de 2 booleanos para un dato de 3
+// valores mutuamente excluyentes, incluida la imposible "pagado Y sin pagar"). pagado_flag y
+// sinpagar se conservan escritos EN PARALELO (nunca se leen para decidir nada nuevo, solo se
+// escriben) porque todavía hay muchos cálculos de totales/listas/orden/exportación que los
+// leen directamente — cambiarlos todos a leer `estado` es más riesgo del que vale la pena
+// mientras ambas representaciones se mantengan consistentes. gastoEstado() es la única fuente
+// de lectura del estado; setGastoEstado() es la única forma de cambiarlo.
+function gastoEstado(g){
+  if(g.estado!==undefined) return g.estado;
+  return g.pagado_flag?'pagado':(g.sinpagar?'sinpagar':null);
+}
+function setGastoEstado(g,estado){
+  g.estado=estado;
+  g.pagado_flag=(estado==='pagado');
+  g.sinpagar=(estado==='sinpagar');
+}
+// Migración única e idempotente de pagado_flag/sinpagar → estado, para los gastos guardados
+// antes de este cambio (nunca tuvieron el campo `estado`). Si ambos flags legacy estaban en
+// true a la vez (el estado imposible que este cambio existe para evitar), gana 'pagado': el
+// dinero ya salió, es el hecho más fuerte de los dos.
+function migrarEstadoGastos(){
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
+      list.forEach(function(g){
+        if(g.estado!==undefined) return;
+        g.estado=g.pagado_flag?'pagado':(g.sinpagar?'sinpagar':null);
+      });
     });
   });
 }
@@ -5724,6 +6114,10 @@ function buildDraftMonth(){
         }
         return Object.assign({},g,{
           id: newId,
+          // pagado_flag se resetea a false para el mes nuevo (sinpagar, si venía marcado, se
+          // conserva tal cual estaba — mismo criterio de antes); estado debe quedar coherente
+          // con esa combinación, no simplemente heredado de g.estado.
+          estado: g.sinpagar?'sinpagar':null,
           pagado_flag: false,
           pagado_real: null,
           cuota_actual: nxtCuota,
@@ -5757,6 +6151,7 @@ function buildDraftMonth(){
         presupuesto:0,
         metodo:prevG.metodo||'BBVA',
         pagado_real:null,
+        estado:null,
         pagado_flag:false,
         sinpagar:false,
         parentId:null,
