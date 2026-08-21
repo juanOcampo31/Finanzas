@@ -3258,7 +3258,12 @@ function convertirGrupo(id,which){
   const g=list.find(x=>x.id===id); if(!g)return;
   window._cvtId=id; window._cvtWhich=which;
   const isLinked=!!g.tcCardId;
-  const baseVal=(!isLinked&&g.presupuesto)?g.presupuesto:'';
+  // "Monto base manual" solo se precarga al EDITAR un grupo que ya tenía uno — al convertir un
+  // gasto normal en grupo por primera vez, su valor no debe quedar aquí (eso lo congelaría como
+  // total fijo): se preserva como el primer subgasto del grupo, ver saveConvertir(). Si se
+  // precargara igual, "Convertir" sin tocar nada dejaría el grupo en modo "monto fijo" y agregar
+  // gastos después no movería el total mostrado.
+  const baseVal=(!isLinked&&g.esGrupo&&g.presupuesto)?g.presupuesto:'';
   const fieldStyle=isLinked?'opacity:.4;pointer-events:none':'';
   const tcIds=listTCIds(m);
   const cardOptStyle=isLinked?'':'opacity:.4;pointer-events:none';
@@ -3293,6 +3298,8 @@ function saveConvertir(){
   const g=list.find(x=>x.id===id); if(!g)return;
   const linkedEl=document.getElementById('grp-linked');
   const linked=linkedEl?linkedEl.checked:false;
+  const esConversionNueva=!g.esGrupo; // false si esto es "Editar grupo/base" sobre uno ya existente
+  const valorOriginal=g.presupuesto;
   g.esGrupo=true;
   if(linked){
     const cardSel=document.getElementById('grp-card');
@@ -3305,6 +3312,14 @@ function saveConvertir(){
     g.tcCardId=null;
     g.tcLinked=false;
     g.presupuesto=moneyVal('grp-base');
+    // Al convertir un gasto normal en grupo por primera vez, el valor que ya tenía no
+    // desaparece: se preserva como su primer subgasto, para que el grupo pase a sumar sus
+    // subgastos (modo normal) en vez de quedar "congelado" con ese valor como monto fijo. Si el
+    // usuario además escribió un "monto base manual", ambos conviven (base fija + subgastos),
+    // igual que ya funcionaba antes para un grupo existente con base propia.
+    if(esConversionNueva && valorOriginal>0){
+      list.push({id:uid(),nombre:g.nombre,presupuesto:valorOriginal,metodo:g.metodo,pagado_real:null,estado:null,pagado_flag:false,sinpagar:false,parentId:g.id});
+    }
   }
   save();closeModal();render();toast(nombreGasto(g)+' convertido en grupo');
 }
@@ -3808,37 +3823,6 @@ function onFab(){
 }
 
 // ── CRUD Gastos ───────────────────────────────────────────────────────────────
-function sugerirCuotaCredito(){
-  const sel=document.getElementById('g-credito');
-  if(!sel) return;
-  const crId=sel.value;
-  if(!crId){
-    // "Ninguno" seleccionado: limpiar la cuota sugerida y dejar lo que el usuario ya escribió
-    sel.dataset.cuota='';
-    return;
-  }
-  const cr=creditos[crId]; if(!cr) return;
-  const amort=calcAmortizacion(cr);
-  const pagos=cr.pagos||[];
-  // Cuotas de este crédito que ya tienen un gasto O una deducción de nómina asociada, en
-  // CUALQUIER mes — para no repetir la misma cuota (ni chocar con una deducción de nómina
-  // que ya la haya tomado, ver cuotasOcupadasCredito).
-  const usadas=cuotasOcupadasCredito(crId, null);
-  // Buscar la primera cuota NO pagada y sin gasto ya creado
-  var idx=amort.rows.findIndex(function(r,i){return !pagos[i] && !usadas[r.numero];});
-  if(idx===-1) idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
-  if(idx===-1) idx=amort.rows.length-1; // todas pagadas: sugerir la última
-  const row=amort.rows[idx];
-  // La cuota sugerida se guarda en el propio <select> (data-cuota): el formulario de gasto
-  // nuevo ya no tiene los campos "Total cuotas"/"Cuota actual" (eso ahora lo controla el
-  // crédito), así que saveG() la lee de aquí en vez de esos inputs.
-  sel.dataset.cuota=row.numero;
-
-  const nEl=document.getElementById('g-n');
-  const pEl=document.getElementById('g-p');
-  if(nEl) nEl.value=prefijoCredito(cr)+cr.nombre;
-  if(pEl) setMoneyValue(pEl,row.valorCuota);
-}
 
 // Contexto temporal para los pickers de "Forma de pago" y "Grupo" del formulario de gasto: la
 // app solo tiene UN modal a la vez (openModal reemplaza todo #mc, no apila), así que abrir un
@@ -3861,6 +3845,8 @@ function capturarEstadoFormGasto(baseG,isE){
   const estadoEl=document.getElementById('g-estado');
   if(estadoEl) setGastoEstado(data,estadoEl.value||null);
   const gEl=document.getElementById('g-grupo-destino'); if(gEl) data.parentId=gEl.value||null;
+  const crEl=document.getElementById('g-credito');
+  if(crEl){ data.creditoId=crEl.value||null; data.numCuota=parseInt(crEl.dataset.cuota)||null; }
   const cEl=document.getElementById('g-esCuotas');
   if(cEl){
     data.cuotas_total=cEl.checked?(parseInt(document.getElementById('g-ct')?.value)||0):0;
@@ -3937,9 +3923,9 @@ function abrirPickerGrupo(eid,wh,pid){
       +(sel?('<span style="color:var(--acc);display:flex">'+icon('check',16)+'</span>'):'')
       +'</div>';
   }
-  const itemsHtml=itemRow('','Gasto independiente (sin grupo)')
+  const itemsHtml=itemRow('','Sin agrupar')
     +gruposNow.map(function(gr){return itemRow(gr.id,nombreGasto(gr));}).join('');
-  openModal('<div class="mtitle">Grupo</div>'
+  openModal('<div class="mtitle">Asociar a grupo</div>'
     +'<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+itemsHtml+'</div>'
     +'<button class="bcnl" style="width:100%" onclick="cerrarPickerYVolver()">Cancelar</button>');
 }
@@ -3947,6 +3933,139 @@ function elegirGrupo(gid){
   if(!_gastoFormPending) return;
   _gastoFormPending.data.parentId=gid||null;
   reabrirGastoDesdePending();
+}
+function abrirPickerCredito(wh,pid){
+  _gastoFormPending={data:capturarEstadoFormGasto(null,false),wh:wh,pid:pid,eid:''};
+  const current=_gastoFormPending.data.creditoId||null;
+  const creditoIds=Object.keys(creditos);
+  function itemRow(cid,label){
+    const sel=(current||'')===cid;
+    return '<div onclick="elegirCredito('+(cid?"'"+cid+"'":"''")+')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--brd);cursor:pointer">'
+      +'<span style="font-size:15px;font-weight:'+(sel?'700':'500')+';color:'+(sel?'var(--acc)':'var(--txt)')+'">'+esc(label)+'</span>'
+      +(sel?('<span style="color:var(--acc);display:flex">'+icon('check',16)+'</span>'):'')
+      +'</div>';
+  }
+  const itemsHtml=itemRow('','Ninguno')
+    +creditoIds.map(function(cid){return itemRow(cid,creditos[cid].nombre);}).join('');
+  openModal('<div class="mtitle">Asociar a crédito</div>'
+    +'<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+itemsHtml+'</div>'
+    +'<button onclick="event.preventDefault();irCrearCreditoDesdeGastoPicker()" style="width:100%;background:none;border:1px dashed var(--brd2);border-radius:var(--r2);padding:11px;color:var(--acc);font-size:13px;cursor:pointer;margin-bottom:14px">+ Crear crédito nuevo (cuotas fijas)</button>'
+    +'<button class="bcnl" style="width:100%" onclick="cerrarPickerYVolver()">Cancelar</button>');
+}
+function elegirCredito(cid){
+  if(!_gastoFormPending) return;
+  if(!cid){
+    _gastoFormPending.data.creditoId=null;
+    _gastoFormPending.data.numCuota=null;
+    reabrirGastoDesdePending();
+    return;
+  }
+  const cr=creditos[cid]; if(!cr) return;
+  // Misma regla que antes usaba sugerirCuotaCredito(): primera cuota sin pagar y sin gasto (ni
+  // deducción de nómina) ya creado para ella — evita repetir una cuota que otro gasto ya cubre.
+  const amort=calcAmortizacion(cr);
+  const pagos=cr.pagos||[];
+  const usadas=cuotasOcupadasCredito(cid,null);
+  var idx=amort.rows.findIndex(function(r,i){return !pagos[i]&&!usadas[r.numero];});
+  if(idx===-1) idx=amort.rows.findIndex(function(r,i){return !pagos[i];});
+  if(idx===-1) idx=amort.rows.length-1;
+  const row=amort.rows[idx];
+  _gastoFormPending.data.creditoId=cid;
+  _gastoFormPending.data.numCuota=row.numero;
+  _gastoFormPending.data.nombre=prefijoCredito(cr)+cr.nombre;
+  _gastoFormPending.data.presupuesto=row.valorCuota;
+  reabrirGastoDesdePending();
+}
+// "+ Crear crédito nuevo" dentro del picker de "Asociar a crédito": mismo flujo que ya existía
+// (irCrearCreditoDesdeGasto) — abandona este formulario y abre "Nuevo crédito"; al guardarlo,
+// el gasto se crea solo, ya vinculado (ver crearGastoDesdeCredito). Toma nombre/valor/metodo de
+// _gastoFormPending en vez de leer el DOM del formulario de gasto, porque ese formulario ya no
+// está abierto (estamos parados en el picker, que lo reemplazó).
+function irCrearCreditoDesdeGastoPicker(){
+  const pending=_gastoFormPending;
+  const nombreVal=pending?(pending.data.nombre||''):'';
+  const valorVal=pending?(pending.data.presupuesto||0):0;
+  const wh=pending?pending.wh:'q1', pid=pending?pending.pid:'';
+  creditoDesdeGastoCtx={which:wh,parentId:pid||null,metodo:pending?(pending.data.metodo||''):''};
+  openNewCredito('manual');
+  const crNombre=document.getElementById('cr-nombre');
+  if(crNombre&&nombreVal) crNombre.value=nombreVal;
+  const crCuotaManual=document.getElementById('cr-cuota-manual');
+  if(crCuotaManual&&valorVal>0) setMoneyValue(crCuotaManual,valorVal);
+}
+// "Vincular a gasto" (antes "Usar gasto guardado"): mismo patrón de picker que Forma de
+// pago/Asociar a crédito, con "+ Crear gasto guardado nuevo" dentro del propio modal. Solo
+// aplica al crear un gasto (nunca al editar uno existente), igual que antes.
+function abrirPickerGastoGuardado(wh,pid){
+  _gastoFormPending={data:capturarEstadoFormGasto(null,false),wh:wh,pid:pid,eid:''};
+  const current=_gastoFormPending.data.catTipoId||null;
+  function itemRow(tid,label){
+    const sel=(current||'')===tid;
+    return '<div onclick="elegirGastoGuardado('+(tid?"'"+tid+"'":"''")+')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--brd);cursor:pointer">'
+      +'<span style="font-size:15px;font-weight:'+(sel?'700':'500')+';color:'+(sel?'var(--acc)':'var(--txt)')+'">'+esc(label)+'</span>'
+      +(sel?('<span style="color:var(--acc);display:flex">'+icon('check',16)+'</span>'):'')
+      +'</div>';
+  }
+  const itemsHtml=itemRow('','Ninguno')
+    +catTipos.map(function(t){return itemRow(t.id,t.nombre);}).join('');
+  openModal('<div class="mtitle">Vincular a gasto</div>'
+    +'<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+itemsHtml+'</div>'
+    +'<button onclick="event.preventDefault();abrirNuevoGastoGuardadoDesdePicker()" style="width:100%;background:none;border:1px dashed var(--brd2);border-radius:var(--r2);padding:11px;color:var(--acc);font-size:13px;cursor:pointer;margin-bottom:14px">+ Crear gasto guardado nuevo</button>'
+    +'<button class="bcnl" style="width:100%" onclick="cerrarPickerYVolver()">Cancelar</button>');
+}
+function elegirGastoGuardado(tid){
+  if(!_gastoFormPending) return;
+  if(!tid){
+    _gastoFormPending.data.catTipoId=null;
+    reabrirGastoDesdePending();
+    return;
+  }
+  const item=catTipos.find(function(i){return i.id===tid;});
+  if(!item) return;
+  _gastoFormPending.data.catTipoId=item.id;
+  _gastoFormPending.data.nombre=item.nombre;
+  if(item.presupuesto) _gastoFormPending.data.presupuesto=item.presupuesto;
+  if(item.metodo) _gastoFormPending.data.metodo=item.metodo;
+  if(item.cuotas_total) _gastoFormPending.data.cuotas_total=item.cuotas_total;
+  reabrirGastoDesdePending();
+}
+// "+ Crear gasto guardado nuevo" reutiliza el mismo formulario del catálogo de Gastos
+// (gastoTemplateForm, usado también en Catálogos), pero Cancelar/Guardar vuelven al picker o
+// al formulario de gasto en curso en vez de a la pantalla de Catálogos.
+function abrirNuevoGastoGuardadoDesdePicker(){
+  openModal('<div class="mtitle">Nuevo gasto guardado</div>'
+    +gastoTemplateForm()
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="abrirPickerGastoGuardado(\''+(_gastoFormPending?_gastoFormPending.wh:'q1')+'\',\''+(_gastoFormPending?_gastoFormPending.pid:'')+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="guardarNuevoGastoGuardadoDesdePicker()">Guardar</button>'
+    +'</div>');
+}
+function guardarNuevoGastoGuardadoDesdePicker(){
+  const nombre=document.getElementById('gt-nombre').value.trim();
+  if(!nombre){showAlert('Escribe un nombre');return;}
+  if(catTipos.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
+    showAlert('Ya existe un gasto con ese nombre');return;
+  }
+  const item={
+    id:uid(),
+    nombre:nombre,
+    presupuesto:moneyVal('gt-presupuesto')||null,
+    metodo:document.getElementById('gt-metodo').value||null,
+    cuotas_total:parseInt(document.getElementById('gt-cuotas').value)||0,
+    esMensualidad:document.getElementById('gt-mens').checked
+  };
+  catTipos.push(item);
+  save();
+  if(_gastoFormPending){
+    _gastoFormPending.data.catTipoId=item.id;
+    _gastoFormPending.data.nombre=item.nombre;
+    if(item.presupuesto) _gastoFormPending.data.presupuesto=item.presupuesto;
+    if(item.metodo) _gastoFormPending.data.metodo=item.metodo;
+    if(item.cuotas_total) _gastoFormPending.data.cuotas_total=item.cuotas_total;
+    reabrirGastoDesdePending();
+  } else {
+    openGastoTemplates(); toast('Gasto agregado');
+  }
 }
 function openGasto(g,which,parentId){
   const e=g||{nombre:'',presupuesto:0,metodo:'',pagado_real:null,estado:null,pagado_flag:false};
@@ -4004,14 +4123,19 @@ function openGasto(g,which,parentId){
 
   const opts=catMetodos.map(function(x){return '<option'+(defaultMetodo===x.nombre?' selected':'')+'>'+esc(x.nombre)+'</option>';}).join('');
 
-  // Selector opcional de plantilla de gasto (catálogo de Gastos) — en creación, incluidos subgastos de un grupo
+  // "Vincular a gasto" (antes "Usar gasto guardado") abre un picker de pantalla completa
+  // (abrirPickerGastoGuardado), igual que "Forma de pago"/"Asociar a crédito" — con la lista
+  // del catálogo de Gastos y, dentro del mismo picker, "+ Crear gasto guardado nuevo". Solo
+  // aplica al crear (incluidos subgastos de un grupo), igual que antes.
   var templateField='';
-  if(!isE && catTipos.length>0){
-    var tplOpts='<option value="">— Escribir libremente —</option>'+catTipos.map(function(t){
-      return '<option value="'+t.id+'">'+esc(t.nombre)+'</option>';
-    }).join('');
-    templateField='<div class="field" style="margin-bottom:0"><label>Usar gasto guardado</label>'
-      +'<select id="g-template" onchange="aplicarPlantillaGasto()">'+tplOpts+'</select></div>';
+  if(!isE){
+    var templateLabelActual=e.catTipoId?((catTipos.find(function(t){return t.id===e.catTipoId;})||{}).nombre||'Ninguno'):'Ninguno';
+    templateField='<div onclick="abrirPickerGastoGuardado(\''+wh+'\',\''+pid+'\')" style="padding:13px 2px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
+      +'<div style="font-size:15px;font-weight:600;color:var(--txt)">Vincular a gasto</div>'
+      +'<div style="display:flex;align-items:center;gap:6px">'
+      +'<span style="font-size:15px;font-weight:700;color:var(--mut)">'+esc(templateLabelActual)+'</span>'
+      +'<span style="font-size:15px;color:var(--mut)">›</span>'
+      +'</div></div>';
   }
 
   // Mover un gasto existente (independiente o de otro grupo) a un grupo desplegable ya
@@ -4025,14 +4149,14 @@ function openGasto(g,which,parentId){
     const listNow2=wh==='q1'?(getM().q1_gastos||[]):(getM().q2_gastos||[]);
     const gruposNow=listNow2.filter(function(x){return x.esGrupo&&x.id!==eid;});
     if(gruposNow.length>0||e.parentId){
-      var grupoOpts='<option value="">— Gasto independiente (sin grupo) —</option>'+gruposNow.map(function(gr){
+      var grupoOpts='<option value="">— Sin agrupar —</option>'+gruposNow.map(function(gr){
         return '<option value="'+gr.id+'"'+(e.parentId===gr.id?' selected':'')+'>'+esc(nombreGasto(gr))+'</option>';
       }).join('');
       var grupoActual=e.parentId?(gruposNow.find(function(gr){return gr.id===e.parentId;})):null;
-      var grupoLabel=grupoActual?nombreGasto(grupoActual):'Independiente';
+      var grupoLabel=grupoActual?nombreGasto(grupoActual):'Sin agrupar';
       moverGrupoField='<select id="g-grupo-destino" style="display:none">'+grupoOpts+'</select>'
         +'<div onclick="abrirPickerGrupo(\''+eid+'\',\''+wh+'\',\''+pid+'\')" style="padding:13px 2px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
-        +'<div style="font-size:15px;font-weight:600;color:var(--txt)">Grupo</div>'
+        +'<div style="font-size:15px;font-weight:600;color:var(--txt)">Asociar a grupo</div>'
         +'<div style="display:flex;align-items:center;gap:6px">'
         +'<span style="font-size:15px;font-weight:700;color:var(--mut)">'+esc(grupoLabel)+'</span>'
         +'<span style="font-size:15px;color:var(--mut)">›</span>'
@@ -4040,49 +4164,39 @@ function openGasto(g,which,parentId){
     }
   }
 
-  // Checks con su lista/campo mostrado DEBAJO del checkbox (no en línea).
+  // "Asociar a crédito" abre un picker de pantalla completa (abrirPickerCredito), igual que
+  // "Forma de pago" — con la lista de créditos y, dentro del mismo picker, "+ Crear crédito
+  // nuevo (cuotas fijas)" (antes era un enlace aparte en Más opciones, solo visible cuando no
+  // había ningún crédito asociado). El <select> real queda oculto solo para que saveG() lo siga
+  // leyendo tal cual (incluido data-cuota, que usaba antes sugerirCuotaCredito()).
   var creditoField='';
-  const creditoIds=Object.keys(creditos);
-  if(!isE && creditoIds.length>0){
-    var creditoOpts='<option value="">— Selecciona un crédito —</option>'+creditoIds.map(function(cid){
-      var cr=creditos[cid];
-      return '<option value="'+cid+'">'+esc(cr.nombre)+'</option>';
+  if(!isE){
+    var creditoOpts='<option value="">— Ninguno —</option>'+Object.keys(creditos).map(function(cid){
+      return '<option value="'+cid+'"'+(e.creditoId===cid?' selected':'')+'>'+esc(creditos[cid].nombre)+'</option>';
     }).join('');
-    creditoField='<div class="cbx-row"><input type="checkbox" id="g-escredito" onchange="toggleCreditoField()">'
-      +'<label for="g-escredito" style="font-size:13px;color:var(--txt)">Asociar a crédito</label></div>'
-      +'<div class="field" id="g-credito-field" style="display:none;margin:-2px 0 10px">'
-      +'<select id="g-credito" onchange="sugerirCuotaCredito()">'+creditoOpts+'</select></div>';
-  }
-
-  // Crear directamente como grupo desplegable (antes había que crear el gasto, editarlo y
-  // luego "Convertir en grupo desplegable" en un tercer modal — esto lo colapsa a un solo paso).
-  // "Vincular saldo de tarjeta" y la tarjeta misma quedan indentadas para reflejar
-  // que dependen de "Agrupar subgastos" (jerarquía visual: check → sub-check → select).
-  var grupoCreacionField='';
-  if(!isE && !pid){
-    const mNow=getM();
-    const tcIdsNow=listTCIds(mNow);
-    var cardOptsNow=tcIdsNow.map(function(tid){
-      var card=mNow.tarjetas[tid];
-      var saldo=calcTCSaldo(mNow,tid);
-      return '<option value="'+tid+'">'+esc(card.nombre)+' ('+cop(saldo)+')</option>';
-    }).join('');
-    grupoCreacionField='<div class="cbx-row"><input type="checkbox" id="g-esgrupo" onchange="toggleGrupoCreacionField()">'
-      +'<label for="g-esgrupo" style="font-size:13px;color:var(--acc)">Agrupar subgastos</label></div>'
-      +(tcIdsNow.length>0
-        ?('<div class="cbx-row" id="g-grp-linked-row" style="display:none">'
-          +'<input type="checkbox" id="g-grp-linked" onchange="toggleGrupoLinkedField()">'
-          +'<label for="g-grp-linked" style="font-size:13px;color:var(--acc)">Vincular saldo de tarjeta</label></div>'
-          +'<div class="field" id="g-grp-card-field" style="display:none;margin:-2px 0 10px">'
-          +'<select id="g-grp-card" onchange="applyTCNombreGasto()">'+cardOptsNow+'</select></div>')
-        :'');
+    var creditoLabelActual=(e.creditoId&&creditos[e.creditoId])?creditos[e.creditoId].nombre:'Ninguno';
+    creditoField='<select id="g-credito" style="display:none" data-cuota="'+(e.numCuota||'')+'">'+creditoOpts+'</select>'
+      +'<div onclick="abrirPickerCredito(\''+wh+'\',\''+pid+'\')" style="padding:13px 2px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">'
+      +'<div style="font-size:15px;font-weight:600;color:var(--txt)">Asociar a crédito</div>'
+      +'<div style="display:flex;align-items:center;gap:6px">'
+      +'<span style="font-size:15px;font-weight:700;color:var(--mut)">'+esc(creditoLabelActual)+'</span>'
+      +'<span style="font-size:15px;color:var(--mut)">›</span>'
+      +'</div></div>';
   }
 
   const delBtn=isE?'<button class="bdel" onclick="delG(\''+eid+'\',\''+wh+'\')">Eliminar gasto</button>':'';
+  // "Convertir en grupo desplegable" es el mismo botón/modal tanto al crear un gasto nuevo como
+  // al editar uno existente — antes crear-como-grupo tenía su propio flujo en línea (checkbox
+  // "Agrupar subgastos" + vincular tarjeta + autocompletar nombre), duplicando lo que ya hacía
+  // convertirGrupo()/saveConvertir() para un gasto ya guardado. Para un gasto nuevo (sin id
+  // todavía), convertirEnGrupoDesdeCreacion() primero lo guarda (mismo saveG de siempre) y
+  // luego abre convertirGrupo() sobre el que se acaba de crear.
   var grpBtn='';
-  if(isE&&!e.parentId&&!e.esGrupo){
+  if(!isE && !pid){
+    grpBtn='<button class="bdel" style="background:var(--acc-d);border-color:var(--acc);color:var(--acc);margin-top:6px" onclick="convertirEnGrupoDesdeCreacion(\''+wh+'\',\''+pid+'\')">Convertir en grupo desplegable</button>';
+  } else if(isE&&!e.parentId&&!e.esGrupo){
     grpBtn='<button class="bdel" style="background:var(--acc-d);border-color:var(--acc);color:var(--acc);margin-top:6px" onclick="convertirGrupo(\''+eid+'\',\''+wh+'\')">Convertir en grupo desplegable</button>';
-  } else if(isE&&e.esGrupo){
+  } else if(e.esGrupo){
     grpBtn='<button class="bdel" style="background:var(--acc-d);border-color:var(--acc);color:var(--acc);margin-top:6px" onclick="convertirGrupo(\''+eid+'\',\''+wh+'\')">Editar grupo / base</button>'
           +'<button class="bdel" style="margin-top:6px" onclick="delGrupo(\''+eid+'\',\''+wh+'\')">Eliminar grupo (y subgastos)</button>';
   }
@@ -4123,11 +4237,11 @@ function openGasto(g,which,parentId){
   // vinculados vive junto al nombre del crédito, debajo de "Valor" (ver valorBlockHtml) — no
   // aquí en Más opciones, porque es la info más relevante de ESE gasto puntual.
   var cuotasField='';
-  var crearCreditoLinkHtml='';
   if(e.creditoId && creditos[e.creditoId]){
     // nada que agregar acá: ver comentario arriba.
   } else if(!isE){
-    crearCreditoLinkHtml='<button onclick="event.preventDefault();irCrearCreditoDesdeGasto(\''+wh+'\',\''+pid+'\')" style="background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;padding:0;margin-top:4px">+ Crear crédito nuevo (cuotas fijas)</button>';
+    // "+ Crear crédito nuevo" ahora vive dentro del picker de "Asociar a crédito" (ver
+    // creditoField/abrirPickerCredito), no aquí como enlace aparte.
   } else {
     // Gasto legacy con cuotas_total>0 (creado antes de la migración): se conserva editable.
     const manejaCuotasChecked=e.cuotas_total>0;
@@ -4148,7 +4262,7 @@ function openGasto(g,which,parentId){
   const valorSubtitulo=creditoLigado
     ?('Cuota '+cuotaNumActual+' de '+cuotaTotalActual)
     :'COP · valor de la cuota';
-  const valorBlockHtml='<div style="padding:4px 4px 18px;display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center">'
+  const valorBlockHtml='<div style="padding:4px 4px 6px;display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center">'
     +'<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)">Valor</div>'
     +'<div style="display:flex;align-items:baseline;gap:6px;padding-bottom:6px;border-bottom:2px solid var(--acc)">'
     +'<span style="font-size:22px;font-weight:600;color:var(--mut)">$</span>'
@@ -4202,7 +4316,7 @@ function openGasto(g,which,parentId){
   // vivo al seleccionarla/deseleccionarla, ver pintarEstadoGasto().
   const labelSinPagar=wh==='q1'?'Mover a Q2':'Sin pagar';
   const labelPagado=estadoInicial==='pagado'?'Pagado':'Pagar';
-  const estadoSectionHtml='<div style="padding:16px 2px 4px;border-top:1px solid var(--brd)">'
+  const estadoSectionHtml='<div style="padding:4px 2px 4px">'
     +'<input type="hidden" id="g-estado" value="'+(estadoInicial||'')+'">'
     +'<div style="display:flex;gap:10px">'
     +'<div id="g-card-pagado" onclick="seleccionarEstadoGasto(\'pagado\',\''+wh+'\',\''+eid+'\',\''+pid+'\')" style="'+(estadoInicial==='pagado'?CARD_PAGADO_ON:CARD_ESTADO_BASE)+'">'
@@ -4221,7 +4335,7 @@ function openGasto(g,which,parentId){
   // existe. El "valor real pagado" ya no vive aquí como campo aparte: para un gasto ligado a un
   // crédito se captura escribiendo un valor mayor directamente en "Valor" (se procesa al
   // guardar, ver saveG).
-  var masOpcionesInner=creditoField+crearCreditoLinkHtml+cuotasField+grpBtn;
+  var masOpcionesInner=creditoField+cuotasField+grpBtn;
   const hayDatosAvanzados=isE&&(e.cuotas_total>0||!!e.creditoId||!!e.esGrupo);
   const masOpDisplay=hayDatosAvanzados?'block':'none';
   const masOpChevron=hayDatosAvanzados?'⌃':'⌄';
@@ -4256,7 +4370,6 @@ function openGasto(g,which,parentId){
     +formaPagoRowHtml
     +templateField
     +moverGrupoField
-    +grupoCreacionField
     +masOpcionesSectionHtml
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
@@ -4317,148 +4430,6 @@ function crearGastoDesdeCredito(creditoId,ctx){
 }
 
 
-function toggleGrupoCreacionField(){
-  const chk=document.getElementById('g-esgrupo');
-  const row=document.getElementById('g-grp-linked-row');
-  if(!chk) return;
-  // Si no hay tarjetas creadas todavía, esta fila ni siquiera existe en el formulario.
-  if(row) row.style.display=chk.checked?'flex':'none';
-}
-function toggleGrupoLinkedField(){
-  const chk=document.getElementById('g-grp-linked');
-  const cardField=document.getElementById('g-grp-card-field');
-  if(!chk) return;
-  if(cardField) cardField.style.display=chk.checked?'block':'none';
-  // Si se vincula a una tarjeta, el valor lo calcula el saldo de la tarjeta —
-  // el campo "Valor" de arriba se ignora al guardar, así que se atenúa visualmente.
-  const presupField=document.getElementById('g-p')?document.getElementById('g-p').closest('.field'):null;
-  if(presupField){
-    presupField.style.opacity=chk.checked?'.4':'1';
-    presupField.style.pointerEvents=chk.checked?'none':'auto';
-  }
-  // Un gasto vinculado al saldo de una tarjeta siempre se paga con "Tarjeta" — se fija ese
-  // método automáticamente (creándolo en el catálogo si todavía no existe) y se bloquea el
-  // selector mientras esté vinculado, para que quede consistente con la tarjeta elegida.
-  const metodoSel=document.getElementById('g-m');
-  const metodoField=metodoSel?metodoSel.closest('.field'):null;
-  if(metodoField){
-    metodoField.style.opacity=chk.checked?'.4':'1';
-    metodoField.style.pointerEvents=chk.checked?'none':'auto';
-  }
-  if(chk.checked && metodoSel){
-    let tarjetaMetodo=catMetodos.find(function(x){return x.nombre.toLowerCase()==='tarjeta';});
-    if(!tarjetaMetodo){
-      tarjetaMetodo={id:uid(),nombre:'Tarjeta'};
-      catMetodos.push(tarjetaMetodo);
-      save();
-    }
-    let opt=Array.from(metodoSel.options).find(function(o){return o.value.toLowerCase()==='tarjeta';});
-    if(!opt){
-      opt=document.createElement('option');
-      opt.value=tarjetaMetodo.nombre; opt.textContent=tarjetaMetodo.nombre;
-      metodoSel.appendChild(opt);
-    }
-    metodoSel.value=tarjetaMetodo.nombre;
-  }
-  // El nombre del gasto se autocompleta con "Tarjeta {MARCA}-{últimos 4}" mientras esté
-  // vinculado a una tarjeta, y se bloquea igual que al usar una plantilla del catálogo.
-  if(chk.checked){ applyTCNombreGasto(); } else { unlockTCNombreGasto(); }
-}
-// Arma el nombre a partir de la tarjeta seleccionada: "Tarjeta VISA-9537" si hay marca y
-// últimos 4 dígitos, o variantes más cortas si falta alguno de los dos datos.
-function tcDisplayName(card){
-  var marca=card.info&&card.info.marca;
-  var ult4=card.info&&card.info.ultimos4;
-  if(marca&&ult4) return 'Tarjeta '+marca.toUpperCase()+'-'+ult4;
-  if(marca) return 'Tarjeta '+marca.toUpperCase();
-  if(ult4) return 'Tarjeta '+card.nombre+'-'+ult4;
-  return 'Tarjeta '+card.nombre;
-}
-function applyTCNombreGasto(){
-  const cardSel=document.getElementById('g-grp-card');
-  const nEl=document.getElementById('g-n');
-  if(!cardSel||!nEl) return;
-  const card=getM().tarjetas[cardSel.value];
-  if(!card) return;
-  // Si el nombre venía vinculado a una plantilla del catálogo de Gastos, se desvincula:
-  // ahora el nombre lo define la tarjeta, no la plantilla.
-  nEl.dataset.catTipoId='';
-  const plantillaNote=document.getElementById('g-n-note');
-  if(plantillaNote) plantillaNote.remove();
-  nEl.value=tcDisplayName(card);
-  nEl.readOnly=true;
-  nEl.style.opacity='.7';
-  nEl.style.cursor='not-allowed';
-  let note=document.getElementById('g-n-note-tc');
-  if(!note){
-    note=document.createElement('div');
-    note.id='g-n-note-tc';
-    note.style.cssText='font-size:11px;color:var(--acc);margin-top:4px';
-    nEl.parentElement.appendChild(note);
-  }
-  note.textContent='Nombre asignado automáticamente según la tarjeta vinculada.';
-}
-function unlockTCNombreGasto(){
-  const nEl=document.getElementById('g-n');
-  if(!nEl) return;
-  nEl.readOnly=false;
-  nEl.style.opacity='1';
-  nEl.style.cursor='text';
-  const note=document.getElementById('g-n-note-tc');
-  if(note) note.remove();
-}
-function toggleCreditoField(){
-  const chk=document.getElementById('g-escredito');
-  const field=document.getElementById('g-credito-field');
-  if(!chk||!field) return;
-  field.style.display=chk.checked?'block':'none';
-  if(!chk.checked){
-    const sel=document.getElementById('g-credito');
-    if(sel) sel.value='';
-  }
-}
-
-function aplicarPlantillaGasto(){
-  const sel=document.getElementById('g-template');
-  const nEl=document.getElementById('g-n');
-  if(!sel||!nEl) return;
-  if(!sel.value){
-    // "Escribir libremente": liberar el campo por completo
-    nEl.readOnly=false;
-    nEl.style.opacity='1';
-    nEl.style.cursor='text';
-    nEl.dataset.catTipoId='';
-    const oldNote=document.getElementById('g-n-note-dyn');
-    if(oldNote) oldNote.remove();
-    return;
-  }
-  const item=catTipos.find(function(i){return i.id===sel.value;});
-  if(!item) return;
-  const pEl=document.getElementById('g-p');
-  const mEl=document.getElementById('g-m');
-  const ctEl=document.getElementById('g-ct');
-  nEl.value=item.nombre;
-  nEl.readOnly=true;
-  nEl.style.opacity='.7';
-  nEl.style.cursor='not-allowed';
-  nEl.dataset.catTipoId=item.id;
-  if(pEl&&item.presupuesto) setMoneyValue(pEl,item.presupuesto);
-  if(mEl&&item.metodo) mEl.value=item.metodo;
-  if(ctEl&&item.cuotas_total){
-    ctEl.value=item.cuotas_total;
-    const cuotasChk=document.getElementById('g-esCuotas');
-    if(cuotasChk){ cuotasChk.checked=true; toggleCuotasField(); }
-  }
-  let note=document.getElementById('g-n-note-dyn');
-  if(!note){
-    note=document.createElement('div');
-    note.id='g-n-note-dyn';
-    note.style.cssText='font-size:11px;color:var(--acc);margin-top:4px';
-    nEl.parentElement.appendChild(note);
-  }
-  note.textContent='Nombre vinculado al catálogo — coincidirá siempre con "'+item.nombre+'".';
-}
-
 function unlinkGastoNameField(){
   const nEl=document.getElementById('g-n');
   if(!nEl) return;
@@ -4472,6 +4443,11 @@ function unlinkGastoNameField(){
 
 function saveG(id,which,parentId){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  // Se consume (y limpia) el flag apenas entra la función, no al final: si algo más abajo
+  // corta la ejecución con un "return" temprano (nombre vacío, orden de pago bloqueado), el
+  // flag no debe quedar pegado en true esperando el próximo guardado que nada tenga que ver.
+  const convertirTrasGuardar=_convertirGrupoTrasGuardar;
+  _convertirGrupoTrasGuardar=false;
   const nEl=document.getElementById('g-n');
   const nombre=nEl.value.trim();
   const catTipoIdSel=nEl.dataset.catTipoId||null;
@@ -4556,8 +4532,8 @@ function saveG(id,which,parentId){
     if(catTipoIdSel){ gasto.catTipoId=catTipoIdSel; }
     if(creditoIdSel){
       gasto.creditoId=creditoIdSel;
-      // sugerirCuotaCredito() guarda la cuota sugerida en el <select> (data-cuota) al elegir
-      // el crédito; si por algo no quedó (ej. el usuario nunca disparó el onchange), se cae
+      // elegirCredito() (picker "Asociar a crédito") calcula la cuota sugerida y la deja en
+      // data-cuota del <select> oculto al reabrir el formulario; si por algo no quedó, se cae
       // al viejo cálculo por cuotas_total como respaldo.
       const cuotaDesdeSel=parseInt(creditoSel?.dataset.cuota)||0;
       gasto.numCuota=cuotaDesdeSel||cuota_auto||cuotas_total||1;
@@ -4568,33 +4544,35 @@ function saveG(id,which,parentId){
       if(crAsoc){ gasto.cuotas_total=crAsoc.cuotas; gasto.cuota_actual=gasto.numCuota; }
       if(!sincronizarCreditoDesdeGasto(gasto,null)) return;
     }
-    // Crear directamente como grupo desplegable (checkbox "Asociar a grupo desplegable" en
-    // el propio formulario de creación), en vez de tener que crear el gasto, editarlo y luego
-    // usar "Convertir en grupo desplegable" en un modal aparte.
-    const esGrupoChk=document.getElementById('g-esgrupo');
-    if(esGrupoChk&&esGrupoChk.checked){
-      gasto.esGrupo=true;
-      const linkedChk=document.getElementById('g-grp-linked');
-      if(linkedChk&&linkedChk.checked){
-        const cardSel=document.getElementById('g-grp-card');
-        const tcId=cardSel?cardSel.value:listTCIds(m)[0];
-        gasto.tcCardId=tcId;
-        gasto.tcLinked=true;
-        gasto.presupuesto=calcTCSaldo(m,tcId);
-      }
-    }
     list.push(gasto);
     lastCreatedId=gasto.id;
-    if(gasto.esGrupo&&gasto.tcCardId) syncTCGrupo(m); // crea el subgasto "Abono TC" automáticamente
   }
   save(); closeModal(); render();
   setTimeout(function(){ lastCreatedId=null; }, 400);
+  // "Convertir en grupo desplegable" sobre un gasto recién creado (ver
+  // convertirEnGrupoDesdeCreacion): ya quedó guardado como gasto normal arriba, ahora se abre
+  // el mismo modal de convertir/configurar grupo que usa un gasto existente, en vez del toast
+  // o la pregunta de mover a Q2.
+  if(convertirTrasGuardar){
+    convertirGrupo(gasto.id,which);
+    return;
+  }
   // Si es Q1 y se marcó "Sin pagar", ofrecer crear el gasto en Q2
   if(which==='q1' && sinpagar) {
     ofrecerCopiarQ2(gasto);
   } else {
     toast(id?'Gasto actualizado':(gasto.esGrupo?'Grupo creado ✓':'Gasto agregado'));
   }
+}
+// Permite marcar "Convertir en grupo desplegable" desde Más opciones al CREAR un gasto nuevo
+// (antes solo existía para uno ya guardado): primero lo guarda con el saveG de siempre y luego
+// abre convertirGrupo() sobre el que se acaba de crear, en vez de duplicar ese flujo.
+let _convertirGrupoTrasGuardar=false;
+function convertirEnGrupoDesdeCreacion(wh,pid){
+  const nEl=document.getElementById('g-n');
+  if(!nEl||!nEl.value.trim()){ showAlert('Escribe un nombre'); return; }
+  _convertirGrupoTrasGuardar=true;
+  saveG('',wh,pid);
 }
 
 function ofrecerCopiarQ2(g) {
