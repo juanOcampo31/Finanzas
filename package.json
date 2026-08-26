@@ -1,0 +1,8 @@
+{
+  "name": "finanzas-pwa",
+  "private": true,
+  "description": "PWA de finanzas personales — sin build step, sin dependencias.",
+  "scripts": {
+    "test": "node --test test/run-tests.mjs"
+  }
+}

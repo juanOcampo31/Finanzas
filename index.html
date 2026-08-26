@@ -68,11 +68,28 @@
     <!-- Texto de respaldo: debe coincidir con CACHE_VERSION en sw.js. app.js lo actualiza
          en cuanto el service worker responde el postMessage GET_VERSION; esto es solo lo
          que se ve mientras esa respuesta no ha llegado (o si falla). -->
-    <div class="lock-version" id="lockVersion">V 2.3 &bull; Powered by Felipe Ocampo</div>
+    <div class="lock-version" id="lockVersion">V 2.4 &bull; Powered by Felipe Ocampo</div>
   </div>
 </div>
 
-<script src="app.js"></script>
+<!-- app.js se dividió en varios archivos por dominio bajo js/ — deben cargarse en este mismo
+     orden relativo (idéntico al de js/manifest.json, usado por test/sandbox.mjs), porque código
+     de nivel superior de un archivo puede depender de que uno anterior ya haya corrido. Si
+     cambias este orden, actualiza también js/manifest.json y los <script> de tests.html. -->
+<script src="js/core.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/creditos.js"></script>
+<script src="js/format-utils.js"></script>
+<script src="js/nomina-calc.js"></script>
+<script src="js/render.js"></script>
+<script src="js/nomina.js"></script>
+<script src="js/ui-core.js"></script>
+<script src="js/gasto-pickers.js"></script>
+<script src="js/tarjeta.js"></script>
+<script src="js/nomina-deducciones.js"></script>
+<script src="js/catalogos.js"></script>
+<script src="js/gasto-estado.js"></script>
+<script src="js/export-main.js"></script>
 
 </body>
 </html>
