@@ -1,0 +1,16 @@
+[
+  "js/core.js",
+  "js/auth.js",
+  "js/creditos.js",
+  "js/format-utils.js",
+  "js/nomina-calc.js",
+  "js/render.js",
+  "js/nomina.js",
+  "js/ui-core.js",
+  "js/gasto-pickers.js",
+  "js/tarjeta.js",
+  "js/nomina-deducciones.js",
+  "js/catalogos.js",
+  "js/gasto-estado.js",
+  "js/export-main.js"
+]
