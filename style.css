@@ -140,6 +140,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .g-sub-row:last-child{border-bottom:none}
 .g-sub-add{display:flex;align-items:center;justify-content:center;padding:8px 14px 8px 44px;cursor:pointer;color:var(--acc);font-size:12px;font-weight:600;gap:6px;border-top:1px solid var(--brd)}
 .g-sub-add:active{background:var(--surf2)}
+.g-dragging{position:relative;z-index:50;background:var(--surf2);box-shadow:0 6px 16px rgba(0,0,0,.35);opacity:.95}
 .empty{text-align:center;padding:36px 20px;color:var(--mut)}
 .empty .eic{font-size:36px;margin-bottom:10px}
 .empty p{font-size:13px;line-height:1.5}
