@@ -66,6 +66,9 @@ async function lockPinConfirm(){
         if(!sessionDataKey){ await ensureDataKey(pin); await loadAppData(); }
         clearPinRecoveryBackup(); // el material actual funciona de punta a punta: ya no hace falta el respaldo
         appUnlocked=true; hideLockOverlay(); render();
+        // Revisa en segundo plano si hay un respaldo más nuevo en la nube (ver js/sync.js) —
+        // no bloquea el desbloqueo ni reemplaza nada sin preguntar primero.
+        if(typeof revisarSyncAlDesbloquear==='function') revisarSyncAlDesbloquear();
       }catch(e){
         // Nota: mantenemos sessionPIN (el PIN correcto y ya verificado) en memoria — las
         // opciones de recuperación de abajo lo necesitan para re-envolver la data key una
@@ -716,6 +719,9 @@ function save(){
     if(!sessionDataKey) return; // no debería pasar: save() solo se usa después de desbloquear
     const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono});
     localStorage.setItem('fin26_enc', JSON.stringify(envelope));
+    // Sincronización automática (ver js/sync.js) — no hace nada si no hay sesión de Google
+    // iniciada; función definida en un archivo que carga después de este, de ahí el guard.
+    if(typeof programarAutoSyncSubida==='function') programarAutoSyncSubida();
   }).catch(function(e){
     // Antes esto solo quedaba en consola: el usuario seguía viendo su cambio en pantalla (ya
     // aplicado en memoria) sin enterarse de que NO se guardó, y lo perdía al recargar.

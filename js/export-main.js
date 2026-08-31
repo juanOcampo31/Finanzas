@@ -1,21 +1,22 @@
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
-// Sección "Sincronizar con la nube" (ver js/sync.js) — prueba inicial, todavía manual (subir/
-// bajar a propósito, no automático en cada save()). Se reconstruye cada vez que se abre este
-// menú, leyendo el usuario de Google actual, para reflejar sin retraso si se acaba de iniciar/
-// cerrar sesión.
+// Sección "Sincronizar con la nube" (ver js/sync.js): sube sola con cada cambio y revisa sola
+// al desbloquear si hay algo más nuevo — los botones de acá son solo para forzarlo al toque,
+// no hace falta abrir este menú para que sincronice. Se reconstruye cada vez que se abre,
+// leyendo el usuario de Google actual, para reflejar sin retraso si se acaba de iniciar/cerrar
+// sesión.
 function backupNubeSectionHtml(){
   const user=(typeof syncUsuarioActual==='function')?syncUsuarioActual():null;
   if(user){
     return '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--brd)">'
-      +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Conectado como <b style="color:var(--txt)">'+esc(user.email||user.displayName||'')+'</b></p>'
+      +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Sincronizado automáticamente como <b style="color:var(--txt)">'+esc(user.email||user.displayName||'')+'</b>.</p>'
       +'<div style="display:flex;flex-direction:column;gap:10px">'
-      +'<button class="bpri" onclick="subirBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('upload',16)+' Subir a la nube</button>'
-      +'<button class="bcnl" onclick="bajarBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('download',16)+' Bajar de la nube</button>'
+      +'<button class="bpri" onclick="subirBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('upload',16)+' Subir ahora</button>'
+      +'<button class="bcnl" onclick="bajarBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('download',16)+' Bajar ahora</button>'
       +'<button class="bcnl" onclick="syncSignOut()" style="color:var(--red)">Cerrar sesión de Google</button>'
       +'</div></div>';
   }
   return '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--brd)">'
-    +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Sincroniza entre tus dispositivos iniciando sesión con Google (prueba inicial).</p>'
+    +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Inicia sesión con Google para que tus datos se sincronicen solos entre tus dispositivos.</p>'
     +'<button class="bcnl" onclick="syncSignInGoogle()" style="width:100%">Iniciar sesión con Google</button>'
     +'</div>';
 }
