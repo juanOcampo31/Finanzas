@@ -302,10 +302,16 @@ function setGFiltro(which,f){
 }
 
 // Monto total de un método de pago dentro de una quincena (o el total general si m==='todos')
-// — usado tanto por la pastilla de filtro siempre visible como por el panel expandible.
-function montoMetodoFiltro(m,topGastosAll,total){
+// — usado tanto por la pastilla de filtro siempre visible como por el panel expandible. Incluye
+// los subgastos de los grupos (antes solo sumaba gastos sueltos de nivel superior, así que el
+// monto de la pastilla no reflejaba nada de lo que hubiera dentro de un grupo).
+function montoMetodoFiltro(m,topGastosAll,total,subMap){
   if(m==='todos') return total;
-  return topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+  var directo=topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
+  var deSubgastos=topGastosAll.filter(function(g){return g.esGrupo;}).reduce(function(a,g){
+    return a+(subMap&&subMap[g.id]?subMap[g.id]:[]).filter(function(s){return s.metodo===m&&!s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
+  },0);
+  return directo+deSubgastos;
 }
 function pillMetodoBtn(m,which,activeFiltro,mTotal,extraStyle){
   var active=m===activeFiltro;
@@ -540,6 +546,12 @@ function renderGastos(gastos,which) {
     var gi=gastoRowGiCounter++;
     if(g.esGrupo){
       var subs=subMap[g.id]||[];
+      // Si hay un filtro de método activo, el grupo puede haber quedado incluido en la lista
+      // porque coincide el método DEL GRUPO o el de CUALQUIERA de sus subgastos (ver
+      // topGastosFiltered) — pero antes seguía mostrando TODOS los subgastos sin importar el
+      // filtro. Acá se acota a los que sí coinciden, para que el filtro también aplique adentro
+      // del grupo (totales, badge de cantidad y la lista de subgastos que se ve al expandirlo).
+      if(activeFiltro!=='todos') subs=subs.filter(function(s){return s.metodo===activeFiltro;});
       // Base del grupo: si tiene presupuesto propio (ej. saldo tarjeta), usarlo; si no, sumar subgastos
       var base=(g.presupuesto!==null&&g.presupuesto!==undefined&&g.tcLinked)?g.presupuesto:(g.presupuesto>0?g.presupuesto:0);
       var subsPagados=subs.filter(function(s){return s.pagado_flag&&!s.sinpagar;}).reduce(function(a,s){return a+Math.abs(s.presupuesto||0);},0);
@@ -612,7 +624,7 @@ function renderGastos(gastos,which) {
   // padding y el borde scroll-snap cambiaban); ahora ambas usan montoMetodoFiltro/pillMetodoBtn.
   var pillsHtml='<div style="position:relative"><div style="display:flex;gap:6px;overflow-x:auto;padding:8px 14px 6px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory">'
     +metodos.map(function(m){
-      return pillMetodoBtn(m,which,activeFiltro,montoMetodoFiltro(m,topGastosAll,total),'4px 10px;scroll-snap-align:start');
+      return pillMetodoBtn(m,which,activeFiltro,montoMetodoFiltro(m,topGastosAll,total,subMap),'4px 10px;scroll-snap-align:start');
     }).join('')+'</div></div>';
 
   // Collapsible filter + sort panel
@@ -625,7 +637,7 @@ function renderGastos(gastos,which) {
     var sortOpts=[{k:'orden',lbl:'Orden'},{k:'nombre',lbl:'Nombre'},
       {k:'monto-desc',lbl:'Mayor $'},{k:'monto-asc',lbl:'Menor $'},{k:'metodo',lbl:'F. Pago'}];
     var filterPills=metodos.map(function(m){
-      return pillMetodoBtn(m,which,activeFiltro,montoMetodoFiltro(m,topGastosAll,total),'3px 9px');
+      return pillMetodoBtn(m,which,activeFiltro,montoMetodoFiltro(m,topGastosAll,total,subMap),'3px 9px');
     }).join('');
     var sortPills=sortOpts.map(function(opt){
       var isA=opt.k===activeSort;
