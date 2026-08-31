@@ -155,25 +155,34 @@ function programarAutoSyncSubida(){
 // Se llama justo después de un desbloqueo exitoso (ver lockPinConfirm en auth.js). No bloquea
 // la app mientras responde — si Firebase tarda o falla, la app sigue funcionando normal, solo
 // no se ofrece el aviso de "hay algo más nuevo".
+//
+// OJO: no se puede leer firebase.auth().currentUser directamente acá (síncrono) — el
+// desbloqueo con PIN pasa casi apenas carga la página, y Firebase todavía no ha terminado de
+// restaurar la sesión de Google guardada (currentUser da null unos instantes aunque SÍ sigas
+// con sesión iniciada). onAuthStateChanged() es la forma correcta de esperar a que ese estado
+// quede resuelto (con sesión o sin ella) antes de decidir si hay algo que revisar.
 function revisarSyncAlDesbloquear(){
-  const user=syncUsuarioActual();
-  if(!user){ _syncCheckPendiente=false; return; }
-  firebase.firestore().collection('usuarios').doc(user.uid).get().then(function(snap){
-    _syncCheckPendiente=false;
-    if(!snap.exists) return;
-    const data=snap.data();
-    if(!data||!data.backup||!data.updatedAt||!data.updatedAt.toMillis) return;
-    const remoteMs=data.updatedAt.toMillis();
-    const localMs=parseInt(localStorage.getItem('fin26_last_sync_at')||'0');
-    // Margen de 2s: evita que el propio reloj del servidor (unos ms distinto al de este
-    // dispositivo) dispare el aviso sobre un backup que en realidad subió este mismo dispositivo.
-    if(remoteMs<=localMs+2000) return;
-    const fecha=new Date(remoteMs).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'});
-    showConfirm('Hay un respaldo más reciente en la nube (subido el '+fecha+', probablemente desde otro dispositivo). ¿Quieres revisarlo?',function(){
-      procesarBackupParseado(data.backup,'Respaldo en la nube ('+(data.backup.fecha||'')+')');
-    },{title:'Respaldo más reciente disponible', confirmLabel:'Revisar', cancelLabel:'Ahora no', danger:false});
-  }).catch(function(e){
-    _syncCheckPendiente=false;
-    console.error('[sync] no se pudo revisar la nube al desbloquear', e);
+  if(typeof firebase==='undefined'){ _syncCheckPendiente=false; return; }
+  const unsub=firebase.auth().onAuthStateChanged(function(user){
+    unsub(); // solo interesa la primera resolución del estado, no quedarse escuchando cambios futuros acá
+    if(!user){ _syncCheckPendiente=false; return; }
+    firebase.firestore().collection('usuarios').doc(user.uid).get().then(function(snap){
+      _syncCheckPendiente=false;
+      if(!snap.exists) return;
+      const data=snap.data();
+      if(!data||!data.backup||!data.updatedAt||!data.updatedAt.toMillis) return;
+      const remoteMs=data.updatedAt.toMillis();
+      const localMs=parseInt(localStorage.getItem('fin26_last_sync_at')||'0');
+      // Margen de 2s: evita que el propio reloj del servidor (unos ms distinto al de este
+      // dispositivo) dispare el aviso sobre un backup que en realidad subió este mismo dispositivo.
+      if(remoteMs<=localMs+2000) return;
+      const fecha=new Date(remoteMs).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'});
+      showConfirm('Hay un respaldo más reciente en la nube (subido el '+fecha+', probablemente desde otro dispositivo). ¿Quieres revisarlo?',function(){
+        procesarBackupParseado(data.backup,'Respaldo en la nube ('+(data.backup.fecha||'')+')');
+      },{title:'Respaldo más reciente disponible', confirmLabel:'Revisar', cancelLabel:'Ahora no', danger:false});
+    }).catch(function(e){
+      _syncCheckPendiente=false;
+      console.error('[sync] no se pudo revisar la nube al desbloquear', e);
+    });
   });
 }
