@@ -68,7 +68,7 @@
     <!-- Texto de respaldo: debe coincidir con CACHE_VERSION en sw.js. app.js lo actualiza
          en cuanto el service worker responde el postMessage GET_VERSION; esto es solo lo
          que se ve mientras esa respuesta no ha llegado (o si falla). -->
-    <div class="lock-version" id="lockVersion">V 2.5 &bull; Powered by Felipe Ocampo</div>
+    <div class="lock-version" id="lockVersion">V 2.6 &bull; Powered by Felipe Ocampo</div>
   </div>
 </div>
 
@@ -90,6 +90,15 @@
 <script src="js/catalogos.js"></script>
 <script src="js/gasto-estado.js"></script>
 <script src="js/export-main.js"></script>
+
+<!-- Sincronización en la nube (prueba inicial, ver js/sync.js): SDK de Firebase vía CDN,
+     cargado DESPUÉS de nuestro propio código porque sync.js solo usa `firebase` dentro de
+     funciones (nunca en código de nivel superior salvo el initializeApp ya protegido con un
+     `typeof firebase!=='undefined'`), así que el orden respecto a los demás scripts no importa. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/sync.js"></script>
 
 </body>
 </html>

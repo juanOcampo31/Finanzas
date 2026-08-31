@@ -1,4 +1,24 @@
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
+// Sección "Sincronizar con la nube" (ver js/sync.js) — prueba inicial, todavía manual (subir/
+// bajar a propósito, no automático en cada save()). Se reconstruye cada vez que se abre este
+// menú, leyendo el usuario de Google actual, para reflejar sin retraso si se acaba de iniciar/
+// cerrar sesión.
+function backupNubeSectionHtml(){
+  const user=(typeof syncUsuarioActual==='function')?syncUsuarioActual():null;
+  if(user){
+    return '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--brd)">'
+      +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Conectado como <b style="color:var(--txt)">'+esc(user.email||user.displayName||'')+'</b></p>'
+      +'<div style="display:flex;flex-direction:column;gap:10px">'
+      +'<button class="bpri" onclick="subirBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('upload',16)+' Subir a la nube</button>'
+      +'<button class="bcnl" onclick="bajarBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('download',16)+' Bajar de la nube</button>'
+      +'<button class="bcnl" onclick="syncSignOut()" style="color:var(--red)">Cerrar sesión de Google</button>'
+      +'</div></div>';
+  }
+  return '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--brd)">'
+    +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Sincroniza entre tus dispositivos iniciando sesión con Google (prueba inicial).</p>'
+    +'<button class="bcnl" onclick="syncSignInGoogle()" style="width:100%">Iniciar sesión con Google</button>'
+    +'</div>';
+}
 function openBackupMenu(){
   openModal('<div class="mtitle">Respaldo de datos</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
@@ -9,7 +29,8 @@ function openBackupMenu(){
     +icon('upload',16)+' Exportar / compartir backup</button>'
     +'<button class="bcnl" onclick="document.getElementById(\'imp-file\').click();closeModal()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
     +icon('download',16)+' Importar backup JSON</button>'
-    +'</div>');
+    +'</div>'
+    +backupNubeSectionHtml());
 }
 
 async function exportJSON(){
@@ -61,61 +82,76 @@ async function exportJSON(){
   toast('Backup cifrado exportado ✓');
 }
 
+// Descifra/valida un backup ya parseado (objeto JS, sea el envelope {encrypted:true,...} o el
+// formato viejo sin cifrar) y muestra la confirmación de "reemplazar todo" — compartido entre
+// importJSON (archivo local) y bajarBackupNube (Firestore, ver js/sync.js), que solo difieren en
+// de dónde sale `parsed` y qué texto describe su origen.
+async function procesarBackupParseado(parsed, origenLabel){
+  try{
+    let importedPayload;
+    if(parsed.encrypted){
+      let pin=sessionPIN;
+      if(!pin){
+        pin=await promptPINModal('Ingresa tu PIN para restaurar el backup');
+        if(pin===null) return;
+      }
+      let plain;
+      try{
+        plain=await decryptString(parsed,pin);
+      }catch(err){
+        showAlert('PIN incorrecto o backup dañado. No se pudo descifrar.');
+        return;
+      }
+      sessionPIN=pin;
+      importedPayload=JSON.parse(plain);
+    } else {
+      importedPayload=parsed; // compatibilidad con backups antiguos sin cifrar
+    }
+    const importedDb=importedPayload.data||importedPayload;
+    if(typeof importedDb!=='object'||Array.isArray(importedDb)){
+      showAlert('Backup no válido. Debe venir de esta misma app.');
+      return;
+    }
+    const errorEsquema=validarEsquemaDb(importedDb);
+    if(errorEsquema){
+      showAlert('El backup no tiene un formato válido: '+errorEsquema);
+      return;
+    }
+    window._importedDb=importedDb;
+    window._importedExtra={
+      creditos: importedPayload.creditos||null,
+      catMetodos: importedPayload.catMetodos||null,
+      catTipos: importedPayload.catTipos||null,
+      telefono: importedPayload.telefono||null
+    };
+    openModal('<div class="mtitle">Importar backup</div>'
+      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
+      +'Origen: <b style="color:var(--txt)">'+esc(origenLabel)+'</b><br>'
+      +'Meses encontrados: <b style="color:var(--txt)">'+Object.keys(importedDb).length+'</b><br><br>'
+      +'<b style="color:var(--red)">¿Reemplazar todos los datos actuales?</b> Esta acción no se puede deshacer.</p>'
+      +'<div class="macts">'
+      +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+      +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmImport()">Reemplazar todo</button>'
+      +'</div>');
+  } catch(err){
+    showAlert('Error al leer el backup: '+err.message);
+  }
+}
+
 function importJSON(input){
   const file=input.files[0];
   if(!file){return;}
   const reader=new FileReader();
   reader.onload=async function(e){
+    let parsed;
     try{
-      const parsed=JSON.parse(e.target.result);
-      let importedPayload;
-      if(parsed.encrypted){
-        let pin=sessionPIN;
-        if(!pin){
-          pin=await promptPINModal('Ingresa tu PIN para restaurar el backup');
-          if(pin===null){ input.value=''; return; }
-        }
-        let plain;
-        try{
-          plain=await decryptString(parsed,pin);
-        }catch(err){
-          showAlert('PIN incorrecto o archivo dañado. No se pudo descifrar el backup.');
-          input.value=''; return;
-        }
-        sessionPIN=pin;
-        importedPayload=JSON.parse(plain);
-      } else {
-        importedPayload=parsed; // compatibilidad con backups antiguos sin cifrar
-      }
-      const importedDb=importedPayload.data||importedPayload;
-      if(typeof importedDb!=='object'||Array.isArray(importedDb)){
-        showAlert('Archivo no válido. Debe ser un backup exportado desde esta app.');
-        input.value=''; return;
-      }
-      const errorEsquema=validarEsquemaDb(importedDb);
-      if(errorEsquema){
-        showAlert('El backup no tiene un formato válido: '+errorEsquema);
-        input.value=''; return;
-      }
-      window._importedDb=importedDb;
-      window._importedExtra={
-        creditos: importedPayload.creditos||null,
-        catMetodos: importedPayload.catMetodos||null,
-        catTipos: importedPayload.catTipos||null,
-        telefono: importedPayload.telefono||null
-      };
-      openModal('<div class="mtitle">Importar backup</div>'
-        +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
-        +'Archivo: <b style="color:var(--txt)">'+file.name+'</b><br>'
-        +'Meses encontrados: <b style="color:var(--txt)">'+Object.keys(importedDb).length+'</b><br><br>'
-        +'<b style="color:var(--red)">¿Reemplazar todos los datos actuales?</b> Esta acción no se puede deshacer.</p>'
-        +'<div class="macts">'
-        +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
-        +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmImport()">Reemplazar todo</button>'
-        +'</div>');
+      parsed=JSON.parse(e.target.result);
     } catch(err){
       showAlert('Error al leer el archivo: '+err.message);
+      input.value='';
+      return;
     }
+    await procesarBackupParseado(parsed, file.name);
     input.value='';
   };
   reader.readAsText(file);
