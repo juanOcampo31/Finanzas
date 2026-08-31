@@ -7,8 +7,12 @@
 function backupNubeSectionHtml(){
   const user=(typeof syncUsuarioActual==='function')?syncUsuarioActual():null;
   if(user){
+    const lastSyncMs=parseInt(localStorage.getItem('fin26_last_sync_at')||'0')||null;
+    const lastSyncTxt=(lastSyncMs&&typeof formatoUltimaSync==='function')?formatoUltimaSync(lastSyncMs):null;
     return '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--brd)">'
-      +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Sincronizado automáticamente como <b style="color:var(--txt)">'+esc(user.email||user.displayName||'')+'</b>.</p>'
+      +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Sincronizado automáticamente como <b style="color:var(--txt)">'+esc(user.email||user.displayName||'')+'</b>.'
+      +(lastSyncTxt?(' Última sincronización: '+esc(lastSyncTxt)+'.'):' Todavía no se ha sincronizado nada en este dispositivo.')
+      +'</p>'
       +'<div style="display:flex;flex-direction:column;gap:10px">'
       +'<button class="bpri" onclick="subirBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('upload',16)+' Subir ahora</button>'
       +'<button class="bcnl" onclick="bajarBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('download',16)+' Bajar ahora</button>'

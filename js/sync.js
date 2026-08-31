@@ -37,6 +37,23 @@ function syncUsuarioActual(){
   return (typeof firebase!=='undefined')?firebase.auth().currentUser:null;
 }
 
+// "hace 2 min" / "hace 3 h" / "ayer" / "23 ago" a partir de fin26_last_sync_at (ver
+// construirYSubirBackup) — usado en el menú de Respaldo para mostrar cuándo fue la última
+// sincronización sin tener que abrir la consola de Firebase.
+function formatoUltimaSync(ms){
+  if(!ms) return null;
+  const diffMs=Date.now()-ms;
+  if(diffMs<60000) return 'hace un momento';
+  const min=Math.floor(diffMs/60000);
+  if(min<60) return 'hace '+min+' min';
+  const horas=Math.floor(min/60);
+  if(horas<24) return 'hace '+horas+' h';
+  const dias=Math.floor(horas/24);
+  if(dias===1) return 'ayer';
+  if(dias<7) return 'hace '+dias+' días';
+  return new Date(ms).toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+}
+
 function syncSignInGoogle(){
   if(typeof firebase==='undefined'){ showAlert('No se pudo cargar el servicio de sincronización.'); return; }
   const provider=new firebase.auth.GoogleAuthProvider();
@@ -126,7 +143,9 @@ function programarAutoSyncSubida(){
   clearTimeout(_autoSyncUploadTimer);
   _autoSyncUploadTimer=setTimeout(function(){
     if(_syncCheckPendiente) return; // todavía no se resolvió si había algo más nuevo en la nube
-    construirYSubirBackup(sessionPIN).catch(function(e){
+    construirYSubirBackup(sessionPIN).then(function(){
+      toast('☁️ Sincronizado');
+    }).catch(function(e){
       console.error('[sync] auto-subida falló', e);
     });
   }, 4000);
