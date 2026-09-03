@@ -36,9 +36,13 @@ async function showLockOverlay(mode){
   document.getElementById('lockError').textContent='';
   document.getElementById('lockKeypad').innerHTML = buildKeypadHTML();
   renderLockDots();
-  // El enlace de recuperación solo aplica cuando ya hay datos protegidos por desbloquear
-  // (no durante la configuración inicial de un PIN nuevo, cuando todavía no hay nada que recuperar).
-  document.getElementById('lockRecoveryLink').style.display = (mode!=='setup') ? 'block' : 'none';
+  // El enlace ahora también se muestra al crear un PIN nuevo (antes solo aparecía si ya había
+  // datos protegidos por desbloquear): un dispositivo nuevo, sin nada guardado localmente
+  // todavía, es justo el caso más común para "recuperar mis datos desde la nube" en vez de
+  // arrancar con la app vacía (ver showRecoveryOptions/syncSignInGoogleDesdeLock).
+  const recoveryLink=document.getElementById('lockRecoveryLink');
+  recoveryLink.textContent = (mode==='setup') ? '¿Ya usas la app en otro dispositivo?' : '¿Problemas para ingresar?';
+  recoveryLink.style.display='block';
 }
 function hideLockOverlay(){
   document.getElementById('lockOverlay').classList.add('hidden');
@@ -123,8 +127,10 @@ function showRecoveryOptions(){
   openModal('<div class="mtitle">Recuperar acceso</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
     +'Si tu PIN no descifra tus datos guardados (por ejemplo, porque un cambio de PIN anterior '
-    +'quedó a medias), elige una opción:</p>'
+    +'quedó a medias), o si es la primera vez que abres la app en este dispositivo y ya tienes '
+    +'datos guardados en otro, elige una opción:</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +(typeof syncSignInGoogleDesdeLock==='function'?'<button class="bpri" onclick="syncSignInGoogleDesdeLock()">'+btnIcon('refresh')+'Iniciar sesión con Google y recuperar de la nube</button>':'')
     +(hasRecoveryPhone?'<button class="bcnl" onclick="closeModal();recoverWithPhone()">'+btnIcon('phone')+'Recuperar con mi número de celular</button>':'')
     +(hasDataKey?'<button class="bcnl" onclick="closeModal();recoverWithPreviousPin()">'+btnIcon('undo')+'Intentar con mi PIN anterior</button>':'')
     +'<button class="bcnl" onclick="closeModal();document.getElementById(\'lock-imp-file\').click()">'+btnIcon('download')+'Restaurar desde un backup exportado (.json)</button>'

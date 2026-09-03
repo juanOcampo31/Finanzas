@@ -112,6 +112,88 @@ async function subirBackupNube(){
   }
 }
 
+// ── Recuperar desde la nube ANTES de desbloquear (ver "¿Ya usas la app en otro dispositivo?"
+// en showRecoveryOptions, auth.js) — para un dispositivo nuevo que todavía no tiene PIN ni
+// datos locales: inicia sesión con Google y, si hay un respaldo, arma el PIN/data key de ESTE
+// dispositivo con el mismo PIN que descifra ese respaldo, en vez de arrancar con la app vacía.
+function syncSignInGoogleDesdeLock(){
+  if(typeof firebase==='undefined'){ showAlert('No se pudo cargar el servicio de sincronización.'); return; }
+  closeModal();
+  const provider=new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).then(function(){
+    return bajarBackupNubeDesdeLock();
+  }).catch(function(e){
+    if(e.code==='auth/popup-closed-by-user') return;
+    console.error('Error al iniciar sesión con Google', e);
+    showAlert('No se pudo iniciar sesión: '+e.message);
+  });
+}
+// Mismo patrón que lockImportBackup (auth.js), fuente Firestore en vez de un archivo: pide el
+// PIN con el que se protegió ese respaldo para descifrarlo, y arma una data key COMPLETAMENTE
+// NUEVA para este dispositivo (nunca intenta reutilizar/desenvolver una que ya hubiera acá —
+// en un dispositivo nuevo no existe ninguna, y en uno con un PIN roto la anterior se da por
+// perdida de todas formas), envuelta bajo ese mismo PIN.
+async function bajarBackupNubeDesdeLock(){
+  const user=syncUsuarioActual();
+  if(!user){ showAlert('No se pudo confirmar la sesión de Google.'); return; }
+  try{
+    const snap=await firebase.firestore().collection('usuarios').doc(user.uid).get();
+    if(!snap.exists){ showAlert('No hay ningún respaldo en la nube para esta cuenta de Google.'); return; }
+    const data=snap.data();
+    if(!data||!data.backup){ showAlert('El respaldo en la nube está vacío o dañado.'); return; }
+    const pin=await promptPINModal('Ingresa el PIN con el que se protegió ese respaldo');
+    if(pin===null) return;
+    let plain;
+    try{
+      plain=await decryptString(data.backup,pin);
+    }catch(err){
+      showAlert('PIN incorrecto o respaldo dañado. No se pudo descifrar.');
+      return;
+    }
+    const importedPayload=JSON.parse(plain);
+    const importedDb=importedPayload.data||importedPayload;
+    if(typeof importedDb!=='object'||Array.isArray(importedDb)){
+      showAlert('Respaldo no válido. Debe venir de esta misma app.');
+      return;
+    }
+    const errorEsquema=validarEsquemaDb(importedDb);
+    if(errorEsquema){
+      showAlert('El respaldo en la nube no tiene un formato válido: '+errorEsquema);
+      return;
+    }
+    sessionPIN=pin;
+    if(!pinIsConfigured()) await pinSetupSave(pin);
+    db=importedDb;
+    Object.keys(db).forEach(function(k){ db[k]=migrateMonth(db[k]); });
+    creditos=importedPayload.creditos||{};
+    catMetodos=importedPayload.catMetodos||[];
+    catTipos=importedPayload.catTipos||[];
+    perfilTelefono=importedPayload.telefono||'';
+    sessionDataKey=await generateDataKey();
+    await wrapAndStoreDataKey(sessionDataKey, sessionPIN);
+    const digitsRestored=perfilTelefono.replace(/\D/g,'');
+    if(digitsRestored.length>=6){
+      const recEnv=await buildDataKeyEnvelope(sessionDataKey, digitsRestored.slice(-6));
+      localStorage.setItem('fin26_recovery', JSON.stringify(recEnv));
+    } else {
+      localStorage.removeItem('fin26_recovery');
+    }
+    migrarEstadoGastos();
+    repararGastosHuerfanosDeGrupo();
+    const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
+    curM=keys.length?keys[keys.length-1]:0;
+    curTab=0; homeQ=homeQParaMes(db[curM]);
+    localStorage.setItem('fin26_last_sync_at', String(Date.now()));
+    await save();
+    clearPinRecoveryBackup();
+    appUnlocked=true; hideLockOverlay(); render();
+    toast('Datos recuperados de la nube ✓');
+  }catch(e){
+    console.error('Error al recuperar el respaldo de la nube desde el bloqueo', e);
+    showAlert('No se pudo recuperar el respaldo: '+e.message);
+  }
+}
+
 // Trae el envelope guardado en Firestore y lo procesa con el mismo camino que un backup JSON
 // importado desde archivo (ver procesarBackupParseado en export-main.js): pide el PIN, descifra,
 // valida el esquema y muestra la confirmación de "reemplazar todo" antes de aplicar nada.

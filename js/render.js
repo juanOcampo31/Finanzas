@@ -864,47 +864,21 @@ function renderTC(m) {
 
   if(!tc.length) return tcMiniHtml+headerCard+creditosVinculadosHtml+'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('card',36)+'</div><p>Sin movimientos. Toca + para agregar.</p></div>';
 
-  var grupos={};
+  // Cada movimiento es su propia fila (antes se agrupaban por descripción — un "Gasolina" del
+  // 3 y otro del 20 quedaban plegados bajo una sola fila "Gasolina", había que expandirla para
+  // ver/editar cada uno). Ordenados por fecha, el más reciente primero.
   var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
-  sorted.forEach(function(x){
-    var key=x.descripcion||'Sin descripción';
-    if(!grupos[key]) grupos[key]=[];
-    grupos[key].push(x);
-  });
-  var gruposArr=Object.entries(grupos).map(function(entry){
-    var nombre=entry[0], items=entry[1];
-    var neto=items.reduce(function(a,x){return a+(x.tipo==='Abono'?-Math.abs(x.valor||0):Math.abs(x.valor||0));},0);
-    var total=Math.abs(neto);
-    var tipo=neto<0?'Abono':'Compra';
-    var firstFecha=items[0]?items[0].fecha:'';
-    return {nombre:nombre,items:items,total:total,tipo:tipo,firstFecha:firstFecha};
-  }).sort(function(a,b){return a.firstFecha>b.firstFecha?-1:a.firstFecha<b.firstFecha?1:0;});
-
-  var grupoRows=gruposArr.map(function(g,gi){
-    var zero=g.total===0;
-    var ab=g.tipo==='Abono';
-    var detalles=g.items.map(function(x){
-      var xAb=x.tipo==='Abono';
-      return '<div class="tc-detail" onclick="editTC(\''+x.id+'\')">'
-        +'<div style="font-size:12px;color:var(--mut)">'+fmtD(x.fecha)+'</div>'
-        +'<div style="font-size:12px;font-weight:600;color:var(--'+(xAb?'grn':'red')+')">'+(xAb?'-':'+')+cop(Math.abs(x.valor||0))+'</div>'
-        +'</div>';
-    }).join('');
-    var countBadge=g.items.length>1?'<span class="tc-count">'+g.items.length+'</span>':'';
-    var dateRange=g.items.length===1?fmtD(g.items[0].fecha):fmtD(g.items[0].fecha)+' – '+fmtD(g.items[g.items.length-1].fecha);
-    return '<div class="tc-group" id="tcg-'+gi+'">'
-      +'<div class="tc-group-head" onclick="toggleTCG('+gi+')">'
-      +(zero?'<div class="tcic" style="background:var(--brd);color:var(--mut)">'+icon('minus',14)+'</div>':'<div class="tcic '+(ab?'a':'c')+'">'+icon(ab?'arrowDown':'arrowUp',14)+'</div>')
+  var grupoRows=sorted.map(function(x){
+    var ab=x.tipo==='Abono';
+    return '<div class="tc-group" onclick="editTC(\''+x.id+'\')" style="cursor:pointer">'
+      +'<div class="tc-group-head">'
+      +'<div class="tcic '+(ab?'a':'c')+'">'+icon(ab?'arrowDown':'arrowUp',14)+'</div>'
       +'<div style="flex:1;min-width:0">'
-      +'<div class="tcdesc">'+esc(g.nombre)+countBadge+'</div>'
-      +'<div class="tcdate">'+dateRange+'</div>'
+      +'<div class="tcdesc">'+esc(x.descripcion||'Sin descripción')+'</div>'
+      +'<div class="tcdate">'+fmtD(x.fecha)+'</div>'
       +'</div>'
-      +'<div style="text-align:right;display:flex;align-items:center;gap:8px">'
-      +(zero?'<div class="tcval" style="color:var(--mut)">'+cop(0)+'</div>':'<div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(g.total)+'</div>')
-      +'<div class="tc-chevron" id="tcc-'+gi+'" style="display:flex">'+icon('chevronRight',16)+'</div>'
+      +'<div style="text-align:right"><div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(Math.abs(x.valor||0))+'</div></div>'
       +'</div>'
-      +'</div>'
-      +'<div class="tc-detail-wrap" id="tcd-'+gi+'" style="display:none">'+detalles+'</div>'
       +'</div>';
   }).join('');
 
@@ -993,15 +967,6 @@ function deleteCard(tid){
   const ids=listTCIds(m);
   curTC=ids[0]||null;
   save();closeModal();render();toast('Tarjeta eliminada');
-}
-
-function toggleTCG(gi) {
-  const wrap=document.getElementById('tcd-'+gi);
-  const chev=document.getElementById('tcc-'+gi);
-  const open=wrap.style.display==='none';
-  wrap.style.display=open?'block':'none';
-  chev.style.transform=open?'rotate(90deg)':'rotate(0deg)';
-  chev.style.color=open?'var(--acc)':'var(--mut)';
 }
 
 // ── Ingresos adicionales ─────────────────────────────────────────────────────

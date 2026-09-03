@@ -78,11 +78,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .tc-group:last-child{border-bottom:none}
 .tc-group-head{display:flex;align-items:center;padding:10px 14px;gap:10px;cursor:pointer}
 .tc-group-head:active{background:var(--surf2)}
-.tc-chevron{font-size:18px;color:var(--mut);transition:transform .2s,color .2s;flex-shrink:0}
-.tc-detail-wrap{background:rgba(0,0,0,.15);border-top:1px solid var(--brd)}
-.tc-detail{display:flex;justify-content:space-between;align-items:center;padding:8px 14px 8px 52px;border-bottom:1px solid var(--brd);cursor:pointer}
-.tc-detail:last-child{border-bottom:none}
-.tc-detail:active{background:var(--surf2)}
 .tc-count{display:inline-block;font-size:10px;font-weight:700;background:var(--acc-d);color:var(--acc);padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle}
 .tcic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .tcic.c{background:var(--red-d);color:var(--red)}.tcic.a{background:var(--grn-d);color:var(--grn)}

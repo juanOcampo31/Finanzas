@@ -869,24 +869,34 @@ function sincronizarCreditoDesdeGasto(gasto,estadoAntes){
 // duplicar la sincronización con crédito/tarjeta — cada llamada solo muta el gasto y el mes
 // (m); guardar/renderizar queda a cargo de quien llama (toggleP o toggleGrupoPagado), para no
 // guardar/renderizar una vez por subgasto en un toggle masivo.
-function marcarGastoPagado(g,m){
+function marcarGastoPagado(g,m,opts){
+  opts=opts||{};
   setGastoEstado(g,'pagado');
   if(g.parentId){
     const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
     const parent=allGastos.find(x=>x.id===g.parentId);
     if(parent&&parent.tcCardId){
-      const t=getTC(m,parent.tcCardId);
-      const mvId=uid();
-      t.movimientos.push({
-        id:mvId,
-        descripcion:g.nombre,
-        tipo:'Abono',
-        valor:-Math.abs(g.presupuesto||0),
-        fecha:new Date().toISOString().slice(0,10),
-        saldo:null
-      });
-      g.tcMovimientoId=mvId;
-      syncTCGrupo(m);
+      if(opts.sinMovimientoTC){
+        // Este gasto queda marcado como pagado (para el checklist del grupo) pero SIN su
+        // propio movimiento en la tarjeta — ver toggleGrupoPagado: cuando "Abono TC" (que ya
+        // cubre TODO el saldo pendiente) se paga en el mismo lote que otros gastos agregados a
+        // mano, crearle además un abono a cada uno de esos otros duplicaría el pago sobre la
+        // misma deuda.
+        g.tcSinMovimiento=true;
+      } else {
+        const t=getTC(m,parent.tcCardId);
+        const mvId=uid();
+        t.movimientos.push({
+          id:mvId,
+          descripcion:g.nombre,
+          tipo:'Abono',
+          valor:-Math.abs(g.presupuesto||0),
+          fecha:new Date().toISOString().slice(0,10),
+          saldo:null
+        });
+        g.tcMovimientoId=mvId;
+        syncTCGrupo(m);
+      }
     }
   }
   if(g.creditoId && creditos[g.creditoId]){
@@ -912,21 +922,27 @@ function desmarcarGastoPagado(g,m){
     const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
     const parent=allGastos.find(x=>x.id===g.parentId);
     if(parent&&parent.tcCardId){
-      const t=getTC(m,parent.tcCardId);
-      if(g.tcMovimientoId){
-        t.movimientos=t.movimientos.filter(x=>x.id!==g.tcMovimientoId);
+      if(g.tcSinMovimiento){
+        // Este gasto nunca tuvo su propio movimiento (ver marcarGastoPagado): no hay nada que
+        // quitar de la tarjeta, solo limpiar la marca.
+        g.tcSinMovimiento=false;
       } else {
-        // Compatibilidad con abonos creados antes de guardar el id del movimiento en el
-        // gasto: se recurre al criterio anterior (más frágil, por coincidencia de nombre)
-        // solo como último recurso.
-        const abonos=t.movimientos.filter(x=>x.tipo==='Abono'&&x.descripcion.startsWith(g.nombre));
-        if(abonos.length>0){
-          const last=abonos[abonos.length-1];
-          t.movimientos=t.movimientos.filter(x=>x.id!==last.id);
+        const t=getTC(m,parent.tcCardId);
+        if(g.tcMovimientoId){
+          t.movimientos=t.movimientos.filter(x=>x.id!==g.tcMovimientoId);
+        } else {
+          // Compatibilidad con abonos creados antes de guardar el id del movimiento en el
+          // gasto: se recurre al criterio anterior (más frágil, por coincidencia de nombre)
+          // solo como último recurso.
+          const abonos=t.movimientos.filter(x=>x.tipo==='Abono'&&x.descripcion.startsWith(g.nombre));
+          if(abonos.length>0){
+            const last=abonos[abonos.length-1];
+            t.movimientos=t.movimientos.filter(x=>x.id!==last.id);
+          }
         }
+        g.tcMovimientoId=null;
+        syncTCGrupo(m);
       }
-      g.tcMovimientoId=null;
-      syncTCGrupo(m);
     }
   }
 }
@@ -970,6 +986,12 @@ function toggleGrupoPagado(e,gid,which){
   if(!subs.length) return;
   const allPaid=subs.every(function(s){return s.pagado_flag;});
   var pendientesManual=[], bloqueados=[];
+  // Si "Abono TC" (el auto-generado que ya cubre TODO el saldo pendiente de la tarjeta, ver
+  // syncTCGrupo) está sin pagar y se va a pagar en este mismo lote, los demás gastos del grupo
+  // agregados a mano NO deben crear su propio movimiento en la tarjeta — ya quedan cubiertos
+  // por el abono consolidado de "Abono TC"; crear uno aparte por cada uno duplicaría el pago
+  // sobre la misma deuda (ver marcarGastoPagado, parámetro sinMovimientoTC).
+  var abonoTCEnEsteLote=subs.some(function(s){return s.nombre==='Abono TC'&&!s.pagado_flag;});
   subs.forEach(function(s){
     if(allPaid){ desmarcarGastoPagado(s,m); return; }
     if(s.pagado_flag || s.presupuesto<0) return;
@@ -978,7 +1000,7 @@ function toggleGrupoPagado(e,gid,which){
       var pendNum=cuotaAnteriorPendiente(creditos[s.creditoId],s.numCuota-1);
       if(pendNum!=null){ bloqueados.push(nombreGasto(s)+' (cuota '+pendNum+' sin pagar)'); return; }
     }
-    marcarGastoPagado(s,m);
+    marcarGastoPagado(s,m,{sinMovimientoTC:abonoTCEnEsteLote&&s.nombre!=='Abono TC'});
   });
   save();render();
   if(!allPaid && (pendientesManual.length||bloqueados.length)){
