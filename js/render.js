@@ -866,19 +866,91 @@ function renderTC(m) {
 
   // Cada movimiento es su propia fila (antes se agrupaban por descripción — un "Gasolina" del
   // 3 y otro del 20 quedaban plegados bajo una sola fila "Gasolina", había que expandirla para
-  // ver/editar cada uno). Ordenados por fecha, el más reciente primero.
-  var sorted=[...tc].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
+  // ver/editar cada uno) — EXCEPTO los abonos ligados a una compra puntual (movimientoId, ver
+  // abrirAbonoMovimiento en tarjeta.js): esos no aparecen como fila propia en la lista general,
+  // se resumen en un desplegable bajo su compra — mismo patrón visual que "Abono a capital" en
+  // el detalle de un crédito (ver abonoDetailsHtml en creditos.js): un <details> con el total
+  // abonado y saldo antes/después, y cada abono individual con su botón de eliminar.
+  function abonoTCDetailsHtml(compra,ligados){
+    var color='var(--grn)';
+    var totalAbonado=ligados.reduce(function(a,y){return a+Math.abs(y.valor||0);},0);
+    var saldoAntes=Math.abs(compra.valor||0);
+    var saldoDespues=Math.max(0,Math.round((saldoAntes-totalAbonado)*100)/100);
+    var compsHtml=ligados.slice().sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;}).map(function(y){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:4px;border-top:1px solid var(--brd)">'
+        +'<span>'+esc(y.descripcion||'Abono')+' ('+fmtD(y.fecha)+')</span>'
+        +'<span style="display:flex;align-items:center;gap:6px">'
+        +'<span style="color:'+color+';font-weight:600">'+cop(Math.abs(y.valor||0))+'</span>'
+        +'<button onclick="event.stopPropagation();confirmarEliminarAbonoTC(\''+y.id+'\')" style="background:none;border:1px solid rgba(248,113,113,.4);border-radius:var(--r2);padding:3px 7px;font-size:9px;color:var(--red);cursor:pointer">Eliminar</button>'
+        +'</span></div>';
+    }).join('');
+    var etiqueta=ligados.length+' abono'+(ligados.length>1?'s':'')+' registrado'+(ligados.length>1?'s':'');
+    return '<details style="padding:9px 12px;border-bottom:1px solid var(--brd);background:rgba(0,0,0,.12)" onclick="event.stopPropagation()">'
+      +'<summary style="font-size:11px;color:'+color+';font-weight:600;cursor:pointer">'+btnIcon('dollar',12)+etiqueta+'</summary>'
+      +'<div style="margin-top:6px;padding:8px 10px;background:var(--surf2);border-radius:var(--r2);font-size:11px;color:var(--mut)">'
+      +'<div style="display:flex;justify-content:space-between"><span>Total abonado</span><span style="color:'+color+';font-weight:600">'+cop(totalAbonado)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo antes</span><span>'+cop(saldoAntes)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo después</span><span style="color:var(--txt);font-weight:600">'+cop(saldoDespues)+'</span></div>'
+      +compsHtml
+      +'</div></details>';
+  }
+
+  var abonosPorCompra={};
+  tc.forEach(function(x){
+    if(x.tipo==='Abono'&&x.movimientoId){
+      if(!abonosPorCompra[x.movimientoId]) abonosPorCompra[x.movimientoId]=[];
+      abonosPorCompra[x.movimientoId].push(x);
+    }
+  });
+  var idsAgrupados={};
+  Object.keys(abonosPorCompra).forEach(function(compraId){
+    // Si la compra padre ya no existe (se borró), sus abonos quedan huérfanos — se muestran
+    // sueltos como cualquier otro movimiento, en vez de perderse de la lista.
+    if(tc.some(function(y){return y.id===compraId;})){
+      abonosPorCompra[compraId].forEach(function(a){ idsAgrupados[a.id]=true; });
+    } else {
+      delete abonosPorCompra[compraId];
+    }
+  });
+  var topMovs=tc.filter(function(x){ return !idsAgrupados[x.id]; });
+  var sorted=[...topMovs].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
   var grupoRows=sorted.map(function(x){
     var ab=x.tipo==='Abono';
-    return '<div class="tc-group" onclick="editTC(\''+x.id+'\')" style="cursor:pointer">'
-      +'<div class="tc-group-head">'
+    var ligados=(!ab&&abonosPorCompra[x.id])?abonosPorCompra[x.id]:null;
+    var totalAbonado=ligados?ligados.reduce(function(a,y){return a+Math.abs(y.valor||0);},0):0;
+    var pendiente=ligados?Math.max(0,Math.abs(x.valor||0)-totalAbonado):Math.abs(x.valor||0);
+
+    var extraInfo='', abonarBtn='';
+    if(!ab){
+      if(pendiente>0){
+        abonarBtn='<button onclick="event.stopPropagation();abrirAbonoMovimiento(\''+x.id+'\')" style="background:var(--acc-d);color:var(--acc);border:1px solid var(--acc);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap">Abonar</button>';
+      }
+    } else if(x.movimientoId){
+      var compraOrigen=tc.find(function(y){return y.id===x.movimientoId;});
+      if(compraOrigen) extraInfo='<div style="font-size:10px;color:var(--mut);margin-top:1px">→ '+esc(compraOrigen.descripcion||'')+'</div>';
+    }
+    // Con abonos ligados, el valor mostrado en la fila es lo que QUEDA por pagar de esa compra
+    // (no el valor original) — el original se deja tachado, chiquito, como referencia. Ya
+    // pagada del todo, se reemplaza por un simple "Pagado" en vez de "+$0".
+    var valorMostrado=ligados?pendiente:Math.abs(x.valor||0);
+    var valorOriginalHtml=(ligados&&totalAbonado>0)?'<div style="font-size:10px;color:var(--mut);text-decoration:line-through">'+cop(Math.abs(x.valor||0))+'</div>':'';
+    var tcValHtml=(ligados&&pendiente===0)
+      ?'<div class="tcval a">Pagado</div>'
+      :'<div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(valorMostrado)+'</div>';
+    return '<div class="tc-group">'
+      +'<div class="tc-group-head" onclick="editTC(\''+x.id+'\')" style="cursor:pointer">'
       +'<div class="tcic '+(ab?'a':'c')+'">'+icon(ab?'arrowDown':'arrowUp',14)+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div class="tcdesc">'+esc(x.descripcion||'Sin descripción')+'</div>'
       +'<div class="tcdate">'+fmtD(x.fecha)+'</div>'
+      +extraInfo
       +'</div>'
-      +'<div style="text-align:right"><div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(Math.abs(x.valor||0))+'</div></div>'
+      +'<div style="text-align:right;display:flex;align-items:center;gap:8px">'
+      +abonarBtn
+      +'<div>'+valorOriginalHtml+tcValHtml+'</div>'
       +'</div>'
+      +'</div>'
+      +(ligados&&ligados.length?abonoTCDetailsHtml(x,ligados):'')
       +'</div>';
   }).join('');
 

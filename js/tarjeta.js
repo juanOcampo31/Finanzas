@@ -226,6 +226,59 @@ function editTC(id){
   if(mv){tcTipo=mv.tipo;openTCModal(mv);}
 }
 
+// ── Abonar a un movimiento específico ────────────────────────────────────────────────────
+// Antes un "Abono" siempre era genérico: solo restaba del saldo total de la tarjeta, sin quedar
+// ligado a qué compra puntual se estaba pagando. Este abono SÍ queda enlazado (movimientoId) a
+// la compra elegida, así la fila de esa compra puede mostrar "Abonado $X · Pendiente $Y" (ver
+// renderTC). El saldo total de la tarjeta no cambia de cálculo — calcTCSaldo sigue sumando
+// TODOS los abonos igual, con o sin enlace — el enlace es solo para el seguimiento visual.
+function abrirAbonoMovimiento(compraId){
+  const m=getM(),t=getTC(m);
+  const compra=(t.movimientos||[]).find(function(x){return x.id===compraId;});
+  if(!compra) return;
+  const totalAbonado=(t.movimientos||[]).filter(function(x){return x.tipo==='Abono'&&x.movimientoId===compraId;})
+    .reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
+  const pendiente=Math.max(Math.abs(compra.valor||0)-totalAbonado,0);
+  openModal('<div class="mtitle">Abonar a "'+esc(compra.descripcion||'este movimiento')+'"</div>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:14px">Valor original: <b style="color:var(--txt)">'+cop(Math.abs(compra.valor||0))+'</b>'
+    +(totalAbonado>0?(' · Ya abonado: <b style="color:var(--grn)">'+cop(totalAbonado)+'</b>'):'')
+    +'</p>'
+    +'<div class="field"><label>Valor a abonar</label>'
+    +'<input id="am-v" type="text" inputmode="numeric" value="'+moneyInputFmt(pendiente)+'" oninput="maskMoneyInput(this)"></div>'
+    +'<div class="field"><label>Fecha</label><input id="am-f" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="guardarAbonoMovimiento(\''+compraId+'\')">Guardar</button></div>');
+}
+function guardarAbonoMovimiento(compraId){
+  const m=getM(),t=getTC(m);
+  const compra=(t.movimientos||[]).find(function(x){return x.id===compraId;});
+  if(!compra){closeModal();return;}
+  const val=moneyVal('am-v');
+  if(!val||val<=0){showAlert('El valor debe ser mayor a 0');return;}
+  const fecha=document.getElementById('am-f').value||new Date().toISOString().slice(0,10);
+  t.movimientos.push({
+    id:uid(),
+    descripcion:'Abono a '+compra.descripcion,
+    tipo:'Abono',
+    valor:-Math.abs(val),
+    fecha:fecha,
+    saldo:null,
+    movimientoId:compraId
+  });
+  syncTCGrupo(m);
+  save();closeModal();render();toast('Abono registrado');
+}
+// Mismo patrón que confirmarEliminarComponenteAbono en creditos.js: quita un abono puntual (el
+// saldo pendiente de la compra vuelve a subir por ese valor) sin tocar los demás abonos ligados.
+function confirmarEliminarAbonoTC(abonoId){
+  showConfirm('¿Eliminar este abono? El movimiento volverá a quedar pendiente por ese valor.',function(){
+    const m=getM(),t=getTC(m);
+    t.movimientos=(t.movimientos||[]).filter(function(x){return x.id!==abonoId;});
+    syncTCGrupo(m);
+    save();closeModal();render();toast('Abono eliminado');
+  });
+}
+
 // ── Editar básico y bonos ─────────────────────────────────────────────────────
 function editBasico(){
   const m=getM(), n=getNom(m);
