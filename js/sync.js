@@ -178,7 +178,10 @@ async function bajarBackupNubeDesdeLock(){
     catMetodos=importedPayload.catMetodos||[];
     catTipos=importedPayload.catTipos||[];
     perfilTelefono=importedPayload.telefono||'';
-    perfilNombre=importedPayload.nombre||'';
+    // Si el respaldo en la nube no traía un nombre guardado (p.ej. viene de antes de que
+    // existiera el campo Perfil), se usa el de la cuenta de Google como respaldo — mismo
+    // criterio que syncSignInGoogle(), nunca pisa uno que el respaldo sí traiga.
+    perfilNombre=importedPayload.nombre||user.displayName||'';
     sessionDataKey=await generateDataKey();
     await wrapAndStoreDataKey(sessionDataKey, sessionPIN);
     const digitsRestored=perfilTelefono.replace(/\D/g,'');
