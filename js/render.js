@@ -875,7 +875,12 @@ function renderTC(m) {
     var color='var(--grn)';
     var totalAbonado=ligados.reduce(function(a,y){return a+Math.abs(y.valor||0);},0);
     var saldoAntes=Math.abs(compra.valor||0);
-    var saldoDespues=Math.max(0,Math.round((saldoAntes-totalAbonado)*100)/100);
+    // Sin Math.max(0,...): si los abonos superan el valor de la compra, el saldo después queda
+    // negativo a propósito (un crédito a favor sobre ese movimiento puntual) en vez de quedar
+    // oculto en $0 — el excedente de todas formas ya cuenta en el saldo total de la tarjeta.
+    var saldoDespues=Math.round((saldoAntes-totalAbonado)*100)/100;
+    var saldoDespuesColor=saldoDespues<0?'var(--red)':'var(--txt)';
+    var saldoDespuesTxt=saldoDespues<0?('-'+cop(Math.abs(saldoDespues))):cop(saldoDespues);
     var compsHtml=ligados.slice().sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;}).map(function(y){
       return '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:4px;border-top:1px solid var(--brd)">'
         +'<span>'+esc(y.descripcion||'Abono')+' ('+fmtD(y.fecha)+')</span>'
@@ -890,7 +895,7 @@ function renderTC(m) {
       +'<div style="margin-top:6px;padding:8px 10px;background:var(--surf2);border-radius:var(--r2);font-size:11px;color:var(--mut)">'
       +'<div style="display:flex;justify-content:space-between"><span>Total abonado</span><span style="color:'+color+';font-weight:600">'+cop(totalAbonado)+'</span></div>'
       +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo antes</span><span>'+cop(saldoAntes)+'</span></div>'
-      +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo después</span><span style="color:var(--txt);font-weight:600">'+cop(saldoDespues)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo después</span><span style="color:'+saldoDespuesColor+';font-weight:600">'+saldoDespuesTxt+'</span></div>'
       +compsHtml
       +'</div></details>';
   }
@@ -918,25 +923,32 @@ function renderTC(m) {
     var ab=x.tipo==='Abono';
     var ligados=(!ab&&abonosPorCompra[x.id])?abonosPorCompra[x.id]:null;
     var totalAbonado=ligados?ligados.reduce(function(a,y){return a+Math.abs(y.valor||0);},0):0;
-    var pendiente=ligados?Math.max(0,Math.abs(x.valor||0)-totalAbonado):Math.abs(x.valor||0);
+    // Sin Math.max(0,...): si lo abonado supera el valor de la compra, saldoMov queda negativo
+    // a propósito (crédito a favor sobre ESA compra) en vez de esconderse en $0 — ver
+    // abonoTCDetailsHtml, mismo criterio.
+    var saldoMov=ligados?Math.round((Math.abs(x.valor||0)-totalAbonado)*100)/100:Math.abs(x.valor||0);
 
     var extraInfo='', abonarBtn='';
     if(!ab){
-      if(pendiente>0){
+      if(saldoMov>0){
         abonarBtn='<button onclick="event.stopPropagation();abrirAbonoMovimiento(\''+x.id+'\')" style="background:var(--acc-d);color:var(--acc);border:1px solid var(--acc);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap">Abonar</button>';
       }
     } else if(x.movimientoId){
       var compraOrigen=tc.find(function(y){return y.id===x.movimientoId;});
       if(compraOrigen) extraInfo='<div style="font-size:10px;color:var(--mut);margin-top:1px">→ '+esc(compraOrigen.descripcion||'')+'</div>';
     }
-    // Con abonos ligados, el valor mostrado en la fila es lo que QUEDA por pagar de esa compra
-    // (no el valor original) — el original se deja tachado, chiquito, como referencia. Ya
-    // pagada del todo, se reemplaza por un simple "Pagado" en vez de "+$0".
-    var valorMostrado=ligados?pendiente:Math.abs(x.valor||0);
+    // Con abonos ligados, el valor mostrado en la fila es el SALDO de esa compra (lo que queda
+    // por pagar, o negativo si se abonó de más), no el valor original — el original se deja
+    // tachado, chiquito, como referencia. Ya pagada exacto, se reemplaza por "Pagado".
     var valorOriginalHtml=(ligados&&totalAbonado>0)?'<div style="font-size:10px;color:var(--mut);text-decoration:line-through">'+cop(Math.abs(x.valor||0))+'</div>':'';
-    var tcValHtml=(ligados&&pendiente===0)
-      ?'<div class="tcval a">Pagado</div>'
-      :'<div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(valorMostrado)+'</div>';
+    var tcValHtml;
+    if(ligados&&saldoMov<0){
+      tcValHtml='<div class="tcval a">-'+cop(Math.abs(saldoMov))+' a favor</div>';
+    } else if(ligados&&saldoMov===0){
+      tcValHtml='<div class="tcval a">Pagado</div>';
+    } else {
+      tcValHtml='<div class="tcval '+(ab?'a':'c')+'">'+(ab?'-':'+')+cop(saldoMov)+'</div>';
+    }
     return '<div class="tc-group">'
       +'<div class="tc-group-head" onclick="editTC(\''+x.id+'\')" style="cursor:pointer">'
       +'<div class="tcic '+(ab?'a':'c')+'">'+icon(ab?'arrowDown':'arrowUp',14)+'</div>'

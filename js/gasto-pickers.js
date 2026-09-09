@@ -886,13 +886,20 @@ function marcarGastoPagado(g,m,opts){
       } else {
         const t=getTC(m,parent.tcCardId);
         const mvId=uid();
+        // Si el gasto está asociado a un movimiento puntual (g.tcMovimientoOrigenId, ver
+        // tcMovimientoField en openGasto), el abono queda enlazado a esa compra en vez de ser
+        // genérico — igual que "Abonar" en la pestaña Tarjeta. Puede ser mayor al valor de esa
+        // compra sin problema: el excedente sigue contando en el saldo total de la tarjeta
+        // (calcTCSaldo suma todos los abonos igual), solo el desglose de esa compra puntual
+        // queda en $0/"Pagado" en vez de un pendiente negativo (ver abonoTCDetailsHtml).
         t.movimientos.push({
           id:mvId,
           descripcion:g.nombre,
           tipo:'Abono',
           valor:-Math.abs(g.presupuesto||0),
           fecha:new Date().toISOString().slice(0,10),
-          saldo:null
+          saldo:null,
+          movimientoId:g.tcMovimientoOrigenId||undefined
         });
         g.tcMovimientoId=mvId;
         syncTCGrupo(m);
@@ -946,6 +953,15 @@ function desmarcarGastoPagado(g,m){
     }
   }
 }
+// Tarjeta a la que pertenece el grupo de este gasto (esGrupo+tcCardId), o null si no vive
+// dentro de un grupo así — usado para decidir si al pagar corresponde preguntar a qué
+// movimiento se asocia el abono (ver abrirPickerMovimientoTCAlPagar).
+function tcCardIdDeGasto(g,m){
+  if(!g.parentId) return null;
+  const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
+  const parent=allGastos.find(function(x){return x.id===g.parentId;});
+  return (parent&&parent.tcCardId)?parent.tcCardId:null;
+}
 function toggleP(e,id,which){
   e.stopPropagation();
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
@@ -962,9 +978,37 @@ function toggleP(e,id,which){
     openPagoModal(g,which);
   } else {
     if(bloquearPagoFueraDeOrden(g)) return;
+    // Si el gasto vive en un grupo vinculado a una tarjeta, antes de marcarlo pagado se
+    // pregunta a qué movimiento (Compra) corresponde ese pago — reemplaza el campo fijo que
+    // antes vivía en el formulario de edición: ahora la asociación se hace justo al pagar.
+    const tcCardId=tcCardIdDeGasto(g,m);
+    if(tcCardId){
+      abrirPickerMovimientoTCAlPagar(id,which,tcCardId);
+      return;
+    }
     marcarGastoPagado(g,m);
     save();render();
   }
+}
+// Picker de pantalla completa que se abre al tocar el check de un gasto dentro de un grupo de
+// tarjeta (ver toggleP) — mismo esqueleto que abrirPickerCredito/abrirPickerGrupo, pero no pasa
+// por _gastoFormPending (no hay ningún formulario abierto en este punto, solo la lista de
+// gastos): "Cancelar" simplemente cierra el modal sin marcar nada como pagado.
+function abrirPickerMovimientoTCAlPagar(id,which,tcCardId){
+  const m=getM(),t=getTC(m,tcCardId);
+  const compras=(t.movimientos||[]).filter(function(mv){return mv.tipo==='Compra';});
+  function fila(movId,label){ return pickerItemRow("confirmarPagoConMovimientoTC('"+id+"','"+which+"',"+(movId?"'"+movId+"'":"''")+")",label,false); }
+  const itemsHtml=fila('','Abono genérico (sin asociar a un movimiento)')
+    +compras.map(function(mv){return fila(mv.id,(mv.descripcion||'Sin descripción')+' · '+cop(Math.abs(mv.valor||0)));}).join('');
+  renderPickerModal('¿A qué movimiento corresponde este pago?',itemsHtml);
+}
+function confirmarPagoConMovimientoTC(id,which,movId){
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(function(x){return x.id===id;});
+  if(!g){closeModal();return;}
+  g.tcMovimientoOrigenId=movId||null;
+  marcarGastoPagado(g,m);
+  save();closeModal();render();
 }
 // Checkbox del encabezado de un grupo (ver g-group-head en render.js): antes solo mostraba en
 // vivo si ya estaban todos los subgastos pagados, sin acción propia — tocar el grupo no hacía
@@ -1044,12 +1088,26 @@ function openPagoModal(g,which){
       +'</div></div>';
   }
 
+  // Si el gasto vive en un grupo de tarjeta, un select en línea (no un picker de pantalla
+  // completa aparte, ya hay varios campos en este mismo modal) para asociar el pago a un
+  // movimiento puntual — mismo tratamiento que el check simple en toggleP/abrirPickerMovimientoTCAlPagar.
+  var tcMovField='';
+  var tcCardIdPago=tcCardIdDeGasto(g,getM());
+  if(tcCardIdPago){
+    var comprasPago=(getTC(getM(),tcCardIdPago).movimientos||[]).filter(function(mv){return mv.tipo==='Compra';});
+    var tcMovOptsPago='<option value="">Abono genérico (sin asociar)</option>'+comprasPago.map(function(mv){
+      return '<option value="'+mv.id+'"'+(g.tcMovimientoOrigenId===mv.id?' selected':'')+'>'+esc(mv.descripcion||'Sin descripción')+' · '+cop(Math.abs(mv.valor||0))+'</option>';
+    }).join('');
+    tcMovField='<div class="field"><label>Asociar a movimiento de tarjeta</label><select id="pg-tcmov">'+tcMovOptsPago+'</select></div>';
+  }
+
   openModal('<div class="mtitle">Confirmar pago</div>'
     +'<p style="font-size:13px;color:var(--mut);margin-bottom:10px">'+esc(nombreGasto(g))+' · '+cop(g.presupuesto)+'</p>'
     +cuotaInfo
     +'<div class="field"><label>Valor pagado</label>'
     +'<input id="pg-val" type="text" inputmode="numeric" value="'+moneyInputFmt(g.pagado_real||g.presupuesto)+'" placeholder="'+cop(g.presupuesto)+'" oninput="maskMoneyInput(this)"></div>'
     +mensField
+    +tcMovField
     +'<div class="field"><label>Fecha de pago</label>'
     +'<input id="pg-fecha" type="date" value="'+(g.fecha_pago||hoy)+'"></div>'
     +'<div class="field"><label>Comprobante / referencia (opcional)</label>'
@@ -1071,6 +1129,8 @@ function confirmarPago(id,which){
   const comp=document.getElementById('pg-comp').value.trim()||null;
   const mensEl=document.getElementById('pg-mens');
   const mens=mensEl?mensEl.value||null:null;
+  const tcMovEl=document.getElementById('pg-tcmov');
+  if(tcMovEl) g.tcMovimientoOrigenId=tcMovEl.value||null;
   setGastoEstado(g,'pagado');
   g.pagado_real=val;
   g.fecha_pago=fecha;
@@ -1111,13 +1171,16 @@ function confirmarPago(id,which){
     if(parent&&parent.tcCardId){
       const t=getTC(m,parent.tcCardId);
       const mvId=uid();
+      // Igual que en marcarGastoPagado: si el gasto está asociado a un movimiento puntual, el
+      // abono queda enlazado a esa compra (puede superar su valor sin problema, ver comentario allá).
       t.movimientos.push({
         id:mvId,
         descripcion:g.nombre+(comp?' ('+comp+')':''),
         tipo:'Abono',
         valor:-montoAbono,
         fecha:fecha||new Date().toISOString().slice(0,10),
-        saldo:null
+        saldo:null,
+        movimientoId:g.tcMovimientoOrigenId||undefined
       });
       g.tcMovimientoId=mvId;
       syncTCGrupo(m);
