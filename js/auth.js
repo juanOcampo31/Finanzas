@@ -288,6 +288,7 @@ function lockImportBackup(input){
       catMetodos=importedPayload.catMetodos||[];
       catTipos=importedPayload.catTipos||[];
       perfilTelefono=importedPayload.telefono||'';
+      perfilNombre=importedPayload.nombre||'';
       // Esta ruta genera una data key COMPLETAMENTE NUEVA (la anterior se da por perdida), así
       // que cualquier número de recuperación configurado con la data key vieja ya no sirve.
       // Si el backup traía un teléfono, se reconstruye el envelope de recuperación bajo la
@@ -359,16 +360,27 @@ function initApp(){
 }
 
 // ── Menú de seguridad (cambiar PIN / número de recuperación / bloquear ahora) ──
+// "Perfil": nombre (informativo) + accesos a lo que antes vivía en "Seguridad" — cambiar la
+// contraseña (PIN) y el número de recuperación quedan asociados acá porque son, en la práctica,
+// las credenciales del mismo perfil. Se mantiene el nombre de función por compatibilidad con
+// quien ya la llamaba (renderHeaderUserMenu, ver js/render.js), solo cambió el título/contenido del modal.
 function openSecurityMenu(){
   const hasRecoveryPhone = !!localStorage.getItem('fin26_recovery');
-  openModal('<div class="mtitle">Seguridad</div>'
-    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Tu PIN protege el acceso a la app y cifra tus copias de seguridad exportadas.</p>'
+  openModal('<div class="mtitle">Perfil</div>'
+    +'<div class="field"><label>Nombre</label><input id="perfil-nombre" value="'+esc(perfilNombre||'')+'" placeholder="Tu nombre"></div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin:14px 0">Tu PIN protege el acceso a la app y cifra tus copias de seguridad exportadas.</p>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
-    +'<button class="bcnl" onclick="closeModal();startChangePIN()">'+btnIcon('key')+'Cambiar PIN</button>'
+    +'<button class="bcnl" onclick="closeModal();startChangePIN()">'+btnIcon('key')+'Cambiar contraseña (PIN)</button>'
     +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">'+btnIcon('phone')+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
     +'<button class="bcnl" style="color:var(--red)" onclick="lockNow()">'+btnIcon('lock')+'Bloquear ahora</button>'
     +'</div>'
-    +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
+    +(typeof backupNubeSectionHtml==='function'?backupNubeSectionHtml():'')
+    +'<div class="macts" style="margin-top:14px"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="guardarPerfilNombre()">Guardar</button></div>');
+}
+function guardarPerfilNombre(){
+  perfilNombre=(document.getElementById('perfil-nombre').value||'').trim();
+  save();closeModal();render();toast('Perfil actualizado ✓');
 }
 function startChangePIN(){
   openModal('<div class="mtitle">Cambiar PIN</div>'
@@ -570,6 +582,7 @@ let creditos={}; // {id: {nombre, valorPrestamo, pctAval, cuotas, tasa, fechaIni
 let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
 let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
 let perfilTelefono=''; // número de celular para recuperación (ver Seguridad); viaja cifrado junto al resto de los datos
+let perfilNombre='';   // nombre del perfil (solo informativo); viaja cifrado junto al resto de los datos, igual que perfilTelefono
 let db=null; // se puebla en loadAppData(), después de desbloquear con el PIN — nunca antes
 let sessionDataKey=null; // CryptoKey AES-256 en memoria; nunca se persiste. Cifra/descifra fin26_enc.
 let saveChain=Promise.resolve(); // serializa los guardados para no pisar escrituras si save() se llama varias veces seguidas
@@ -679,7 +692,7 @@ async function loadAppData(){
   const encRaw = localStorage.getItem('fin26_enc');
   if(encRaw){
     const payload = await decryptPayload(JSON.parse(encRaw)); // lanza si la clave no coincide
-    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||'';
+    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||'';
   } else {
     loadLegacyPlaintext();
   }
@@ -703,6 +716,8 @@ let curM   = parseInt(localStorage.getItem('fin26m') || '0');
 let gFiltro = {'q1':'todos','q2':'todos'}; // filtro por método en Q1/Q2
 let gSort      = {'q1':'orden','q2':'orden'};  // orden activo en Q1/Q2
 let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
+let headerUserMenuOpen=false;   // panel del menú de usuario (bloque de identidad), en el header
+let headerMonthPanelOpen=false; // panel del selector de mes (pastilla derecha), en el header
 let gGroupOpen  = {};  // group open state: {groupId: bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
@@ -723,7 +738,7 @@ let tcTipo = 'Compra';
 function save(){
   saveChain = saveChain.then(async function(){
     if(!sessionDataKey) return; // no debería pasar: save() solo se usa después de desbloquear
-    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono});
+    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre});
     localStorage.setItem('fin26_enc', JSON.stringify(envelope));
     // Sincronización automática (ver js/sync.js) — no hace nada si no hay sesión de Google
     // iniciada; función definida en un archivo que carga después de este, de ahí el guard.

@@ -1,9 +1,9 @@
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
-// Sección "Sincronizar con la nube" (ver js/sync.js): sube sola con cada cambio y revisa sola
-// al desbloquear si hay algo más nuevo — los botones de acá son solo para forzarlo al toque,
-// no hace falta abrir este menú para que sincronice. Se reconstruye cada vez que se abre,
-// leyendo el usuario de Google actual, para reflejar sin retraso si se acaba de iniciar/cerrar
-// sesión.
+// Sección "Sincronizar con la nube" (ver js/sync.js), usada dentro de "Perfil" (openSecurityMenu
+// en auth.js) — sube sola con cada cambio y revisa sola al desbloquear si hay algo más nuevo;
+// los botones de acá son solo para forzarlo al toque, no hace falta abrir este menú para que
+// sincronice. Se reconstruye cada vez que se abre, leyendo el usuario de Google actual, para
+// reflejar sin retraso si se acaba de iniciar/cerrar sesión.
 function backupNubeSectionHtml(){
   const user=(typeof syncUsuarioActual==='function')?syncUsuarioActual():null;
   if(user){
@@ -34,13 +34,12 @@ function openBackupMenu(){
     +icon('upload',16)+' Exportar / compartir backup</button>'
     +'<button class="bcnl" onclick="document.getElementById(\'imp-file\').click();closeModal()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
     +icon('download',16)+' Importar backup JSON</button>'
-    +'</div>'
-    +backupNubeSectionHtml());
+    +'</div>');
 }
 
 async function exportJSON(){
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre});
   let pin=sessionPIN;
   if(!pin){
     pin=await promptPINModal('Confirma tu PIN para cifrar el backup');
@@ -127,7 +126,8 @@ async function procesarBackupParseado(parsed, origenLabel){
       creditos: importedPayload.creditos||null,
       catMetodos: importedPayload.catMetodos||null,
       catTipos: importedPayload.catTipos||null,
-      telefono: importedPayload.telefono||null
+      telefono: importedPayload.telefono||null,
+      nombre: importedPayload.nombre||null
     };
     openModal('<div class="mtitle">Importar backup</div>'
       +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
@@ -172,6 +172,7 @@ function confirmImport(){
     if(window._importedExtra.catMetodos) catMetodos=window._importedExtra.catMetodos;
     if(window._importedExtra.catTipos) catTipos=window._importedExtra.catTipos;
     if(window._importedExtra.telefono) perfilTelefono=window._importedExtra.telefono;
+    if(window._importedExtra.nombre) perfilNombre=window._importedExtra.nombre;
   }
   // Reset navigation
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});

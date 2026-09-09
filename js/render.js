@@ -61,54 +61,155 @@ function homeQParaMes(mes){
   }
   return 'q1';
 }
-function renderMonthTabs(){
+// ── Header: identidad del perfil + selector de mes ──────────────────────────────
+// Reemplaza las antiguas pestañas de mes (ventana de 3) y el botón "⋮": una sola fila con
+// el bloque de identidad (avatar/nombre/quincena seleccionada, pulsable → menú de usuario) a
+// la izquierda y una pastilla de mes (pulsable → lista completa de meses) a la derecha. Los
+// paneles que abren no son overlays: viven en el flujo normal del documento (#userMenuPanel/
+// #monthPanel en index.html, justo debajo de #headerRow) y empujan el contenido hacia abajo.
+function mesTienePendientes(k){
+  const r=calcPctPagadoMes(db[k]);
+  return r.total>0 && r.pagado<r.total;
+}
+// Iniciales para el avatar: primera letra del nombre + primera del apellido; un solo nombre
+// (sin espacios) da una sola letra. Nunca se inventa un "?" — sin nombre, el avatar queda vacío.
+function inicialesPerfil(nombre){
+  const partes=(nombre||'').trim().split(/\s+/).filter(Boolean);
+  if(!partes.length) return '';
+  if(partes.length===1) return partes[0][0].toUpperCase();
+  return (partes[0][0]+partes[partes.length-1][0]).toUpperCase();
+}
+// "María Fernanda Rodríguez" -> "María Fernanda R.": todas las palabras completas salvo la
+// última, reducida a su inicial — evita nombres largos empujando la pastilla de mes sin tener
+// que reducir el tamaño de letra. La elipsis del CSS (ver renderHeaderTop) cubre el resto.
+function nombreCortoPerfil(nombre){
+  const limpio=(nombre||'').trim();
+  const partes=limpio.split(/\s+/).filter(Boolean);
+  if(partes.length<=2) return limpio;
+  return partes.slice(0,-1).join(' ')+' '+partes[partes.length-1][0].toUpperCase()+'.';
+}
+// Texto del subtítulo — se recalcula con la quincena seleccionada (homeQ, misma fuente de
+// verdad que ya resaltan las tarjetas Q1/Q2) y su fecha de pago real del mes activo.
+// diasHasta() ya calcula a medianoche local (ver format-utils.js), no por diferencia de ms.
+function textoDiasAlPago(qLabel,fechaPagoDt){
+  const d=diasHasta(fechaPagoDt);
+  if(d>1) return qLabel+' · '+d+' días al pago';
+  if(d===1) return qLabel+' · mañana es el pago';
+  if(d===0) return qLabel+' · hoy es el pago';
+  const f=fechaPagoDt.toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+  return qLabel+' · pago del '+f;
+}
+function toggleHeaderUserMenu(){
+  headerUserMenuOpen=!headerUserMenuOpen;
+  if(headerUserMenuOpen) headerMonthPanelOpen=false;
+  render();
+}
+function toggleHeaderMonthPanel(){
+  headerMonthPanelOpen=!headerMonthPanelOpen;
+  if(headerMonthPanelOpen) headerUserMenuOpen=false;
+  render();
+}
+// "Tocar fuera para cerrar": el <div class="scroll"> (todo el contenido debajo del header)
+// llama a esto en su onclick — ver index.html. No interfiere con los demás onclick de adentro
+// (siguen disparando normalmente por burbujeo); si ningún panel está abierto, no hace nada.
+function closeHeaderPanels(){
+  if(headerUserMenuOpen||headerMonthPanelOpen){
+    headerUserMenuOpen=false; headerMonthPanelOpen=false;
+    render();
+  }
+}
+function renderHeaderTop(m){
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
-  const idx=keys.indexOf(curM);
-  const lastKey=keys[keys.length-1];
-  const isLast=curM===lastKey;
-  const prevKey=idx>0?keys[idx-1]:null;
-  const nextKey=isLast?null:keys[idx+1];
 
-  function dotColorFor(k){
-    const r=calcPctPagadoMes(db[k]);
-    return r.total===0?'var(--brd2)':r.pct>=75?'var(--grn)':r.pct>=25?'var(--amb)':'var(--red)';
+  const nombre=(perfilNombre||'').trim();
+  const iniciales=inicialesPerfil(nombre);
+  const nombreMostrado=nombre?nombreCortoPerfil(nombre):'Configura tu nombre';
+  const avatarHtml=iniciales
+    ?'<div style="width:40px;height:40px;border-radius:20px;background:var(--acc-d);border:1.5px solid var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:var(--acc);font-size:14px;font-weight:800">'+esc(iniciales)+'</span></div>'
+    :'<div style="width:40px;height:40px;border-radius:20px;background:transparent;border:1.5px solid var(--brd2);flex-shrink:0"></div>';
+
+  const qSel=homeQ==='q2'?'q2':'q1';
+  const mi=MESES.indexOf(m.nombre);
+  const {q1,q2}=getPago(m.año, mi>=0?mi:0);
+  const subtitulo=textoDiasAlPago(qSel==='q1'?'Q1':'Q2', qSel==='q1'?q1:q2);
+
+  // Mismo criterio que chevronMesHtml: caja fija, centrada, que solo rota — nunca cambia de
+  // ancho ni de posición al abrir/cerrar (antes intercambiaba los caracteres ⌄/⌃, que "saltaban").
+  const chevronUserHtml='<span style="display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;color:var(--mut);transform:rotate('+(headerUserMenuOpen?'180deg':'0deg')+');transition:transform .15s ease">'+icon('chevronDown',13)+'</span>';
+
+  const identidadHtml='<div onclick="toggleHeaderUserMenu()" style="display:flex;align-items:center;gap:11px;min-width:0;flex:1;cursor:pointer;padding:3px 8px 3px 3px;margin-left:-3px;border-radius:24px;background:var(--bg-2)">'
+    +avatarHtml
+    +'<div style="min-width:0;flex:1">'
+    +'<div style="display:flex;align-items:center;gap:6px;min-width:0">'
+    +'<span style="font-size:16px;font-weight:800;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+esc(nombreMostrado)+'</span>'
+    +chevronUserHtml
+    +'</div>'
+    +'<div style="font-size:11.5px;font-weight:600;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(subtitulo)+'</div>'
+    +'</div>'
+    +'</div>';
+
+  const otroMesConPendientes=keys.some(function(k){return k!==curM && mesTienePendientes(k);});
+  const dotPastilla=otroMesConPendientes?'<span style="width:6px;height:6px;border-radius:50%;background:var(--amb);flex-shrink:0"></span>':'';
+  // Ícono en vez de intercambiar caracteres ⌄/⌃: con las flechas de texto, el glifo cambiaba de
+  // ancho/posición al abrir y cerrar (se veía "saltar"). Acá el contenedor queda fijo (mismo
+  // tamaño siempre, centrado) y solo se rota con CSS — la flecha queda estática, solo gira.
+  const chevronMesHtml='<span style="display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;color:var(--mut);transform:rotate('+(headerMonthPanelOpen?'180deg':'0deg')+');transition:transform .15s ease">'+icon('chevronDown',13)+'</span>';
+  const pastillaHtml='<div onclick="toggleHeaderMonthPanel()" style="display:flex;align-items:center;gap:6px;padding:8px 11px;background:var(--surf2);border:1px solid var(--brd2);border-radius:12px;cursor:pointer;flex-shrink:0">'
+    +'<span style="font-size:13.5px;font-weight:800;color:var(--txt);white-space:nowrap">'+esc(m.nombre.slice(0,3))+'</span>'
+    +chevronMesHtml
+    +dotPastilla
+    +'</div>';
+
+  return identidadHtml+pastillaHtml;
+}
+// Menú de usuario: mismas opciones que antes vivían en el botón "⋮" (openOverflowMenu), menos
+// "Eliminar mes" (ahora es una papelera por fila dentro del selector de mes, ver
+// renderHeaderMonthPanel) y "Cerrar sesión" (no hay un login tradicional en esta app — la
+// sesión de Google, si hay una, se cierra desde Perfil, ver backupNubeSectionHtml).
+function renderHeaderUserMenu(){
+  if(!headerUserMenuOpen) return '';
+  const user=(typeof syncUsuarioActual==='function')?syncUsuarioActual():null;
+  const sesionHtml=user
+    ?('<div style="padding:13px 16px;border-bottom:1px solid var(--brd)">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--mut);letter-spacing:.08em">SESIÓN ACTIVA</div>'
+      +'<div style="font-size:13px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">'+esc(user.email||user.displayName||'')+'</div>'
+      +'</div>')
+    :'';
+  function fila(label,accion,color){
+    return '<div onclick="headerUserMenuOpen=false;'+accion+'" style="padding:13px 16px;font-size:14px;font-weight:600;color:'+(color||'var(--txt)')+';border-top:1px solid var(--brd);cursor:pointer">'+esc(label)+'</div>';
   }
-
-  function monthBtn(k){
+  const filas=fila('Mi perfil','openSecurityMenu()')
+    +fila('Catálogos','openCatalogosMenu()')
+    +fila('Histórico de meses','openMonthPicker()')
+    +fila('Información general','openInfoGeneral()')
+    +fila('Respaldar información','openBackupMenu()');
+  return '<div style="margin:0 16px 14px;background:var(--surf2);border:1px solid var(--brd2);border-radius:16px;overflow:hidden">'+sesionHtml+filas+'</div>';
+}
+// Selector de mes: la lista reemplaza a las antiguas pestañas — mismo punto ámbar de "tiene
+// pendientes" que antes vivía en cada pestaña (ver mesTienePendientes), "+ Nuevo mes" al final
+// en vez del botón "+" que vivía al final de las pestañas, y una papelera por fila (en vez de
+// la antigua entrada "Eliminar mes" del menú de usuario, ver confirmDeleteMonth en
+// catalogos.js) para borrar ese mes puntual — oculta si solo queda uno, porque siempre debe
+// quedar al menos un mes en la app.
+function renderHeaderMonthPanel(){
+  if(!headerMonthPanelOpen) return '';
+  const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
+  const puedeBorrar=keys.length>1;
+  const filas=keys.map(function(k){
     const mes=db[k];
-    const active=k===curM;
-    return '<button onclick="goToMonth('+k+')" data-mk="'+k+'" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;cursor:pointer;padding:4px 8px 6px;border-bottom:2px solid '+(active?'var(--acc)':'transparent')+'">'
-      +'<span style="font-size:11px;font-weight:'+(active?'800':'600')+';color:'+(active?'var(--txt)':'var(--mut)')+';white-space:nowrap">'+mes.nombre.slice(0,3)+'</span>'
-      +'<span style="width:8px;height:8px;border-radius:50%;background:'+dotColorFor(k)+';flex-shrink:0"></span>'
-      +'</button>';
-  }
-
-  function arrowBtn(dir,targetKey){
-    const disabled=targetKey===null;
-    const path=dir==='left'?'<polyline points="15 18 9 12 15 6"/>':'<polyline points="9 18 15 12 9 6"/>';
-    return '<button'+(disabled?' disabled':' onclick="goToMonth('+targetKey+')"')+' aria-label="'+(dir==='left'?'Mes anterior':'Mes siguiente')+'" style="flex-shrink:0;background:none;border:none;cursor:'+(disabled?'default':'pointer')+';color:'+(disabled?'var(--brd2)':'var(--mut)')+';padding:4px 2px;display:flex;align-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></button>';
-  }
-
-  const addBtn='<button onclick="openNewMonth()" data-mk="add" title="Nuevo mes" aria-label="Crear nuevo mes" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:none;border:none;cursor:pointer;padding:4px 8px 6px;border-bottom:2px solid transparent">'
-    +'<span style="width:24px;height:24px;border-radius:50%;border:1.5px dashed var(--mut);display:flex;align-items:center;justify-content:center;color:var(--mut);flex-shrink:0">'
-    +'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
-    +'</span>'
-    +'</button>';
-
-  let html='';
-  html+=arrowBtn('left',prevKey);
-  if(prevKey!==null) html+=monthBtn(prevKey);
-  html+=monthBtn(curM);
-  if(isLast){
-    html+=addBtn;
-  } else {
-    html+=monthBtn(nextKey);
-    // Sin mes anterior que mostrar (estamos en el primero): se agrega un mes más
-    // a la derecha para que siempre se vean 3 meses en la ventana, no solo 2.
-    if(prevKey===null && idx+2<=keys.length-1) html+=monthBtn(keys[idx+2]);
-    html+=arrowBtn('right',nextKey);
-  }
-  return html;
+    const activo=k===curM;
+    const pend=mesTienePendientes(k);
+    const trashBtn=puedeBorrar
+      ?'<button onclick="event.stopPropagation();headerMonthPanelOpen=false;confirmDeleteMonth('+k+')" style="background:none;border:none;color:var(--red);padding:4px;cursor:pointer;display:flex;align-items:center;flex-shrink:0">'+icon('trash',15)+'</button>'
+      :'';
+    return '<div onclick="headerMonthPanelOpen=false;goToMonth('+k+')" style="padding:13px 16px;min-height:44px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--brd);cursor:pointer;background:'+(activo?'var(--acc-d)':'transparent')+'">'
+      +'<span style="font-size:14px;font-weight:'+(activo?'700':'600')+';color:'+(activo?'var(--txt)':'var(--mut)')+';flex:1;min-width:0">'+esc(mes.nombre)+' '+mes.año+'</span>'
+      +(pend?'<span style="width:6px;height:6px;border-radius:50%;background:var(--amb);flex-shrink:0"></span>':'')
+      +trashBtn
+      +'</div>';
+  }).join('');
+  const nuevoMesBtn='<div onclick="headerMonthPanelOpen=false;openNewMonth()" style="padding:13px 16px;border-top:1px solid var(--brd);cursor:pointer;color:var(--acc);font-size:13px;font-weight:600">+ Nuevo mes</div>';
+  return '<div style="margin:0 16px 14px;background:var(--surf2);border:1px solid var(--brd2);border-radius:16px;overflow:hidden">'+filas+nuevoMesBtn+'</div>';
 }
 
 // ── Render principal ──────────────────────────────────────────────────────────
@@ -122,7 +223,13 @@ function render() {
     homeQ=homeQParaMes(m);
   }
   const homeActive = curTab===0;
-  document.getElementById('mtabs').innerHTML = renderMonthTabs();
+  document.getElementById('headerRow').innerHTML = renderHeaderTop(m);
+  const userMenuEl=document.getElementById('userMenuPanel');
+  userMenuEl.innerHTML = renderHeaderUserMenu();
+  userMenuEl.style.display = headerUserMenuOpen?'block':'none';
+  const monthPanelEl=document.getElementById('monthPanel');
+  monthPanelEl.innerHTML = renderHeaderMonthPanel();
+  monthPanelEl.style.display = headerMonthPanelOpen?'block':'none';
   localStorage.setItem('fin26m', curM);
 
   const mi = MESES.indexOf(m.nombre);

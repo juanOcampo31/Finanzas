@@ -1,5 +1,5 @@
 // ── Navegación ────────────────────────────────────────────────────────────────
-function sw(i){curTab=i;render();}
+function sw(i){curTab=i;headerUserMenuOpen=false;headerMonthPanelOpen=false;render();}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openModal(h){document.getElementById('mc').innerHTML=h;document.getElementById('mbg').classList.add('open');}

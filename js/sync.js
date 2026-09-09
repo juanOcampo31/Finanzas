@@ -59,7 +59,7 @@ function syncSignInGoogle(){
   const provider=new firebase.auth.GoogleAuthProvider();
   firebase.auth().signInWithPopup(provider).then(function(){
     toast('Sesión iniciada ✓');
-    openBackupMenu();
+    openSecurityMenu();
   }).catch(function(e){
     if(e.code==='auth/popup-closed-by-user') return;
     console.error('Error al iniciar sesión con Google', e);
@@ -70,7 +70,7 @@ function syncSignInGoogle(){
 function syncSignOut(){
   firebase.auth().signOut().then(function(){
     toast('Sesión cerrada');
-    openBackupMenu();
+    openSecurityMenu();
   });
 }
 
@@ -82,7 +82,7 @@ async function construirYSubirBackup(pin){
   const user=syncUsuarioActual();
   if(!user) return;
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre});
   const envelope=await encryptString(payload,pin);
   const fileObj=Object.assign({encrypted:true, app:'FinanzasPersonales', version:2, fecha:hoy}, envelope);
   await firebase.firestore().collection('usuarios').doc(user.uid).set({
@@ -169,6 +169,7 @@ async function bajarBackupNubeDesdeLock(){
     catMetodos=importedPayload.catMetodos||[];
     catTipos=importedPayload.catTipos||[];
     perfilTelefono=importedPayload.telefono||'';
+    perfilNombre=importedPayload.nombre||'';
     sessionDataKey=await generateDataKey();
     await wrapAndStoreDataKey(sessionDataKey, sessionPIN);
     const digitsRestored=perfilTelefono.replace(/\D/g,'');

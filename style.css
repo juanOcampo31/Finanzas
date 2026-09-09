@@ -2,10 +2,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:15px}
 #app{height:100%;display:flex;flex-direction:column;max-width:430px;margin:0 auto}
-.topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:10px 16px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding-top:max(10px,env(safe-area-inset-top))}
-.topbar-right{display:flex;gap:6px}
-.ibtn{background:none;border:1px solid var(--brd2);border-radius:var(--r2);width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut);font-size:16px}
-.ibtn:active{background:var(--surf2)}
+.topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:8px 16px 8px;display:flex;flex-shrink:0;padding-top:max(8px,env(safe-area-inset-top))}
 .pbanner{padding:8px 16px;flex-shrink:0}
 .pcard-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px}
 .pcard-mini-double{flex-direction:row!important;align-items:stretch!important;padding:8px 8px!important}

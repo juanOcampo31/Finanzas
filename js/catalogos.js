@@ -261,31 +261,6 @@ function saveEditGastoTemplate(id){
 }
 
 
-function openOverflowMenu(){
-  const icCloud='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>';
-  const icTrash='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
-  const icList='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
-  const icLock='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
-  const icCal='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-  const icInfo='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
-  openModal('<div class="mtitle">Más opciones</div>'
-    +'<div style="display:flex;flex-direction:column">'
-    +'<div onclick="closeModal();openInfoGeneral()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
-    +icInfo+'<span style="font-size:14px;color:var(--txt)">Información general</span></div>'
-    +'<div onclick="closeModal();openMonthPicker()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
-    +icCal+'<span style="font-size:14px;color:var(--txt)">Histórico de meses</span></div>'
-    +'<div onclick="closeModal();openCatalogosMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
-    +icList+'<span style="font-size:14px;color:var(--txt)">Catálogos</span></div>'
-    +'<div onclick="closeModal();openBackupMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
-    +icCloud+'<span style="font-size:14px;color:var(--txt)">Respaldar información</span></div>'
-    +'<div onclick="closeModal();openSecurityMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--brd);cursor:pointer;color:var(--acc)">'
-    +icLock+'<span style="font-size:14px;color:var(--txt)">Seguridad</span></div>'
-    +'<div onclick="closeModal();openDeleteMonth()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;color:var(--red)">'
-    +icTrash+'<span style="font-size:14px;color:var(--red)">Eliminar mes</span></div>'
-    +'</div>'
-    +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
-}
-
 function openInfoGeneral(){
   // Recolectar el básico de cada mes del año actual (Enero a Diciembre)
   const año=getM().año;
@@ -524,42 +499,16 @@ function irAPendienteHistorico(k,gastoId,which){
   else toast('No se encontró ese gasto (¿se eliminó?)');
 }
 
-function openDeleteMonth(){
-  const keys=Object.keys(db).map(Number);
-  const m=getM();
-  // Can't delete if only one month left
-  if(keys.length<=1){
-    openModal('<div class="mtitle">No se puede eliminar</div>'
-      +'<p style="font-size:13px;color:var(--mut);margin-bottom:16px">Debe quedar al menos un mes en la app.</p>'
-      +'<div class="macts"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
-    return;
-  }
-  // Build list of all months
-  const monthList=keys.sort(function(a,b){return a-b;}).map(function(k){
-    const mes=db[k];
-    const gastos=(mes.q1_gastos||[]).length+(mes.q2_gastos||[]).length;
-    const tc=Object.values(mes.tarjetas||{}).reduce(function(a,t){return a+(t.movimientos||[]).length;},0);
-    const isCur=k===curM;
-    return '<div onclick="confirmDeleteMonth('+k+')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--brd);cursor:pointer'+(isCur?';background:var(--acc-d);margin:0 -18px;padding:10px 18px':'')+';">'
-      +'<div>'
-      +'<div style="font-size:13px;font-weight:600;color:var(--txt)">'+mes.nombre+' '+mes.año+(isCur?' <span style="font-size:10px;color:var(--acc)">actual</span>':'')+'</div>'
-      +'<div style="font-size:11px;color:var(--mut);margin-top:1px">'+gastos+' gastos · '+tc+' mov. tarjeta</div>'
-      +'</div>'
-      +'<span style="color:var(--red);padding-left:12px;display:flex;align-items:center">'+icon('trash',16)+'</span>'
-      +'</div>';
-  }).join('');
-  openModal('<div class="mtitle">Eliminar mes</div>'
-    +'<p style="font-size:12px;color:var(--mut);margin-bottom:12px">Selecciona el mes que deseas eliminar. Esta acción no se puede deshacer.</p>'
-    +monthList);
-}
-
+// Confirmación de borrado de un mes puntual — se llega acá desde la papelera de cada fila en
+// el selector de mes del header (ver renderHeaderMonthPanel en render.js), que ya oculta esa
+// papelera cuando solo queda un mes (siempre debe quedar al menos uno en la app).
 function confirmDeleteMonth(key){
   const mes=db[key];
   openModal('<div class="mtitle">¿Eliminar '+mes.nombre+'?</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
     +'Se eliminarán todos los datos de <b style="color:var(--txt)">'+mes.nombre+' '+mes.año+'</b> incluyendo gastos, tarjeta y nómina. Esta acción <b style="color:var(--red)">no se puede deshacer</b>.</p>'
     +'<div class="macts">'
-    +'<button class="bcnl" onclick="openDeleteMonth()">Cancelar</button>'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" style="background:var(--red);color:#fff" onclick="deleteMonth('+key+')">Eliminar</button>'
     +'</div>');
 }
