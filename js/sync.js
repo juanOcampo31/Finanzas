@@ -57,7 +57,14 @@ function formatoUltimaSync(ms){
 function syncSignInGoogle(){
   if(typeof firebase==='undefined'){ showAlert('No se pudo cargar el servicio de sincronización.'); return; }
   const provider=new firebase.auth.GoogleAuthProvider();
-  firebase.auth().signInWithPopup(provider).then(function(){
+  firebase.auth().signInWithPopup(provider).then(function(result){
+    // Autocompletar el nombre del perfil con el de la cuenta de Google, solo si todavía no
+    // habías puesto uno — nunca pisa un nombre que ya hayas escrito a mano en Perfil.
+    var nombreGoogle=result&&result.user?result.user.displayName:null;
+    if(nombreGoogle && !(perfilNombre||'').trim()){
+      perfilNombre=nombreGoogle;
+      save();
+    }
     toast('Sesión iniciada ✓');
     openSecurityMenu();
   }).catch(function(e){
