@@ -64,6 +64,8 @@ function syncSignInGoogle(){
     if(nombreGoogle && !(perfilNombre||'').trim()){
       perfilNombre=nombreGoogle;
       save();
+      render(); // sin esto, el header detrás del modal de Perfil quedaba con el nombre viejo
+                // hasta el próximo render() completo (p.ej. al tocar "Guardar")
     }
     toast('Sesión iniciada ✓');
     openSecurityMenu();
