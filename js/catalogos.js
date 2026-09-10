@@ -441,13 +441,12 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
     }
   }
 
-  // Fila de un mes YA CREADO: compacta (punto+nombre+delta a la izquierda, básico+prom.
-  // mensual a la derecha), tocarla abre su editor inline justo debajo (toggleIgEditor).
+  // Fila de un mes YA CREADO: compacta (punto+nombre a la izquierda, básico+bonos con su
+  // % de cambio a la derecha), tocarla abre su editor inline justo debajo (toggleIgEditor).
   // "Ver qué falta" se conserva igual que antes (mismo toggleMesDetalle/irAPendienteHistorico).
   function filaReal(i){
     var kMes=keyPorIndice[i];
     var basico=basicoConSugerido[i], bono=bonoConSugerido[i];
-    var aportePrima=(basico*30)/360;
     var basicoAnterior=null, bonoAnterior=null, hayAnterior=false;
     if(i>0){ if(!esSugerido[i-1]){ basicoAnterior=basicoConSugerido[i-1]; bonoAnterior=bonoConSugerido[i-1]; hayAnterior=true; } }
     else if(basicoDicAnterior!==null){ basicoAnterior=basicoDicAnterior; bonoAnterior=bonoDicAnterior; hayAnterior=true; }
@@ -486,10 +485,9 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
           +'<div style="display:flex;align-items:baseline;gap:6px">'
             +'<span style="font-size:14.5px;font-weight:700;color:'+IG.txt2+';font-variant-numeric:tabular-nums">'+cop(basico)+'</span>'
             +deltaBasicoHtml
-            +'<span style="font-size:12px;font-weight:600;color:'+IG.cian+';font-variant-numeric:tabular-nums;min-width:66px;text-align:right">'+cop(aportePrima)+'</span>'
           +'</div>'
           +'<div style="display:flex;align-items:baseline;gap:6px">'
-            +'<span style="font-size:11px;font-weight:600;color:'+IG.txt5+'">'+cop(bono)+' bono</span>'
+            +'<span style="font-size:12px;font-weight:600;color:'+IG.cian+';font-variant-numeric:tabular-nums">'+cop(bono)+' bono</span>'
             +deltaBonoHtml
           +'</div>'
         +'</div>'
@@ -583,7 +581,7 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
   +'</div>';
   var mesesHeadHtml='<div style="padding:8px 18px 6px;display:flex;justify-content:space-between">'
     +'<span style="font-size:10px;font-weight:700;color:'+IG.txt6+';letter-spacing:.1em;text-transform:uppercase">Mes</span>'
-    +'<span style="font-size:10px;font-weight:700;color:'+IG.txt6+';letter-spacing:.1em;text-transform:uppercase">Básico · Prom. Mensual</span>'
+    +'<span style="font-size:10px;font-weight:700;color:'+IG.txt6+';letter-spacing:.1em;text-transform:uppercase">Básico · Bonos</span>'
   +'</div>';
   function legendItem(color,texto){
     return '<span style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:'+IG.txt6+'"><span style="width:7px;height:7px;border-radius:50%;background:'+color+';display:inline-block"></span>'+texto+'</span>';
