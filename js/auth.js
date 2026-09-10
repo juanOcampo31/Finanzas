@@ -824,6 +824,7 @@ let gSort      = {'q1':'orden','q2':'orden'};  // orden activo en Q1/Q2
 let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
 let headerUserMenuOpen=false;   // panel del menú de usuario (bloque de identidad), en el header
 let headerMonthPanelOpen=false; // panel del selector de mes (pastilla derecha), en el header
+let igHelpOpen=false;           // panel de ayuda ("?") de Información general — colapsado por defecto
 let gGroupOpen  = {};  // group open state: {groupId: bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
