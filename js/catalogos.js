@@ -404,14 +404,17 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
 
   // ── Tira de resumen anual: sube al principio (es el resultado de todo lo demás) y se
   // conserva el tap-para-ver-fórmula (toggleFormula) que ya existía en las tarjetas grandes.
+  // Las 4 tarjetas SIEMPRE en una sola fila, en el mismo orden/posición — en vez de envolver
+  // (3+1) en pantallas angostas, se van achicando juntas (flex:1 1 0, min-width:0) y el valor
+  // puede partirse en dos líneas si no cabe, en vez de saltar de fila o truncarse.
   function stripCard(fxId,bg,bd,label,valorActual,valorEstimado){
-    return '<div onclick="toggleFormula(\''+fxId+'\')" style="flex:1 1 110px;min-width:110px;padding:9px 11px;border-radius:12px;display:flex;flex-direction:column;gap:2px;cursor:pointer;background:'+bg+';border:1px solid '+bd+'">'
-      +'<span style="font-size:9.5px;font-weight:700;color:'+IG.txt6+';letter-spacing:.07em">'+label+'</span>'
-      +'<span style="font-size:15.5px;font-weight:800;color:'+IG.txt1+';font-variant-numeric:tabular-nums">'+cop(valorActual)+'</span>'
-      +'<span style="font-size:10.5px;color:'+IG.txt6+'">est. '+cop(valorEstimado)+'</span>'
+    return '<div onclick="toggleFormula(\''+fxId+'\')" style="flex:1 1 0;min-width:0;padding:8px 7px;border-radius:11px;display:flex;flex-direction:column;gap:2px;cursor:pointer;background:'+bg+';border:1px solid '+bd+'">'
+      +'<span style="font-size:8.5px;font-weight:700;color:'+IG.txt6+';letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+label+'</span>'
+      +'<span style="font-size:13px;font-weight:800;color:'+IG.txt1+';font-variant-numeric:tabular-nums;line-height:1.2;word-break:break-word">'+cop(valorActual)+'</span>'
+      +'<span style="font-size:9px;color:'+IG.txt6+';line-height:1.2;word-break:break-word">est. '+cop(valorEstimado)+'</span>'
       +'</div>';
   }
-  var resumenStripHtml='<div style="padding:12px 14px 10px;display:flex;gap:8px;flex-wrap:wrap">'
+  var resumenStripHtml='<div style="padding:12px 14px 10px;display:flex;gap:6px">'
     +stripCard('fx-primaj',IG.accBg,IG.accBg3,'PRIMA JUN',primaS1Actual,primaS1)
     +stripCard('fx-primad',IG.accBg,IG.accBg3,'PRIMA DIC',primaS2Actual,primaS2)
     +stripCard('fx-cesantias',IG.bg5,IG.bd1,'CESANTÍAS',cesantiasActual,cesantias)
@@ -476,18 +479,18 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
     var nom=getNom(db[kMes]);
     var diasQ2Mes=diasQ2(año,i);
     var abierto=mesAbrirIdx===i;
-    return '<div id="ig-row-'+i+'" onclick="toggleIgEditor('+i+')" style="padding:10px 12px;border-radius:11px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;transition:background 130ms ease;min-height:44px;background:'+(abierto?IG.bg7:'transparent')+'">'
+    return '<div id="ig-row-'+i+'" onclick="toggleIgEditor('+i+')" style="padding:7px 12px;border-radius:11px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;transition:background 130ms ease;background:'+(abierto?IG.bg7:'transparent')+'">'
         +'<div style="display:flex;flex-direction:column;gap:2px;min-width:0">'
           +'<div style="display:flex;align-items:center;gap:8px">'+dotHtml+'<span id="ig-name-'+i+'" style="font-size:14.5px;font-weight:'+(abierto?'800':'600')+';color:'+(abierto?IG.txt1:IG.txt3)+'">'+MESES[i]+'</span></div>'
           +verFaltaHtml
         +'</div>'
-        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">'
-          +'<div style="display:flex;align-items:baseline;gap:6px">'
+        +'<div style="display:grid;grid-template-columns:84px 84px;gap:10px;flex-shrink:0">'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">'
             +'<span style="font-size:14.5px;font-weight:700;color:'+IG.txt2+';font-variant-numeric:tabular-nums">'+cop(basico)+'</span>'
             +deltaBasicoHtml
           +'</div>'
-          +'<div style="display:flex;align-items:baseline;gap:6px">'
-            +'<span style="font-size:12px;font-weight:600;color:'+IG.cian+';font-variant-numeric:tabular-nums">'+cop(bono)+' bono</span>'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">'
+            +'<span style="font-size:13px;font-weight:600;color:'+IG.cian+';font-variant-numeric:tabular-nums">'+cop(bono)+'</span>'
             +deltaBonoHtml
           +'</div>'
         +'</div>'
@@ -520,7 +523,7 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
   // muestra como fila normal en el valor sugerido, sin ser tocable (no existe como mes real,
   // así que no hay nada que editar todavía — para eso está "+ Nuevo mes").
   function filaVacia(i){
-    return '<div style="padding:10px 12px;border-radius:11px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px">'
+    return '<div style="padding:7px 12px;border-radius:11px;display:flex;align-items:center;justify-content:space-between;gap:12px">'
       +'<div style="display:flex;align-items:center;gap:8px">'
         +'<span style="width:8px;height:8px;border-radius:50%;background:'+IG.txt7+';display:inline-block;flex-shrink:0"></span>'
         +'<span style="font-size:14.5px;font-weight:600;color:'+IG.txt6+'">'+MESES[i]+' <span style="font-size:9px;color:'+IG.amber+'">(sug.)</span></span>'
@@ -579,9 +582,12 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
   var helpHtml='<div id="ig-help-panel" style="display:'+(igHelpOpen?'block':'none')+';padding:12px 18px;background:'+IG.accBg+';border-bottom:1px solid '+IG.bd3+';font-size:12.5px;color:#A5F3FC;line-height:1.55">'
     +'Básico mensual de cada mes del año y cálculo de prima de servicios (básico ÷ 30, sumado por semestre). Los meses sin crear toman el básico del último mes existente como sugerencia. Toca un mes ya creado (el punto de color indica qué tanto está pagado) para editar su básico y bonos.'
   +'</div>';
-  var mesesHeadHtml='<div style="padding:8px 18px 6px;display:flex;justify-content:space-between">'
+  var mesesHeadHtml='<div style="padding:8px 18px 6px;display:flex;justify-content:space-between;align-items:center">'
     +'<span style="font-size:10px;font-weight:700;color:'+IG.txt6+';letter-spacing:.1em;text-transform:uppercase">Mes</span>'
-    +'<span style="font-size:10px;font-weight:700;color:'+IG.txt6+';letter-spacing:.1em;text-transform:uppercase">Básico · Bonos</span>'
+    +'<div style="display:grid;grid-template-columns:84px 84px;gap:10px;text-align:right">'
+      +'<span style="font-size:10px;font-weight:700;color:'+IG.txt6+';letter-spacing:.1em;text-transform:uppercase">Básico</span>'
+      +'<span style="font-size:10px;font-weight:700;color:'+IG.txt6+';letter-spacing:.1em;text-transform:uppercase">Bonos</span>'
+    +'</div>'
   +'</div>';
   function legendItem(color,texto){
     return '<span style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:'+IG.txt6+'"><span style="width:7px;height:7px;border-radius:50%;background:'+color+';display:inline-block"></span>'+texto+'</span>';
@@ -601,7 +607,7 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
     +helpHtml
     +resumenStripHtml
     +mesesHeadHtml
-    +'<div style="padding:0 12px 4px;display:flex;flex-direction:column;gap:4px">'+filasHtml+'</div>'
+    +'<div style="padding:0 12px 4px;display:flex;flex-direction:column;gap:1px">'+filasHtml+'</div>'
     +footerHtml
   +'</div>');
 
