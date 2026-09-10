@@ -98,9 +98,92 @@ async function lockPinConfirm(){
     await pinSetupSave(lockInput);
     sessionPIN=lockInput; lockInput='';
     await ensureDataKey(sessionPIN);
-    await loadAppData();
-    appUnlocked=true; hideLockOverlay(); render(); toast('PIN configurado ✓');
+    // Primera vez de verdad (nada guardado ni cifrado ni en texto plano todavía) — en vez de
+    // arrancar en silencio con Enero y los valores de ejemplo (INIT, en core.js), se pregunta
+    // mes/año, quincena actual y básico real (ver abrirAsistentePrimeraConfiguracion). Para
+    // cualquier otro caso (recuperación, dato legacy existente) el flujo sigue igual que antes.
+    const esPrimeraVezDeVerdad = !localStorage.getItem('fin26_enc') && !localStorage.getItem('fin26');
+    if(esPrimeraVezDeVerdad && typeof abrirAsistentePrimeraConfiguracion==='function'){
+      // El modal se abre ENCIMA de la pantalla de bloqueo (igual que "Recuperar acceso"), sin
+      // ocultarla todavía — recién al confirmar el asistente hay un mes armado para mostrar
+      // (ver confirmarPrimeraConfiguracion), así que ese es el momento de destaparla.
+      abrirAsistentePrimeraConfiguracion();
+    } else {
+      await loadAppData();
+      appUnlocked=true; hideLockOverlay(); render(); toast('PIN configurado ✓');
+    }
   }
+}
+
+// ── Asistente de primera configuración ──────────────────────────────────────────
+// Reemplaza el arranque silencioso en Enero con valores de ejemplo (INIT, en core.js) la
+// primera vez de verdad que alguien usa la app: se pregunta el mes/año reales, en qué quincena
+// está ahora mismo (no siempre coincide con la fecha del sistema — puede estar cargando datos
+// atrasados) y su básico mensual. Las deducciones arrancan solo con Salud y Pensión (4% cada
+// una, los básicos de ley) — sin los descuentos propios de Loggro que traía INIT (AporteFE,
+// AhorroFE, F. Solidaridad), ya que no aplican a un usuario genérico; se pueden agregar después
+// desde Nómina si hacen falta.
+let fpQuincenaSel='q1';
+function abrirAsistentePrimeraConfiguracion(){
+  const hoy=new Date();
+  fpQuincenaSel=hoy.getDate()<=15?'q1':'q2';
+  const mesOpts=MESES.map(function(nm,i){return '<option value="'+i+'"'+(i===hoy.getMonth()?' selected':'')+'>'+nm+'</option>';}).join('');
+  openModal('<div class="mtitle">Configura tu primer mes</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Antes de empezar, cuéntanos desde cuándo vas a llevar tus finanzas acá.</p>'
+    +'<div class="field"><label>Mes</label><select id="fp-mes">'+mesOpts+'</select></div>'
+    +'<div class="field"><label>Año</label><input id="fp-anio" type="text" inputmode="numeric" maxlength="4" value="'+hoy.getFullYear()+'"></div>'
+    +'<div class="field"><label>¿En qué quincena estás ahora?</label>'
+    +'<div class="trow2">'
+    +'<button class="topt'+(fpQuincenaSel==='q1'?' sa':'')+'" id="fp-q1" onclick="setFPQuincena(\'q1\')">Quincena 1</button>'
+    +'<button class="topt'+(fpQuincenaSel==='q2'?' sa':'')+'" id="fp-q2" onclick="setFPQuincena(\'q2\')">Quincena 2</button>'
+    +'</div></div>'
+    +'<div class="field"><label>Básico mensual</label><input id="fp-basico" type="text" inputmode="numeric" placeholder="Ej: 2.500.000" oninput="maskMoneyInput(this)"></div>'
+    +'<p style="font-size:11px;color:var(--mut);line-height:1.5">Las deducciones de nómina arrancan con <b style="color:var(--txt)">Salud (4%)</b> y <b style="color:var(--txt)">Pensión (4%)</b> — los básicos de ley. Puedes editarlas después en Nómina.</p>'
+    +'<div class="macts"><button class="bpri" style="grid-column:1/-1" onclick="confirmarPrimeraConfiguracion()">Empezar</button></div>');
+}
+function setFPQuincena(q){
+  fpQuincenaSel=q;
+  document.getElementById('fp-q1').className='topt'+(q==='q1'?' sa':'');
+  document.getElementById('fp-q2').className='topt'+(q==='q2'?' sa':'');
+}
+async function confirmarPrimeraConfiguracion(){
+  const mesIdx=parseInt(document.getElementById('fp-mes').value)||0;
+  const anio=parseInt(document.getElementById('fp-anio').value)||0;
+  if(!anio||anio<2000||anio>2100){ showAlert('Ingresa un año válido'); return; }
+  const basico=moneyVal('fp-basico')||0;
+  if(basico<=0){ showAlert('Ingresa tu básico mensual'); return; }
+  function dedSaludPension(){
+    return [{nombre:'Salud',porcentaje:0.04,valor_fijo:null},{nombre:'Pensión',porcentaje:0.04,valor_fijo:null}];
+  }
+  const mes={
+    nombre:MESES[mesIdx], año:anio,
+    q1_gastos:[], q2_gastos:[],
+    tarjeta:[], tcInfo:{fechaCorte:null,fechaPago:null},
+    nomina:{
+      basico_total:basico, bonos_total:0,
+      basico_q1:0, basico_q2:0, bonos_q1:0, bonos_q2:0,
+      ded_q1:dedSaludPension(), ded_q2:dedSaludPension(),
+      // Si ya arranca en la quincena 2, la Q1 de este mes pasó sin quedar registrada en la app
+      // (no hay gastos ni básico reales que trackear ahí) — basicoQ1() la deja en 0 en vez de
+      // la mitad del básico, y eso a su vez afecta el "Actual" de prima/cesantías en
+      // Información general (ver openInfoGeneral en catalogos.js).
+      q1NoTrackeada: fpQuincenaSel==='q2'
+    }
+  };
+  mes.nomina.basico_q1=basicoQ1(mes);
+  mes.nomina.basico_q2=basicoQ2(mes);
+  db={0:mes};
+  creditos={};
+  catMetodos=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'].map(function(n){return {id:uid(),nombre:n};});
+  catTipos=[];
+  Object.keys(db).forEach(function(k){ db[k]=migrateMonth(db[k]); });
+  migrarEstadoGastos();
+  repararGastosHuerfanosDeGrupo();
+  curM=0; curTab=0;
+  homeQ=fpQuincenaSel; homeQAutoDone=true; // respeta la quincena elegida — sin esto, el primer render() la recalcularía sola
+  await save();
+  appUnlocked=true; hideLockOverlay(); closeModal(); render();
+  toast('¡Todo listo! ✓');
 }
 
 // Modal genérico para pedir el PIN puntualmente (ej: exportar o importar backups)
@@ -289,6 +372,7 @@ function lockImportBackup(input){
       catTipos=importedPayload.catTipos||[];
       perfilTelefono=importedPayload.telefono||'';
       perfilNombre=importedPayload.nombre||'';
+      perfilQ2DiasFijos=!!importedPayload.q2DiasFijos;
       // Esta ruta genera una data key COMPLETAMENTE NUEVA (la anterior se da por perdida), así
       // que cualquier número de recuperación configurado con la data key vieja ya no sirve.
       // Si el backup traía un teléfono, se reconstruye el envelope de recuperación bajo la
@@ -365,16 +449,10 @@ function initApp(){
 // las credenciales del mismo perfil. Se mantiene el nombre de función por compatibilidad con
 // quien ya la llamaba (renderHeaderUserMenu, ver js/render.js), solo cambió el título/contenido del modal.
 function openSecurityMenu(){
-  const hasRecoveryPhone = !!localStorage.getItem('fin26_recovery');
   openModal('<div class="mtitle">Perfil</div>'
     +'<div class="field"><label>Nombre</label><input id="perfil-nombre" value="'+esc(perfilNombre||'')+'" placeholder="Tu nombre"></div>'
-    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin:14px 0">Tu PIN protege el acceso a la app y cifra tus copias de seguridad exportadas.</p>'
-    +'<div style="display:flex;flex-direction:column;gap:10px">'
-    +'<button class="bcnl" onclick="closeModal();startChangePIN()">'+btnIcon('key')+'Cambiar contraseña (PIN)</button>'
-    +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">'+btnIcon('phone')+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
-    +'<button class="bcnl" style="color:var(--red)" onclick="lockNow()">'+btnIcon('lock')+'Bloquear ahora</button>'
-    +'</div>'
     +(typeof backupNubeSectionHtml==='function'?backupNubeSectionHtml():'')
+    +'<div style="margin-top:14px"><button class="bcnl" style="width:100%;color:var(--red)" onclick="lockNow()">'+btnIcon('lock')+'Cerrar sesión</button></div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="guardarPerfilNombre()">Guardar</button></div>');
 }
@@ -382,6 +460,29 @@ function guardarPerfilNombre(){
   perfilNombre=(document.getElementById('perfil-nombre').value||'').trim();
   save();closeModal();render();toast('Perfil actualizado ✓');
 }
+// Agrupa el PIN (cambiarlo, número de recuperación) y el respaldo manual (exportar/importar
+// JSON, antes en su propio menú "Respaldar información") — todo lo relacionado a proteger y
+// resguardar los datos, separado de "Mi perfil" (nombre, sincronización con Google y cerrar sesión).
+function openSeguridadMenu(){
+  const hasRecoveryPhone = !!localStorage.getItem('fin26_recovery');
+  openModal('<div class="mtitle">Seguridad</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Tu PIN protege el acceso a la app y cifra tus copias de seguridad.</p>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<button class="bcnl" onclick="closeModal();startChangePIN()">'+btnIcon('key')+'Cambiar contraseña (PIN)</button>'
+    +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">'+btnIcon('phone')+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
+    +'</div>'
+    +'<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--brd)">'
+    +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Exporta tus datos para guardarlos en Drive, WhatsApp o email, o importa un backup para restaurarlos.</p>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<button class="bpri" onclick="exportJSON()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('upload',16)+' Exportar / compartir backup</button>'
+    +'<button class="bcnl" onclick="document.getElementById(\'imp-file\').click();closeModal()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('download',16)+' Importar backup JSON</button>'
+    +'</div></div>'
+    +'<div class="macts" style="margin-top:14px"><button class="bcnl" onclick="closeModal()">Cerrar</button></div>');
+}
+// Se guarda de inmediato (no espera al botón "Guardar" del modal, que solo aplica al Nombre) —
+// afecta basicoQ2()/netoQ2() de TODOS los meses de una vez (ver diasQ2 en nomina-calc.js), así
+// que conviene que quede claro en el toque mismo que ya se aplicó, reabriendo el modal con el
+// toggle correcto en vez de dejarlo pendiente de "Guardar".
 function startChangePIN(){
   openModal('<div class="mtitle">Cambiar PIN</div>'
     +'<div class="field"><label>PIN actual</label><input id="cp-old" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
@@ -583,6 +684,11 @@ let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
 let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
 let perfilTelefono=''; // número de celular para recuperación (ver Seguridad); viaja cifrado junto al resto de los datos
 let perfilNombre='';   // nombre del perfil (solo informativo); viaja cifrado junto al resto de los datos, igual que perfilTelefono
+// Regla de cálculo de la quincena 2 (ver diasQ2 en nomina-calc.js): por defecto se paga según
+// los días reales del mes (13 a 16, según el mes) — pero muchas empresas siempre pagan Q2 como
+// si fueran 15 días fijos, sin importar el mes. Editable en Perfil; viaja cifrado como los demás
+// datos del perfil, así que aplica igual en todos los dispositivos sincronizados.
+let perfilQ2DiasFijos=false;
 let db=null; // se puebla en loadAppData(), después de desbloquear con el PIN — nunca antes
 let sessionDataKey=null; // CryptoKey AES-256 en memoria; nunca se persiste. Cifra/descifra fin26_enc.
 let saveChain=Promise.resolve(); // serializa los guardados para no pisar escrituras si save() se llama varias veces seguidas
@@ -692,7 +798,7 @@ async function loadAppData(){
   const encRaw = localStorage.getItem('fin26_enc');
   if(encRaw){
     const payload = await decryptPayload(JSON.parse(encRaw)); // lanza si la clave no coincide
-    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||'';
+    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||''; perfilQ2DiasFijos = !!payload.q2DiasFijos;
   } else {
     loadLegacyPlaintext();
   }
@@ -738,7 +844,7 @@ let tcTipo = 'Compra';
 function save(){
   saveChain = saveChain.then(async function(){
     if(!sessionDataKey) return; // no debería pasar: save() solo se usa después de desbloquear
-    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre});
+    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos});
     localStorage.setItem('fin26_enc', JSON.stringify(envelope));
     // Sincronización automática (ver js/sync.js) — no hace nada si no hay sesión de Google
     // iniciada; función definida en un archivo que carga después de este, de ahí el guard.

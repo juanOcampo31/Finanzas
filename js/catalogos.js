@@ -261,11 +261,20 @@ function saveEditGastoTemplate(id){
 }
 
 
-function openInfoGeneral(){
-  // Recolectar el básico de cada mes del año actual (Enero a Diciembre)
-  const año=getM().año;
+// añoSel: año a mostrar (opcional). Sin argumento, o si ya no existe entre los años con meses
+// creados, cae al año del mes activo — mismo comportamiento de siempre. Se pasa explícito al
+// reabrir este modal desde el propio selector de año o desde setQ2DiasFijos, para no perder de
+// vista el año que se estaba revisando.
+function openInfoGeneral(añoSel,mesEditIdx){
+  const añosDisponibles=Array.from(new Set(Object.keys(db).map(function(k){return db[k].año;}))).sort(function(a,b){return a-b;});
+  const año=(añoSel!=null && añosDisponibles.indexOf(añoSel)>=0)?añoSel:getM().año;
+  // Recolectar el básico de cada mes del año seleccionado (Enero a Diciembre)
   const mesesDelAño={};
   const bonosDelAño={};
+  // Antes vivía en la pantalla aparte "Histórico de meses" (openMonthPicker, ya removida): qué
+  // mes real corresponde a cada índice del año, para poder navegar (goToMonth) y calcular el
+  // estado de pago (calcPctPagadoMes) de cada fila de la tabla de abajo.
+  const keyPorIndice={};
   Object.keys(db).forEach(function(k){
     var mes=db[k];
     if(mes.año===año){
@@ -273,6 +282,7 @@ function openInfoGeneral(){
       if(idx>=0){
         mesesDelAño[idx]=mes.nomina?mes.nomina.basico_total||0:0;
         bonosDelAño[idx]=mes.nomina?mes.nomina.bonos_total||0:0;
+        keyPorIndice[idx]=Number(k);
       }
     }
   });
@@ -331,14 +341,39 @@ function openInfoGeneral(){
           +icon(subioBo?'arrowUp':'arrowDown',10)+Math.abs(pctBo).toFixed(1)+'%</span>';
       }
     }
-    return '<tr style="border-bottom:1px solid var(--brd)">'
+    // Gráfico de estado + navegación: solo tiene sentido en meses REALES (un mes "sugerido"
+    // todavía no existe, no hay a dónde navegar ni nada que calcular). Mismo criterio de color
+    // que usaba "Histórico de meses" (rojo <25%, ámbar 25-75%, verde ≥75%).
+    var estadoHtml='', verFaltaHtml='', detalleRowHtml='', trOpen;
+    if(!sugerido){
+      var kMes=keyPorIndice[i];
+      var r=calcPctPagadoMes(db[kMes]);
+      var estadoColor=r.total===0?'var(--brd2)':r.pct>=75?'var(--grn)':r.pct>=25?'var(--amb)':'var(--red)';
+      estadoHtml='<span title="'+r.pct+'% pagado" style="width:8px;height:8px;border-radius:50%;background:'+estadoColor+';display:inline-block;flex-shrink:0"></span>';
+      if(r.pendientes.length>0){
+        verFaltaHtml='<div onclick="event.stopPropagation();toggleMesDetalle('+kMes+')" style="font-size:9px;color:var(--acc);cursor:pointer;margin-top:1px">Ver qué falta ('+r.pendientes.length+')</div>';
+        detalleRowHtml='<tr id="ig-detalle-'+kMes+'" style="display:none;background:rgba(0,0,0,.12)"><td colspan="4" style="padding:2px 10px 8px 30px">'
+          +r.pendientes.map(function(p){
+            return '<div onclick="event.stopPropagation();irAPendienteHistorico('+kMes+',\''+p.id+'\',\''+p.which.toLowerCase()+'\')" style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:5px 4px;cursor:pointer;border-radius:6px">'
+              +'<span style="color:var(--acc);display:flex;align-items:center;gap:3px">'+esc(p.which)+' · '+esc(p.nombre||'(sin nombre)')+icon('chevronRight',11)+'</span><span style="color:var(--txt)">'+cop(p.presupuesto)+'</span></div>';
+          }).join('')
+          +'</td></tr>';
+      }
+      trOpen='<tr onclick="goToMonth('+kMes+')" style="border-bottom:1px solid var(--brd);cursor:pointer">';
+    } else {
+      trOpen='<tr style="border-bottom:1px solid var(--brd)">';
+    }
+    return trOpen
       +'<td style="padding:7px 10px;font-size:12px;color:var(--txt)"><span style="display:inline-flex;align-items:center;gap:7px;vertical-align:middle">'
+      +estadoHtml
       +'<span style="color:'+calIconColor+';display:inline-flex">'+icon('cal',13)+'</span>'
-      +nombre+(sugerido?'<span style="font-size:9px;color:var(--amb);margin-left:2px">(sug.)</span>':'')+'</span></td>'
+      +nombre+(sugerido?'<span style="font-size:9px;color:var(--amb);margin-left:2px">(sug.)</span>':'')+'</span>'
+      +verFaltaHtml+'</td>'
       +'<td style="padding:7px 10px;font-size:12px;text-align:right;color:'+(sugerido?'var(--mut)':'var(--txt)')+'">'+cop(basico)+cambioBasicoHtml+'</td>'
       +'<td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--acc);font-weight:600">'+cop(aportePrima)+'</td>'
       +'<td style="padding:7px 10px;font-size:12px;text-align:right;color:'+(sugerido?'var(--mut)':'var(--pur)')+'">'+cop(bono)+cambioBonoHtml+'</td>'
-      +'</tr>';
+      +'</tr>'
+      +detalleRowHtml;
   }).join('');
   var tableHtml='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="border-bottom:1px solid var(--brd2)">'
@@ -346,7 +381,12 @@ function openInfoGeneral(){
     +'<th style="padding:6px 10px;font-size:10px;color:var(--mut);text-align:right;text-transform:uppercase;letter-spacing:.04em">Básico</th>'
     +'<th style="padding:6px 10px;font-size:10px;color:var(--mut);text-align:right;text-transform:uppercase;letter-spacing:.04em">Prom. Mensual</th>'
     +'<th style="padding:6px 10px;font-size:10px;color:var(--mut);text-align:right;text-transform:uppercase;letter-spacing:.04em">Bonos</th>'
-    +'</tr></thead><tbody>'+tableRows+'</tbody></table></div>';
+    +'</tr></thead><tbody>'+tableRows+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:center;gap:12px;padding:10px 0 2px;border-top:1px solid var(--brd)">'
+    +'<span style="font-size:9px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block"></span>0-25% pagado</span>'
+    +'<span style="font-size:9px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--amb);display:inline-block"></span>25-75%</span>'
+    +'<span style="font-size:9px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--grn);display:inline-block"></span>75-100%</span>'
+    +'</div>';
 
   // Prima primer semestre: (Enero*30/360) + (Febrero*30/360) + ... + (Junio*30/360)
   var primaS1=0, s1TieneSugeridos=false;
@@ -373,34 +413,114 @@ function openInfoGeneral(){
   var interesesCesantias=Math.round(cesantias*0.12);
   var avisoAño=añoTieneSugeridos?'<div style="font-size:11px;color:var(--amb);margin-top:2px;display:flex;align-items:center;gap:5px">'+icon('alertTriangle',12)+'Incluye meses sugeridos (sin crear aún)</div>':'';
 
-  function resumenCard(fxId,iconName,iconColor,iconBg,label,valor){
+  // "Actual" vs "Estimado": lo de arriba (basicoConSugerido) es el ESTIMADO de siempre — rellena
+  // los meses que todavía no existen con el básico del último mes real, como si todo el año
+  // hubiera cotizado normal desde que se empezó a usar la app. El ACTUAL, en cambio, solo suma
+  // meses que YA existen como registro (sin rellenar huecos futuros) y usa lo REALMENTE
+  // recibido por quincena (basicoQ1+basicoQ2) en vez del básico teórico del mes completo — así
+  // el primer mes, si arrancó en la quincena 2 (q1NoTrackeada, ver confirmarPrimeraConfiguracion
+  // en auth.js), no infla la prima/cesantías con una Q1 que nunca se registró.
+  var basicoActualPorMes={};
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    if(mes.año===año){
+      var idx=MESES.indexOf(mes.nombre);
+      if(idx>=0) basicoActualPorMes[idx]=(basicoQ1(mes)||0)+(basicoQ2(mes)||0);
+    }
+  });
+  function sumaActual(inicio,fin){
+    var s=0;
+    for(var i=inicio;i<=fin;i++){ if(basicoActualPorMes[i]!==undefined) s+=(basicoActualPorMes[i]*30)/360; }
+    return Math.round(s);
+  }
+  var primaS1Actual=sumaActual(0,5);
+  var primaS2Actual=sumaActual(6,11);
+  var cesantiasActual=sumaActual(0,11);
+  var interesesCesantiasActual=Math.round(cesantiasActual*0.12);
+
+  function resumenCard(fxId,iconName,iconColor,iconBg,label,valorActual,valorEstimado){
     return '<button onclick="toggleFormula(\''+fxId+'\')" style="background:var(--surf2);border:none;border-radius:var(--r2);padding:12px;text-align:left;cursor:pointer;min-width:0">'
       +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
       +'<div style="width:24px;height:24px;border-radius:7px;background:'+iconBg+';color:'+iconColor+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon(iconName,13)+'</div>'
       +'<span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</span>'
       +'</div>'
-      +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+cop(valor)+'</div>'
+      +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+cop(valorActual)+'</div>'
+      +'<div style="font-size:10px;color:var(--mut);margin-top:2px">Estimado '+cop(valorEstimado)+'</div>'
       +'</button>';
+  }
+  // Cálculo de la quincena 2 (perfilQ2DiasFijos, ver diasQ2 en nomina-calc.js) — decide
+  // basicoQ2() de cada mes, así que vive dentro del panel "Editar salario y bonos" (más abajo),
+  // junto a lo demás que afecta el básico/bonos de un mes.
+  var q2ToggleHtml='<div style="padding:2px 16px 14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Cálculo de la quincena 2</div>'
+    +'<div class="trow2" style="margin-bottom:6px">'
+    +'<button class="topt'+(!perfilQ2DiasFijos?' sa':'')+'" onclick="setQ2DiasFijos(false,'+año+')">Automático</button>'
+    +'<button class="topt'+(perfilQ2DiasFijos?' sa':'')+'" onclick="setQ2DiasFijos(true,'+año+')">15 días fijos</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--mut);line-height:1.5">'
+    +(perfilQ2DiasFijos
+      ?'La quincena 2 siempre se calcula como 15 días, sin importar el mes.'
+      :'La quincena 2 se calcula con los días reales del mes (13 a 16, según el mes).')
+    +'</div></div>';
+  // Editar salario y bonos de cualquier mes ya creado del año, sin salir de Información general
+  // (antes solo se podía desde editBasico() en la pestaña Nómina, y solo para el mes abierto en
+  // ese momento). Reutiliza la misma fórmula de saveBasico() (tarjeta.js) para no duplicar la
+  // lógica de Q1/Q2. Solo tiene sentido si hay al menos un mes real creado en el año.
+  var mesesRealesIdx=Object.keys(keyPorIndice).map(function(x){return parseInt(x);}).sort(function(a,b){return a-b;});
+  var editarSalarioHtml='';
+  if(mesesRealesIdx.length){
+    var mActualIdx=MESES.indexOf(getM().nombre);
+    var mesEditActual=(mesEditIdx!=null && keyPorIndice[mesEditIdx]!==undefined)?mesEditIdx
+      :(getM().año===año && keyPorIndice[mActualIdx]!==undefined)?mActualIdx
+      :mesesRealesIdx[mesesRealesIdx.length-1];
+    var kEdit=keyPorIndice[mesEditActual];
+    var mEdit=db[kEdit], nEdit=getNom(mEdit);
+    var diasEdit=diasQ2(mEdit.año,mesEditActual);
+    var mesEditOpts=mesesRealesIdx.map(function(idx){return '<option value="'+idx+'"'+(idx===mesEditActual?' selected':'')+'>'+MESES[idx]+'</option>';}).join('');
+    editarSalarioHtml='<div class="card" style="margin-bottom:10px">'
+      +'<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
+      +'<div style="width:26px;height:26px;border-radius:8px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center">'+icon('edit',14)+'</div>'
+      +'<span class="ctitle">Editar salario y bonos</span></div></div>'
+      +'<div style="padding:2px 16px 14px">'
+      +'<div class="field" style="margin-bottom:10px"><label>Mes</label>'
+      +'<select id="ig-edit-mes" onchange="openInfoGeneral('+año+',parseInt(this.value))">'+mesEditOpts+'</select></div>'
+      +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Q1 = básico ÷ 2 · Q2 = básico ÷ 30 × '+diasEdit+' días ('+MESES[mesEditActual]+')</p>'
+      +'<div class="field"><label>Básico total mes</label>'
+      +'<input id="ig-edit-bt" type="text" inputmode="numeric" value="'+moneyInputFmt(nEdit.basico_total)+'" oninput="maskMoneyInput(this)"></div>'
+      +'<div class="field"><label>Bonos total mes (solo informativo)</label>'
+      +'<input id="ig-edit-bon" type="text" inputmode="numeric" value="'+moneyInputFmt(nEdit.bonos_total)+'" oninput="maskMoneyInput(this)"></div>'
+      +'<button class="bpri" style="width:100%;margin-top:4px" onclick="guardarBasicoBonoDesdeInfoGeneral('+kEdit+','+año+','+mesEditActual+')">Guardar</button>'
+      +'</div>'
+      +'<div style="border-top:1px solid var(--brd)">'+q2ToggleHtml+'</div>'
+      +'</div>';
   }
   var resumenPills='<div class="card" style="margin-bottom:10px">'
     +'<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
     +'<div style="width:26px;height:26px;border-radius:8px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center">'+icon('barChart',14)+'</div>'
     +'<span class="ctitle">Resumen anual</span></div></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 16px">'
-    +resumenCard('fx-primaj','dollar','var(--acc)','var(--acc-d)','Prima Junio',primaS1)
-    +resumenCard('fx-primad','dollar','var(--pur)','var(--pur-d)','Prima Diciembre',primaS2)
-    +resumenCard('fx-cesantias','calculator','var(--grn)','var(--grn-d)','Cesantías',cesantias)
-    +resumenCard('fx-intereses','percent','var(--amb)','var(--amb-d)','Int. cesantías',interesesCesantias)
+    +resumenCard('fx-primaj','dollar','var(--acc)','var(--acc-d)','Prima Junio',primaS1Actual,primaS1)
+    +resumenCard('fx-primad','dollar','var(--pur)','var(--pur-d)','Prima Diciembre',primaS2Actual,primaS2)
+    +resumenCard('fx-cesantias','calculator','var(--grn)','var(--grn-d)','Cesantías',cesantiasActual,cesantias)
+    +resumenCard('fx-intereses','percent','var(--amb)','var(--amb-d)','Int. cesantías',interesesCesantiasActual,interesesCesantias)
     +'</div>'
-    +'<div id="fx-primaj" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Enero a Junio: Σ (básico × 30 ÷ 360)'+(s1TieneSugeridos?' · incluye meses sugeridos':'')+'</div>'
-    +'<div id="fx-primad" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Julio a Diciembre: Σ (básico × 30 ÷ 360)'+(s2TieneSugeridos?' · incluye meses sugeridos':'')+'</div>'
-    +'<div id="fx-cesantias" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Enero a Diciembre: Σ (básico × 30 ÷ 360)'+(añoTieneSugeridos?' · incluye meses sugeridos':'')+'</div>'
-    +'<div id="fx-intereses" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Cesantías × 0.12 = '+cop(cesantias)+' × 0.12</div>'
+    +'<div id="fx-primaj" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Actual: solo meses ya creados, con lo realmente recibido por quincena.<br>Estimado: Enero a Junio, Σ (básico × 30 ÷ 360)'+(s1TieneSugeridos?', incluye meses sugeridos':'')+'.</div>'
+    +'<div id="fx-primad" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Actual: solo meses ya creados, con lo realmente recibido por quincena.<br>Estimado: Julio a Diciembre, Σ (básico × 30 ÷ 360)'+(s2TieneSugeridos?', incluye meses sugeridos':'')+'.</div>'
+    +'<div id="fx-cesantias" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Actual: solo meses ya creados, con lo realmente recibido por quincena.<br>Estimado: Enero a Diciembre, Σ (básico × 30 ÷ 360)'+(añoTieneSugeridos?', incluye meses sugeridos':'')+'.</div>'
+    +'<div id="fx-intereses" style="display:none;padding:0 16px 10px;font-size:11px;color:var(--acc)">Cesantías × 0.12 — Actual: '+cop(cesantiasActual)+' × 0.12. Estimado: '+cop(cesantias)+' × 0.12.</div>'
     +'</div>';
 
-  openModal('<div class="mtitle">Información general '+año+'</div>'
+  // Selector de año: solo tiene sentido mostrarlo si hay más de un año con meses creados —
+  // con uno solo, un <select> de una sola opción no aporta nada.
+  var añoOpts=añosDisponibles.map(function(a){return '<option value="'+a+'"'+(a===año?' selected':'')+'>'+a+'</option>';}).join('');
+  var añoSelectorHtml=añosDisponibles.length>1
+    ?'<div class="field" style="margin-bottom:14px"><label>Año</label><select id="ig-anio" onchange="openInfoGeneral(parseInt(this.value))">'+añoOpts+'</select></div>'
+    :'';
+
+  openModal('<div class="mtitle">Información general'+(añosDisponibles.length>1?'':(' '+año))+'</div>'
+    +añoSelectorHtml
     +'<p style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
-    +'Básico mensual de cada mes del año y cálculo de prima de servicios (básico ÷ 30, sumado por semestre). Los meses sin crear toman el básico del último mes existente como sugerencia.</p>'
+    +'Básico mensual de cada mes del año y cálculo de prima de servicios (básico ÷ 30, sumado por semestre). Los meses sin crear toman el básico del último mes existente como sugerencia. Toca un mes ya creado (el punto de color indica qué tanto está pagado) para ir directo a él.</p>'
     +'<div class="card" style="margin-bottom:10px">'
     +'<div class="chead"><div style="display:flex;align-items:center;gap:8px">'
     +'<div style="width:26px;height:26px;border-radius:8px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center">'+icon('cal',14)+'</div>'
@@ -408,9 +528,36 @@ function openInfoGeneral(){
     +tableHtml
     +'</div>'
     +resumenPills
+    +editarSalarioHtml
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
 }
+// Mismo cálculo que saveBasico() (tarjeta.js, editor de básico/bonos de la pestaña Nómina) pero
+// aplicado a un mes cualquiera del año que se está viendo en Información general, no solo al mes
+// abierto actualmente — así se puede corregir el histórico sin tener que navegar mes por mes.
+function guardarBasicoBonoDesdeInfoGeneral(k,año,mesIdx){
+  const m=db[k], n=getNom(m);
+  const bt=moneyVal('ig-edit-bt');
+  const bon=moneyVal('ig-edit-bon');
+  n.basico_total=bt; n.bonos_total=bon;
+  n.basico_q1=basicoQ1({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
+  n.basico_q2=basicoQ2({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
+  n.bonos_q1=Math.round(bon/2); n.bonos_q2=Math.round(bon/2);
+  save();
+  render();
+  openInfoGeneral(año,mesIdx);
+  toast('Básico y bonos actualizados ✓');
+}
 
+// Se guarda de inmediato (no hay botón "Guardar" para esto) — afecta basicoQ2()/netoQ2() de
+// TODOS los meses de una vez (ver diasQ2 en nomina-calc.js), así que conviene que el toque
+// mismo ya se sienta aplicado: reabre Información general (mismo año que se estaba viendo) con
+// el toggle y el Actual/Estimado ya recalculados, en vez de dejarlo pendiente de otra acción.
+function setQ2DiasFijos(val,año){
+  perfilQ2DiasFijos=!!val;
+  save();
+  render();
+  openInfoGeneral(año);
+}
 function toggleFormula(id){
   const el=document.getElementById(id);
   if(!el) return;
@@ -421,57 +568,13 @@ function toggleFormula(id){
   el.style.display=willOpen?'block':'none';
 }
 
-function openMonthPicker(){
-  const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
-  const monthList=keys.map(function(k){
-    const mes=db[k];
-    const isCur=k===curM;
-    const r=calcPctPagadoMes(mes);
-    const total=r.total, pagado=r.pagado, pct=r.pct;
-    const ringColor=pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)';
-    const estadoTxt=isCur?'Actual':(pct>=75?'Completado':pct>=25?'En progreso':'Pendiente');
-    const estadoColor=isCur?'var(--acc)':(pct>=75?'var(--grn)':pct>=25?'var(--amb)':'var(--red)');
-    // Detalle de qué falta: solo tiene sentido mostrarlo si el % no es 100 — evita que el
-    // usuario tenga que abrir la consola del navegador para saber qué gasto sigue arrastrando
-    // el total hacia abajo.
-    const tieneFaltantes=r.pendientes.length>0;
-    const detalleHtml=tieneFaltantes?('<div id="mp-detalle-'+k+'" style="display:none;margin:0 0 8px;padding:8px 10px;background:var(--surf2);border-radius:var(--r2)">'
-      +r.pendientes.map(function(p){
-        return '<div onclick="event.stopPropagation();irAPendienteHistorico('+k+',\''+p.id+'\',\''+p.which.toLowerCase()+'\')" style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:5px 4px;cursor:pointer;border-radius:6px">'
-          +'<span style="color:var(--acc);display:flex;align-items:center;gap:3px">'+esc(p.which)+' · '+esc(p.nombre||'(sin nombre)')+icon('chevronRight',11)+'</span><span style="color:var(--txt)">'+cop(p.presupuesto)+'</span></div>';
-      }).join('')
-      +'</div>'):'';
-    return '<div style="border-bottom:1px solid var(--brd);padding:11px 0">'
-      +'<div onclick="goToMonth('+k+')" style="display:flex;align-items:center;gap:10px;cursor:pointer">'
-      +'<div style="width:30px;height:30px;border-radius:8px;background:'+(isCur?'var(--acc-d)':'var(--surf2)')+';color:'+(isCur?'var(--acc)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon('cal',15)+'</div>'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:13px;font-weight:'+(isCur?'700':'500')+';color:'+(isCur?'var(--acc)':'var(--txt)')+'">'+mes.nombre+' '+mes.año+'</div>'
-      +(tieneFaltantes?'<div onclick="event.stopPropagation();toggleMesDetalle('+k+')" style="font-size:10px;color:var(--acc);cursor:pointer;margin-top:2px">Ver qué falta ('+r.pendientes.length+') ▾</div>':'')
-      +'</div>'
-      +'<div style="position:relative;width:40px;height:40px;flex-shrink:0">'
-      +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+ringColor+' '+(pct*3.6)+'deg,var(--brd) 0deg)"></div>'
-      +'<div style="position:absolute;inset:4px;border-radius:50%;background:var(--surf);display:flex;align-items:center;justify-content:center">'
-      +'<span style="font-size:10px;font-weight:800;color:var(--txt)">'+pct+'%</span>'
-      +'</div></div>'
-      +'<div style="text-align:right;flex-shrink:0;min-width:0">'
-      +'<div style="font-size:11px;font-weight:700;color:'+estadoColor+'">'+estadoTxt+'</div>'
-      +'<div style="font-size:10px;color:var(--mut);white-space:nowrap">'+cop(pagado)+' / '+cop(total)+'</div>'
-      +'</div>'
-      +'</div>'
-      +detalleHtml
-      +'</div>';
-  }).join('');
-  const legend='<div style="display:flex;justify-content:center;gap:14px;margin-top:14px;padding-top:10px;border-top:1px solid var(--brd)">'
-    +'<span style="font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block"></span>0 - 25%</span>'
-    +'<span style="font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--amb);display:inline-block"></span>25 - 75%</span>'
-    +'<span style="font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:var(--grn);display:inline-block"></span>75 - 100%</span>'
-    +'</div>';
-  openModal('<div class="mtitle">Seleccionar mes</div>'+monthList+legend);
-}
+// La antigua pantalla aparte "Histórico de meses" (openMonthPicker) se integró dentro de
+// Información general: la tabla "Básico por mes" de ahí ya trae el punto de estado y la
+// navegación (goToMonth) para cada mes real, y "Ver qué falta" reutiliza este mismo toggle.
 function toggleMesDetalle(k){
-  const el=document.getElementById('mp-detalle-'+k);
+  const el=document.getElementById('ig-detalle-'+k);
   if(!el) return;
-  el.style.display=el.style.display==='none'?'block':'none';
+  el.style.display=el.style.display==='none'?'table-row':'none';
 }
 
 
@@ -485,8 +588,9 @@ function goToMonth(k){
   closeModal();render();
 }
 
-// Desde "Ver qué falta" en Histórico de meses: salta directo al mes/quincena del gasto
-// pendiente y abre su editor, en vez de dejar que el usuario lo busque a mano en la lista.
+// Desde "Ver qué falta" en la tabla "Básico por mes" de Información general: salta directo al
+// mes/quincena del gasto pendiente y abre su editor, en vez de dejar que el usuario lo busque a
+// mano en la lista.
 function irAPendienteHistorico(k,gastoId,which){
   goToMonth(k);
   curTab=0; // Inicio: ahí viven las listas de gastos Q1/Q2
@@ -533,10 +637,18 @@ function deleteMonth(key){
 
 function openNewMonth(){
   const keys=Object.keys(db).map(Number),last=Math.max(...keys),lm=db[last];
-  const sig=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(last+2));
+  // Mismo caso especial que buildDraftMonth() (gasto-estado.js): Diciembre → Enero del año
+  // siguiente. Antes de este fix, esta vista previa (y el título del botón) mostraban el mismo
+  // "Mes N" del año viejo que terminó creando buildDraftMonth, por la misma causa: sin este caso
+  // especial, MESES.indexOf('Diciembre')+1 (=12) no existe en el arreglo.
+  const idxMesAnterior=MESES.indexOf(lm.nombre);
+  var sig, sigAño;
+  if(idxMesAnterior===11){ sig=MESES[0]; sigAño=(lm.año||new Date().getFullYear())+1; }
+  else if(idxMesAnterior>=0){ sig=MESES[idxMesAnterior+1]; sigAño=lm.año; }
+  else { sig='Mes '+(last+2); sigAño=lm.año; }
   openModal('<div class="mtitle">Nuevo mes</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
-    +'Se creará <b style="color:var(--txt)">'+sig+' '+lm.año+'</b> copiando la estructura de <b style="color:var(--txt)">'+lm.nombre+'</b>. Los gastos quedan pendientes y la tarjeta empieza vacía.</p>'
+    +'Se creará <b style="color:var(--txt)">'+sig+' '+sigAño+'</b> copiando la estructura de <b style="color:var(--txt)">'+lm.nombre+'</b>. Los gastos quedan pendientes y la tarjeta empieza vacía.</p>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="createMonth()">Crear '+sig+'</button></div>');
 }

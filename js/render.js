@@ -180,9 +180,8 @@ function renderHeaderUserMenu(){
   }
   const filas=fila('Mi perfil','openSecurityMenu()')
     +fila('Catálogos','openCatalogosMenu()')
-    +fila('Histórico de meses','openMonthPicker()')
     +fila('Información general','openInfoGeneral()')
-    +fila('Respaldar información','openBackupMenu()');
+    +fila('Seguridad','openSeguridadMenu()');
   return '<div style="margin:0 16px 14px;background:var(--surf2);border:1px solid var(--brd2);border-radius:16px;overflow:hidden">'+sesionHtml+filas+'</div>';
 }
 // Selector de mes: la lista reemplaza a las antiguas pestañas — mismo punto ámbar de "tiene
@@ -346,12 +345,6 @@ function render() {
   }
 
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===curTab));
-  // If month picker modal is open, refresh its content
-  const mbg=document.getElementById('mbg');
-  if(mbg&&mbg.classList.contains('open')){
-    const mtitle=document.getElementById('mc')?.querySelector('.mtitle');
-    if(mtitle&&mtitle.textContent==='Seleccionar mes') openMonthPicker();
-  }
   const el=document.getElementById('scroll');
   el.classList.toggle('scroll-home', homeActive||curTab===3||curTab===4);
   if      (curTab===0) el.innerHTML=renderInicio(m);

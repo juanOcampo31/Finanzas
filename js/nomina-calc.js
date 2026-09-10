@@ -4,6 +4,10 @@
 // Las deducciones porcentuales se aplican solo sobre el básico quincenal
 
 function diasQ2(año, mesIdx) {
+  // Editable en Información general (perfilQ2DiasFijos, ver catalogos.js): muchas empresas siempre pagan la
+  // quincena 2 como 15 días fijos, sin importar los días reales del mes — a diferencia del
+  // cálculo por defecto de acá abajo, que sí varía según el mes (13 a 16 días).
+  if(typeof perfilQ2DiasFijos!=='undefined' && perfilQ2DiasFijos) return 15;
   // Días del mes
   const diasMes = new Date(año, mesIdx + 1, 0).getDate();
   // Febrero bisiesto: diasMes=29 → diasQ2=14; normal: 28 → 13
@@ -13,6 +17,12 @@ function diasQ2(año, mesIdx) {
 
 function basicoQ1(m) {
   const n = getNom(m);
+  // q1NoTrackeada (ver confirmarPrimeraConfiguracion en auth.js): el primer mes real de la app,
+  // cuando el usuario indicó que empezaba a usarla ya en la quincena 2 — la Q1 de ese mes pasó
+  // sin quedar registrada, así que no tiene sentido mostrarla/contarla como la mitad del básico
+  // (nunca se recibió/gastó dentro de la app). Es un caso puntual del primer mes, no algo que
+  // deba heredarse a los meses siguientes (buildDraftMonth lo limpia al crear el próximo mes).
+  if(n.q1NoTrackeada) return 0;
   return Math.round((n.basico_total || 0) / 2);
 }
 

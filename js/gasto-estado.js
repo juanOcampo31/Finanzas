@@ -60,7 +60,22 @@ function buildDraftMonth(){
   const keys=Object.keys(db).map(Number),last=Math.max(...keys),lm=db[last];
   const nk=last+1;
   const nm=migrateMonth(JSON.parse(JSON.stringify(lm)));
-  nm.nombre=MESES[MESES.indexOf(lm.nombre)+1]||('Mes '+(nk+1));
+  // Diciembre → Enero del año siguiente: MESES.indexOf('Diciembre')+1 (=12) no existe en el
+  // arreglo, así que sin este caso especial caía al fallback genérico "Mes N" y nunca avanzaba
+  // el año — se quedaba en el mismo año de siempre en vez de cruzar a Enero del que sigue.
+  const idxMesAnterior=MESES.indexOf(lm.nombre);
+  if(idxMesAnterior===11){
+    nm.nombre=MESES[0];
+    nm.año=(lm.año||new Date().getFullYear())+1;
+  } else if(idxMesAnterior>=0){
+    nm.nombre=MESES[idxMesAnterior+1];
+  } else {
+    nm.nombre='Mes '+(nk+1);
+  }
+  // q1NoTrackeada (ver confirmarPrimeraConfiguracion en auth.js) es una marca puntual del
+  // primer mes real de la app (arrancó en Q2, esa Q1 nunca se registró) — sin este delete se
+  // arrastraría mes tras mes vía la copia profunda de arriba, dejando la Q1 en 0 para siempre.
+  if(nm.nomina) delete nm.nomina.q1NoTrackeada;
 
   function advanceDate(dateStr){
     if(!dateStr) return null;

@@ -1,5 +1,5 @@
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
-// Sección "Sincronizar con la nube" (ver js/sync.js), usada dentro de "Perfil" (openSecurityMenu
+// Sección "Sincronizar con la nube" (ver js/sync.js), usada dentro de "Mi perfil" (openSecurityMenu
 // en auth.js) — sube sola con cada cambio y revisa sola al desbloquear si hay algo más nuevo;
 // los botones de acá son solo para forzarlo al toque, no hace falta abrir este menú para que
 // sincronice. Se reconstruye cada vez que se abre, leyendo el usuario de Google actual, para
@@ -24,22 +24,9 @@ function backupNubeSectionHtml(){
     +'<button class="bcnl" onclick="syncSignInGoogle()" style="width:100%">Iniciar sesión con Google</button>'
     +'</div>';
 }
-function openBackupMenu(){
-  openModal('<div class="mtitle">Respaldo de datos</div>'
-    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
-    +'Exporta tus datos para guardarlos en Drive, WhatsApp o email.<br>'
-    +'Importa un backup para restaurar tus datos.</p>'
-    +'<div style="display:flex;flex-direction:column;gap:10px">'
-    +'<button class="bpri" onclick="exportJSON()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
-    +icon('upload',16)+' Exportar / compartir backup</button>'
-    +'<button class="bcnl" onclick="document.getElementById(\'imp-file\').click();closeModal()" style="display:flex;align-items:center;justify-content:center;gap:8px">'
-    +icon('download',16)+' Importar backup JSON</button>'
-    +'</div>');
-}
-
 async function exportJSON(){
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre,q2DiasFijos:perfilQ2DiasFijos});
   let pin=sessionPIN;
   if(!pin){
     pin=await promptPINModal('Confirma tu PIN para cifrar el backup');
@@ -127,7 +114,8 @@ async function procesarBackupParseado(parsed, origenLabel){
       catMetodos: importedPayload.catMetodos||null,
       catTipos: importedPayload.catTipos||null,
       telefono: importedPayload.telefono||null,
-      nombre: importedPayload.nombre||null
+      nombre: importedPayload.nombre||null,
+      q2DiasFijos: !!importedPayload.q2DiasFijos
     };
     openModal('<div class="mtitle">Importar backup</div>'
       +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
@@ -173,6 +161,10 @@ function confirmImport(){
     if(window._importedExtra.catTipos) catTipos=window._importedExtra.catTipos;
     if(window._importedExtra.telefono) perfilTelefono=window._importedExtra.telefono;
     if(window._importedExtra.nombre) perfilNombre=window._importedExtra.nombre;
+    // A diferencia de los anteriores (donde "ausente" debe dejar el valor actual intacto, por
+    // compatibilidad con backups viejos que no traían el campo), acá SIEMPRE se aplica: es un
+    // booleano con default false, no hay forma de distinguir "no venía" de "venía en false".
+    perfilQ2DiasFijos=!!window._importedExtra.q2DiasFijos;
   }
   // Reset navigation
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
