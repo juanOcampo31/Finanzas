@@ -42,10 +42,11 @@ function renderNom(m) {
   const mi=MESES.indexOf(m.nombre);
   const miSafe=mi>=0?mi:0;
   const bas1=basicoQ1(m), bas2=basicoQ2(m);
+  const aux1=auxTransporteQ1(m), aux2=auxTransporteQ2(m);
   const ing1=calcIngresosQuincena(m,'q1'), ing2=calcIngresosQuincena(m,'q2');
   const ded1=sumDeducciones(bas1,nom.ded_q1), ded2=sumDeducciones(bas2,nom.ded_q2);
   const n1=netoQ1(m), n2=netoQ2(m);
-  const dev1=bas1+ing1, dev2=bas2+ing2;
+  const dev1=bas1+aux1+ing1, dev2=bas2+aux2+ing2;
   const mesDev=dev1+dev2, mesDed=ded1+ded2;
   const mesExtras=nom.bonos_total+ing1+ing2;
   const diasQ1c=15, diasQ2c=diasQ2(m.año,miSafe);
@@ -53,7 +54,7 @@ function renderNom(m) {
 
   const which=curNomQ;
   const isQ1=which==='q1';
-  const bq=isQ1?bas1:bas2, bonq=isQ1?(nom.bonos_q1||0):(nom.bonos_q2||0);
+  const bq=isQ1?bas1:bas2, bonq=isQ1?(nom.bonos_q1||0):(nom.bonos_q2||0), auxq=isQ1?aux1:aux2;
   const ingQ=isQ1?ing1:ing2, dedQ=isQ1?ded1:ded2, devQ=isQ1?dev1:dev2, netoQ=isQ1?n1:n2;
   const diasQ=isQ1?diasQ1c:diasQ2c;
   const deds=(isQ1?nom.ded_q1:nom.ded_q2)||[];
@@ -111,6 +112,9 @@ function renderNom(m) {
     +'</div>';
 
   var devRows='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Básico quincenal</div><div class="nom-row-nota">'+diasQ+' días</div></div><div class="nom-row-val">'+cop(bq)+'</div></div>';
+  if(auxq>0){
+    devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Auxilio de transporte</div><div class="nom-row-nota">No es base de deducciones</div></div><div class="nom-row-val">'+cop(auxq)+'</div></div>';
+  }
   if(bonq>0){
     devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Bonos</div><div class="nom-row-nota">Solo informativo · no cuenta para el neto</div></div><div class="nom-row-val" style="color:var(--mut)">'+cop(bonq)+'</div></div>';
   }

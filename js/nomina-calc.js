@@ -33,6 +33,24 @@ function basicoQ2(m) {
   return Math.round((n.basico_total || 0) / 30 * dias);
 }
 
+// ── Auxilio de transporte ────────────────────────────────────────────────────
+// A diferencia de los bonos (solo informativos), el auxilio de transporte SÍ es dinero real
+// que el empleado recibe (cuenta para el neto/devengado) y SÍ afecta la base de prima y
+// cesantías (ver calcPrimaMes en creditos.js y sumaCesantias en catalogos.js) — pero, a
+// diferencia del básico, NO es base de las deducciones porcentuales de salud/pensión: por
+// eso se suma DESPUÉS de calcNeto() (que solo recibe el básico como base), nunca dentro de él.
+// Se divide 50/50 entre quincenas (mismo criterio que los bonos, no el de días reales del
+// básico) para mantener la misma convención simple ya usada en el resto de la nómina.
+function auxTransporteQ1(m) {
+  const n = getNom(m);
+  if (n.q1NoTrackeada) return 0;
+  return Math.round((n.aux_transporte_total || 0) / 2);
+}
+function auxTransporteQ2(m) {
+  const n = getNom(m);
+  return Math.round((n.aux_transporte_total || 0) / 2);
+}
+
 function calcNeto(bq, deds) {
   const base = bq || 0;
   let ajuste = 0;
@@ -44,8 +62,8 @@ function calcNeto(bq, deds) {
   }
   return base + ajuste;
 }
-function netoQ1(m) { return calcNeto(basicoQ1(m), getNom(m).ded_q1); }
-function netoQ2(m) { return calcNeto(basicoQ2(m), getNom(m).ded_q2); }
+function netoQ1(m) { return calcNeto(basicoQ1(m), getNom(m).ded_q1) + auxTransporteQ1(m); }
+function netoQ2(m) { return calcNeto(basicoQ2(m), getNom(m).ded_q2) + auxTransporteQ2(m); }
 
 // Total de gastos activos (no "sin pagar") de una quincena, consciente de grupos: si el grupo
 // tiene base propia (vinculado a tarjeta o monto manual) se usa esa; si no, se suman sus subgastos.

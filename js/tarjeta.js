@@ -292,6 +292,9 @@ function editBasico(){
     +'<input id="b-bt" type="text" inputmode="numeric" value="'+moneyInputFmt(n.basico_total)+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="field"><label>Bonos total mes (solo informativo)</label>'
     +'<input id="b-bon" type="text" inputmode="numeric" value="'+moneyInputFmt(n.bonos_total)+'" oninput="maskMoneyInput(this)"></div>'
+    +'<div class="field"><label>Auxilio de transporte</label>'
+    +'<input id="b-aux" type="text" inputmode="numeric" value="'+moneyInputFmt(n.aux_transporte_total)+'" oninput="maskMoneyInput(this)">'
+    +'<p style="font-size:11px;color:var(--mut);margin-top:5px;line-height:1.4">Cuenta para el neto y para la base de prima/cesantías, pero NO para las deducciones de salud/pensión.</p></div>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveBasico()">Guardar</button></div>');
 }
@@ -299,11 +302,13 @@ function saveBasico(){
   const m=getM(),n=m.nomina;
   const bt =moneyVal('b-bt');
   const bon=moneyVal('b-bon');
-  n.basico_total=bt; n.bonos_total=bon;
+  const aux=moneyVal('b-aux');
+  n.basico_total=bt; n.bonos_total=bon; n.aux_transporte_total=aux;
   // Q1 y Q2 se calculan automáticamente con la fórmula
   n.basico_q1=basicoQ1({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
   n.basico_q2=basicoQ2({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
   n.bonos_q1=Math.round(bon/2); n.bonos_q2=Math.round(bon/2);
+  n.aux_transporte_q1=Math.round(aux/2); n.aux_transporte_q2=Math.round(aux/2);
   save();closeModal();render();toast('Nómina actualizada');
 }
 

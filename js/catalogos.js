@@ -324,6 +324,7 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
   // Recolectar el básico de cada mes del año seleccionado (Enero a Diciembre)
   const mesesDelAño={};
   const bonosDelAño={};
+  const auxDelAño={};
   const keyPorIndice={};
   Object.keys(db).forEach(function(k){
     var mes=db[k];
@@ -332,31 +333,38 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
       if(idx>=0){
         mesesDelAño[idx]=mes.nomina?mes.nomina.basico_total||0:0;
         bonosDelAño[idx]=mes.nomina?mes.nomina.bonos_total||0:0;
+        auxDelAño[idx]=mes.nomina?mes.nomina.aux_transporte_total||0:0;
         keyPorIndice[idx]=Number(k);
       }
     }
   });
 
-  // Para meses sin crear, sugerir el básico del último mes existente anterior
+  // Para meses sin crear, sugerir el básico (y auxilio) del último mes existente anterior
   var basicoConSugerido={};
   var bonoConSugerido={};
+  var auxConSugerido={};
   var ultimoBasico=null;
   var ultimoBono=null;
+  var ultimoAux=null;
   var esSugerido={};
   for(var i=0;i<=11;i++){
     if(mesesDelAño[i]!==undefined){
       basicoConSugerido[i]=mesesDelAño[i];
       bonoConSugerido[i]=bonosDelAño[i]||0;
+      auxConSugerido[i]=auxDelAño[i]||0;
       ultimoBasico=mesesDelAño[i];
       ultimoBono=bonosDelAño[i]||0;
+      ultimoAux=auxDelAño[i]||0;
       esSugerido[i]=false;
     } else if(ultimoBasico!==null){
       basicoConSugerido[i]=ultimoBasico;
       bonoConSugerido[i]=ultimoBono;
+      auxConSugerido[i]=ultimoAux;
       esSugerido[i]=true;
     } else {
       basicoConSugerido[i]=0;
       bonoConSugerido[i]=0;
+      auxConSugerido[i]=0;
       esSugerido[i]=true;
     }
   }
@@ -371,14 +379,16 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
     }
   });
 
-  // Prima/cesantías ESTIMADO (relleno con básico sugerido en meses sin crear)
+  // Prima/cesantías ESTIMADO (relleno con básico sugerido en meses sin crear). El auxilio de
+  // transporte SÍ hace base de prima/cesantías (a diferencia de los bonos, solo informativos):
+  // ver auxTransporteQ1/Q2 en nomina-calc.js y el mismo criterio en calcPrimaMes (creditos.js).
   var primaS1=0, s1TieneSugeridos=false;
-  for(var i=0;i<=5;i++){ primaS1+=(basicoConSugerido[i]*30)/360; if(esSugerido[i]) s1TieneSugeridos=true; }
+  for(var i=0;i<=5;i++){ primaS1+=((basicoConSugerido[i]+auxConSugerido[i])*30)/360; if(esSugerido[i]) s1TieneSugeridos=true; }
   var primaS2=0, s2TieneSugeridos=false;
-  for(var i=6;i<=11;i++){ primaS2+=(basicoConSugerido[i]*30)/360; if(esSugerido[i]) s2TieneSugeridos=true; }
+  for(var i=6;i<=11;i++){ primaS2+=((basicoConSugerido[i]+auxConSugerido[i])*30)/360; if(esSugerido[i]) s2TieneSugeridos=true; }
   primaS1=Math.round(primaS1); primaS2=Math.round(primaS2);
   var sumaCesantias=0, añoTieneSugeridos=false;
-  for(var i=0;i<=11;i++){ sumaCesantias+=(basicoConSugerido[i]*30)/360; if(esSugerido[i]) añoTieneSugeridos=true; }
+  for(var i=0;i<=11;i++){ sumaCesantias+=((basicoConSugerido[i]+auxConSugerido[i])*30)/360; if(esSugerido[i]) añoTieneSugeridos=true; }
   var cesantias=Math.round(sumaCesantias);
   var interesesCesantias=Math.round(cesantias*0.12);
 
@@ -389,7 +399,7 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
     var mes=db[k];
     if(mes.año===año){
       var idx=MESES.indexOf(mes.nombre);
-      if(idx>=0) basicoActualPorMes[idx]=(basicoQ1(mes)||0)+(basicoQ2(mes)||0);
+      if(idx>=0) basicoActualPorMes[idx]=(basicoQ1(mes)||0)+(basicoQ2(mes)||0)+(auxTransporteQ1(mes)||0)+(auxTransporteQ2(mes)||0);
     }
   });
   function sumaActual(inicio,fin){
@@ -504,6 +514,9 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
             +'<div><label style="display:block;font-size:11px;font-weight:700;color:'+IG.txt6+';margin-bottom:5px">BONOS · INFORMATIVO</label>'
             +'<input id="ig-bon-'+i+'" type="text" inputmode="numeric" placeholder="0" value="'+moneyInputFmt(nom.bonos_total)+'" oninput="maskMoneyInput(this)" style="width:100%;padding:11px 12px;background:'+IG.bg4+';border:1px solid '+IG.bd1+';border-radius:11px;font-size:16px;font-weight:700;color:'+IG.txt3+';outline:none"></div>'
           +'</div>'
+          +'<div><label style="display:block;font-size:11px;font-weight:700;color:'+IG.txt6+';margin-bottom:5px">AUXILIO DE TRANSPORTE</label>'
+          +'<input id="ig-aux-'+i+'" type="text" inputmode="numeric" placeholder="0" value="'+moneyInputFmt(nom.aux_transporte_total)+'" oninput="maskMoneyInput(this)" style="width:100%;padding:11px 12px;background:'+IG.bg4+';border:1px solid '+IG.bd1+';border-radius:11px;font-size:16px;font-weight:700;color:'+IG.txt3+';outline:none">'
+          +'<p style="font-size:10.5px;color:'+IG.txt6+';margin-top:5px;line-height:1.4">Cuenta para el neto y para la base de prima/cesantías, pero NO para las deducciones de salud/pensión.</p></div>'
           +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
             +'<span style="font-size:11.5px;color:'+IG.txt6+'">Quincena 2</span>'
             +'<div style="display:flex;background:'+IG.bg4+';border-radius:10px;padding:3px;gap:2px">'
@@ -626,10 +639,12 @@ function guardarBasicoBonoDesdeInfoGeneral(k,año,mesIdx){
   const m=db[k], n=getNom(m);
   const bt=moneyVal('ig-bt-'+mesIdx);
   const bon=moneyVal('ig-bon-'+mesIdx);
-  n.basico_total=bt; n.bonos_total=bon;
+  const aux=moneyVal('ig-aux-'+mesIdx);
+  n.basico_total=bt; n.bonos_total=bon; n.aux_transporte_total=aux;
   n.basico_q1=basicoQ1({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
   n.basico_q2=basicoQ2({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
   n.bonos_q1=Math.round(bon/2); n.bonos_q2=Math.round(bon/2);
+  n.aux_transporte_q1=Math.round(aux/2); n.aux_transporte_q2=Math.round(aux/2);
   save();
   render();
   openInfoGeneral(año);

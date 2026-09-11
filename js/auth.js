@@ -623,10 +623,13 @@ function migrateMonth(m) {
   const nom = m.nomina;
   if (!nom.basico_total)  nom.basico_total  = 0;
   if (!nom.bonos_total)   nom.bonos_total   = 0;
+  if (!nom.aux_transporte_total) nom.aux_transporte_total = 0;
   if (nom.basico_q1 == null) nom.basico_q1  = Math.round(nom.basico_total/2);
   if (nom.basico_q2 == null) nom.basico_q2  = Math.round(nom.basico_total/2);
   if (nom.bonos_q1  == null) nom.bonos_q1   = Math.round(nom.bonos_total/2);
   if (nom.bonos_q2  == null) nom.bonos_q2   = Math.round(nom.bonos_total/2);
+  if (nom.aux_transporte_q1 == null) nom.aux_transporte_q1 = Math.round(nom.aux_transporte_total/2);
+  if (nom.aux_transporte_q2 == null) nom.aux_transporte_q2 = Math.round(nom.aux_transporte_total/2);
   if (!Array.isArray(nom.ded_q1)) nom.ded_q1 = [];
   if (!Array.isArray(nom.ded_q2)) nom.ded_q2 = [];
   if (!Array.isArray(m.q1_gastos)) m.q1_gastos = [];

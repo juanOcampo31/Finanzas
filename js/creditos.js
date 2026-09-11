@@ -1232,28 +1232,35 @@ function calcPrimaMes(m){
   if(mi!==5 && mi!==11) return 0; // solo Junio(5) o Diciembre(11)
   const año=m.año;
   const mesesDelAño={};
-  const bonosDelAño={};
+  const auxDelAño={};
   Object.keys(db).forEach(function(k){
     var mes=db[k];
     if(mes.año===año){
       var idx=MESES.indexOf(mes.nombre);
       if(idx>=0){
         mesesDelAño[idx]=mes.nomina?mes.nomina.basico_total||0:0;
-        bonosDelAño[idx]=mes.nomina?mes.nomina.bonos_total||0:0;
+        auxDelAño[idx]=mes.nomina?mes.nomina.aux_transporte_total||0:0;
       }
     }
   });
-  var ultimoBasico=null;
-  var basicoConSugerido={};
+  var ultimoBasico=null, ultimoAux=null;
+  var basicoConSugerido={}, auxConSugerido={};
   for(var i=0;i<=11;i++){
-    if(mesesDelAño[i]!==undefined){ basicoConSugerido[i]=mesesDelAño[i]; ultimoBasico=mesesDelAño[i]; }
-    else if(ultimoBasico!==null){ basicoConSugerido[i]=ultimoBasico; }
-    else { basicoConSugerido[i]=0; }
+    if(mesesDelAño[i]!==undefined){
+      basicoConSugerido[i]=mesesDelAño[i]; ultimoBasico=mesesDelAño[i];
+      auxConSugerido[i]=auxDelAño[i]; ultimoAux=auxDelAño[i];
+    } else if(ultimoBasico!==null){
+      basicoConSugerido[i]=ultimoBasico; auxConSugerido[i]=ultimoAux;
+    } else {
+      basicoConSugerido[i]=0; auxConSugerido[i]=0;
+    }
   }
   var inicio = mi===5 ? 0 : 6;
   var fin = mi===5 ? 5 : 11;
+  // El auxilio de transporte SÍ hace base de prima (a diferencia de los bonos, que son solo
+  // informativos y nunca entraron en este cálculo) — ver auxTransporteQ1/Q2 en nomina-calc.js.
   var prima=0;
-  for(var i=inicio;i<=fin;i++){ prima += (basicoConSugerido[i]*30)/360; }
+  for(var i=inicio;i<=fin;i++){ prima += ((basicoConSugerido[i]+auxConSugerido[i])*30)/360; }
   return Math.round(prima);
 }
 
