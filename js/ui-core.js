@@ -43,7 +43,8 @@ function onFab(){
   else if(curTab===1)openIngresoModal(null,curIngQ);
   else if(curTab===2)openTCModal(null);
   else if(curTab===3)addDed(curNomQ==='q1'?'Nómina Q1':'Nómina Q2');
-  else openNewCredito();
+  else if(curTab===4)openNewCredito();
+  else agAbrirNuevo();
 }
 
 // ── CRUD Gastos ───────────────────────────────────────────────────────────────

@@ -345,6 +345,12 @@ function render() {
   }
 
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===curTab));
+  // Punto ámbar de la pestaña Agenda (ver index.html): se actualiza acá, en cada render(), en
+  // vez de solo al entrar a esa pestaña — así avisa aunque el usuario esté en cualquier otra.
+  const agendaDotEl=document.getElementById('agendaTabDot');
+  if(agendaDotEl && typeof agEntradasProximos7==='function'){
+    agendaDotEl.style.display=agEntradasProximos7(m).length>0?'block':'none';
+  }
   const el=document.getElementById('scroll');
   // Inicio ya NO usa el modo "scroll-home" (encabezado fijo + scroll interno propio de la
   // card de gastos): ahora se comporta exactamente como Tarjeta/Ingresos — toda la pantalla
@@ -354,7 +360,8 @@ function render() {
   else if (curTab===1) el.innerHTML=renderIngresos(m);
   else if (curTab===2) el.innerHTML=renderTC(m);
   else if (curTab===3) el.innerHTML=renderNom(m);
-  else                 el.innerHTML=renderCreditos(m);
+  else if (curTab===4) el.innerHTML=renderCreditos(m);
+  else                 el.innerHTML=renderAgenda(m);
 }
 
 // ── Gastos ───────────────────────────────────────────────────────────────────

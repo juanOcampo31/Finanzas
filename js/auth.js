@@ -634,6 +634,7 @@ function migrateMonth(m) {
   if (!Array.isArray(nom.ded_q2)) nom.ded_q2 = [];
   if (!Array.isArray(m.q1_gastos)) m.q1_gastos = [];
   if (!Array.isArray(m.q2_gastos)) m.q2_gastos = [];
+  if (!Array.isArray(m.agenda)) m.agenda = []; // ver js/agenda.js — recordatorios/tareas manuales de este mes
 
   // ── Ingresos adicionales (aparte de la nómina), asociados a Q1 o Q2 ──────────
   if (!m.ingresos) m.ingresos = {q1:[], q2:[]};

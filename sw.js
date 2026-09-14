@@ -1,12 +1,12 @@
 ﻿// Sube este número cada vez que despliegues cambios en index.html/CSS/JS.
 // Si lo olvidas, los usuarios seguirán viendo la versión anterior offline
 // hasta que haya red disponible para revalidar.
-const CACHE_VERSION = '2.31';
+const CACHE_VERSION = '2.35';
 const CACHE = 'finanzas-' + CACHE_VERSION;
 const FILES = ['./', './index.html', './style.css',
   './js/core.js', './js/auth.js', './js/creditos.js', './js/format-utils.js', './js/nomina-calc.js',
   './js/render.js', './js/nomina.js', './js/ui-core.js', './js/gasto-pickers.js', './js/tarjeta.js',
-  './js/nomina-deducciones.js', './js/catalogos.js', './js/gasto-estado.js', './js/export-main.js',
+  './js/nomina-deducciones.js', './js/catalogos.js', './js/gasto-estado.js', './js/agenda.js', './js/export-main.js',
   './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 // La pantalla de login pregunta la versión por postMessage para mostrarla:

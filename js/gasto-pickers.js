@@ -620,6 +620,12 @@ function saveG(id,which,parentId){
       gasto.comprobante=document.getElementById('g-cmp')?.value.trim()||gasto.comprobante||null;
       const grupoDestinoEl=document.getElementById('g-grupo-destino');
       if(grupoDestinoEl) gasto.parentId=grupoDestinoEl.value||null;
+      // Enlace con la Agenda (ver §6 del pedido / js/agenda.js): si cambia el monto acá y el
+      // gasto sigue "sin pagar", el recordatorio se actualiza sin preguntar. Una vez pagado, el
+      // gasto manda y el recordatorio deja de tocarse desde este lado.
+      if(gasto.agendaId && gastoEstado(gasto)!=='pagado' && typeof agSincronizarMontoDesdeGasto==='function'){
+        agSincronizarMontoDesdeGasto(gasto,m);
+      }
       if(!sincronizarCreditoDesdeGasto(gasto,estadoAntes)) return;
     }
   } else {
@@ -713,8 +719,16 @@ function delGrupo(id,which){
   });
 }
 function delG(id,which){
+  const m=getM(),k=which==='q1'?'q1_gastos':'q2_gastos';
+  const g=(m[k]||[]).find(function(x){return x.id===id;});
+  // Si nació de un recordatorio de la Agenda, no se borra en silencio (§6 del pedido): se
+  // pregunta también por el recordatorio en vez de dejarlo huérfano apuntando a un gasto que
+  // ya no existe.
+  if(g&&g.agendaId&&typeof agConfirmarBorrarGasto==='function'){
+    agConfirmarBorrarGasto(g,which);
+    return;
+  }
   showConfirm('¿Eliminar este gasto?',function(){
-    const m=getM(),k=which==='q1'?'q1_gastos':'q2_gastos';
     m[k]=m[k].filter(x=>x.id!==id);
     save();closeModal();render();toast('Gasto eliminado');
   });
@@ -921,6 +935,9 @@ function marcarGastoPagado(g,m,opts){
     cr2.pagoDetalle[g.numCuota-1]={montoPagado:Math.abs(g.presupuesto||0)};
     invalidarAmortCache(g.creditoId);
   }
+  // Enlace con la Agenda (ver js/agenda.js): si este gasto nació de un recordatorio, pagarlo
+  // tilda ese recordatorio y, si era recurrente, genera de una vez el siguiente periodo.
+  if(g.agendaId && typeof agSincronizarDesdeGasto==='function') agSincronizarDesdeGasto(g,m,true);
 }
 function desmarcarGastoPagado(g,m){
   setGastoEstado(g,null);
@@ -959,6 +976,7 @@ function desmarcarGastoPagado(g,m){
       }
     }
   }
+  if(g.agendaId && typeof agSincronizarDesdeGasto==='function') agSincronizarDesdeGasto(g,m,false);
 }
 // Tarjeta a la que pertenece el grupo de este gasto (esGrupo+tcCardId), o null si no vive
 // dentro de un grupo así — usado para decidir si al pagar corresponde preguntar a qué

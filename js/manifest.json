@@ -12,6 +12,7 @@
   "js/nomina-deducciones.js",
   "js/catalogos.js",
   "js/gasto-estado.js",
+  "js/agenda.js",
   "js/export-main.js",
   "js/sync.js"
 ]

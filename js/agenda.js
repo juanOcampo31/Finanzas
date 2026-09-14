@@ -1,0 +1,658 @@
+// ── Agenda: recordatorios de pago y tareas, enlazados con los gastos ────────────
+// Vive per-mes en m.agenda (ver migrateMonth, auth.js) — solo entradas MANUALES (tareas y
+// pagos que el usuario crea a mano). Las automáticas (días de pago, fecha límite de tarjeta) y
+// derivadas (gastos "sin pagar" que vencen) se calculan al vuelo en cada render, nunca se
+// guardan, para que no puedan desincronizarse de la fuente real (nómina/tarjeta/gastos).
+//
+// Paleta propia de esta pantalla (igual criterio que IG en catalogos.js): no toca las
+// variables CSS globales, así ningún otro modal se ve afectado.
+var AG={
+  bg1:'#0B1220',bg2:'#0D1729',bg3:'#0B1526',bg4:'#101A2E',bg5:'#111C2E',bg6:'#131E33',
+  accBg:'#0E2233',accBg2:'#0E3742',accBg3:'#164E63',
+  bd1:'#22304F',bd2:'#26344F',bd3:'#1E2B45',bd4:'#16334A',
+  cian:'#22D3EE',cian2:'#67E8F9',
+  amb1:'#F59E0B',amb2:'#FBBF24',amb3:'#FCD34D',amb4:'#FEF3C7',amb5:'#78350F',amb6:'#2A1D06',
+  indigo:'#A5B4FC',rojo:'#F87171',
+  txt1:'#F8FAFC',txt2:'#F1F5F9',txt3:'#E2E8F0',txt4:'#CBD5E1',txt5:'#94A3B8'
+};
+
+// Estado de la pantalla (transitorio, no se guarda)
+let agFiltro='todo';        // 'todo' | 'dinero' | 'tareas'
+let agDiaSel=null;          // fecha 'YYYY-MM-DD' seleccionada en la tira de 10 días, o null
+let agFormTipo='tarea';     // tipo activo en el formulario de creación
+let agFormRegistrarGasto=true;
+let agFormRepetirActual='nunca';
+let agFormGastoExistenteId=null; // gasto YA CREADO al que se enlaza este pago, en vez de crear uno nuevo
+let agFormSnapshot=null;         // valores tecleados, para volver del picker de "gasto existente" sin perderlos
+
+// ── Datos ────────────────────────────────────────────────────────────────────
+function agendaArr(m){ if(!Array.isArray(m.agenda)) m.agenda=[]; return m.agenda; }
+function agQuincenaDeFecha(fecha){
+  var day=parseInt((fecha||'').split('-')[2],10)||1;
+  return day<=15?'q1':'q2';
+}
+function agBuscarGasto(m,gastoId,which){
+  var lista=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
+  return (lista||[]).find(function(x){return x.id===gastoId;});
+}
+function agBuscarMesPorFecha(fecha){
+  var partes=fecha.split('-'); var año=parseInt(partes[0],10); var mi=parseInt(partes[1],10)-1;
+  var nombre=MESES[mi];
+  var k=Object.keys(db).find(function(kk){return db[kk].año===año&&db[kk].nombre===nombre;});
+  return k!=null?db[k]:null;
+}
+
+// Automáticas: días de pago de nómina Q1/Q2 y fecha límite de cada tarjeta REAL (ver
+// tcEsPlaceholder en tarjeta.js) con saldo pendiente — se recalculan siempre desde la fuente,
+// nunca se guardan como agenda para que no puedan quedar desactualizadas.
+function agEntradasAutomaticas(m){
+  var out=[];
+  var mi=MESES.indexOf(m.nombre);
+  if(mi<0) return out;
+  var pagos=getPago(m.año,mi);
+  var fQ1=pagos.q1.toISOString().slice(0,10), fQ2=pagos.q2.toISOString().slice(0,10);
+  out.push({id:'auto-pago-q1',origen:'automatico',tipo:'pago',concepto:'Pago de nómina Q1',fecha:fQ1,monto:netoQ1(m),esIngreso:true,gastoPagado:false,which:'q1',color:AG.cian});
+  out.push({id:'auto-pago-q2',origen:'automatico',tipo:'pago',concepto:'Pago de nómina Q2',fecha:fQ2,monto:netoQ2(m),esIngreso:true,gastoPagado:false,which:'q2',color:AG.cian});
+  (typeof listTCIdsReales==='function'?listTCIdsReales(m):[]).forEach(function(tid){
+    var t=m.tarjetas[tid];
+    if(t.info&&t.info.fechaPago){
+      var saldo=calcTCSaldo(m,tid);
+      if(saldo>0){
+        out.push({id:'auto-tc-'+tid,origen:'automatico',tipo:'pago',concepto:'Pago '+(t.nombre||'tarjeta'),fecha:t.info.fechaPago,monto:saldo,esIngreso:false,gastoPagado:false,which:agQuincenaDeFecha(t.info.fechaPago),color:AG.amb1});
+      }
+    }
+  });
+  return out;
+}
+
+// Derivadas: gastos de nivel superior marcados "sin pagar" que siguen sin resolverse — vencen
+// al cierre de su propia quincena (día 15 para Q1, último día del mes para Q2).
+function agEntradasDerivadas(m){
+  var out=[];
+  var mi=MESES.indexOf(m.nombre);
+  if(mi<0) return out;
+  var finMes=new Date(m.año,mi+1,0).getDate();
+  ['q1','q2'].forEach(function(which){
+    var lista=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
+    var dia=which==='q1'?15:finMes;
+    var fecha=m.año+'-'+String(mi+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+    (lista||[]).forEach(function(g){
+      if(g.esGrupo||g.parentId) return;
+      // Un gasto "sin pagar" que YA nació de un recordatorio manual (g.agendaId) no es una
+      // entrada derivada aparte: ya está representado por su propio recordatorio en m.agenda
+      // (ver agEntradaManualEnriquecida) — contarlo también acá lo duplicaría en la agenda.
+      if(g.agendaId) return;
+      if(gastoEstado(g)==='sinpagar'){
+        out.push({id:'deriv-'+g.id,origen:'derivado',tipo:'pago',concepto:nombreGasto(g),fecha:fecha,monto:Math.abs(g.presupuesto||0),esIngreso:false,gastoPagado:false,which:which,color:AG.amb1,gastoId:g.id});
+      }
+    });
+  });
+  return out;
+}
+
+// Manuales: se enriquecen en el momento de leerlas (nunca se guarda el color/estado derivado,
+// solo los datos propios) — así un gasto pagado después de crear el recordatorio se refleja
+// solo, sin tener que sincronizar ese campo a mano en cada punto que lo cambia.
+function agEntradaManualEnriquecida(it,m){
+  var out=Object.assign({},it);
+  out.origen='manual';
+  out.esIngreso=false;
+  if(it.tipo==='tarea'){
+    out.color=it.tildado?'#475569':AG.indigo;
+  } else {
+    var gasto=it.gastoId?agBuscarGasto(m,it.gastoId,it.which):null;
+    out.gastoPagado=gasto?(gastoEstado(gasto)==='pagado'):false;
+    out.color=out.gastoPagado?'#475569':AG.amb1;
+  }
+  return out;
+}
+
+function agEntradasDelMes(m){
+  var auto=agEntradasAutomaticas(m);
+  var deriv=agEntradasDerivadas(m);
+  var man=agendaArr(m).map(function(it){return agEntradaManualEnriquecida(it,m);});
+  return auto.concat(deriv,man).sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
+}
+
+// Entradas pendientes en los próximos 7 días (incluye hoy) — usado por el punto ámbar de la
+// pestaña Agenda (ver render() en render.js).
+function agEntradasProximos7(m){
+  return agEntradasDelMes(m).filter(function(e){
+    if(e.tipo==='tarea'&&e.tildado) return false;
+    if(e.tipo==='pago'&&e.gastoPagado) return false;
+    var d=diasHasta(e.fecha+'T12:00:00');
+    return d>=0&&d<=7;
+  }).sort(function(a,b){return diasHasta(a.fecha+'T12:00:00')-diasHasta(b.fecha+'T12:00:00');});
+}
+
+// ── Pantalla principal de la Agenda ─────────────────────────────────────────────
+function renderAgenda(m){
+  var todas=agEntradasDelMes(m);
+  var pendientesDinero=todas.filter(function(e){return e.tipo==='pago'&&!e.esIngreso&&!e.gastoPagado;});
+  var pendientesTareas=todas.filter(function(e){return e.tipo==='tarea'&&!e.tildado;});
+  var resumen=pendientesDinero.length+' pendiente'+(pendientesDinero.length===1?'':'s')+' · '+pendientesTareas.length+' tarea'+(pendientesTareas.length===1?'':'s');
+
+  var keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
+  var mesOpts=keys.map(function(k){
+    return '<option value="'+k+'"'+(k===curM?' selected':'')+'>'+db[k].nombre.slice(0,3)+' '+db[k].año+'</option>';
+  }).join('');
+
+  var headerHtml='<div style="padding:4px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
+    +'<div style="min-width:0">'
+    +'<div style="font-size:19px;font-weight:800;color:'+AG.txt2+';letter-spacing:-.01em">Agenda</div>'
+    +'<div style="font-size:11.5px;font-weight:600;color:'+AG.cian+'">'+esc(resumen)+'</div>'
+    +'</div>'
+    +'<div style="position:relative;display:flex;align-items:center;flex-shrink:0">'
+    +'<select onchange="curM=parseInt(this.value);agDiaSel=null;render()" style="appearance:none;-webkit-appearance:none;padding:7px 24px 7px 10px;background:'+AG.bg6+';border:1px solid '+AG.bd2+';border-radius:11px;font-size:13px;font-weight:800;color:'+AG.txt2+';outline:none">'+mesOpts+'</select>'
+    +'<span style="position:absolute;right:8px;pointer-events:none;color:'+AG.txt5+';display:flex">'+icon('chevronDown',10)+'</span>'
+    +'</div>'
+    +'</div>';
+
+  function filtroBtn(k,lbl){
+    var isA=agFiltro===k;
+    return '<button onclick="agFiltro=\''+k+'\';render()" style="flex:1;padding:7px 13px;border-radius:9px;border:none;cursor:pointer;font-size:12px;font-weight:'+(isA?'800':'700')+';background:'+(isA?AG.accBg2:'transparent')+';color:'+(isA?AG.cian2:AG.txt5)+'">'+lbl+'</button>';
+  }
+  var filtroHtml='<div style="padding:0 16px 11px"><div style="display:flex;background:'+AG.bg4+';border-radius:12px;padding:4px;gap:4px">'
+    +filtroBtn('todo','Todo')+filtroBtn('dinero','Dinero')+filtroBtn('tareas','Tareas')
+    +'</div></div>';
+
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  var diasBoxes=[];
+  for(var i=0;i<10;i++){
+    var d=new Date(hoy); d.setDate(d.getDate()+i);
+    var fStr=d.toISOString().slice(0,10);
+    var activo=agDiaSel===fStr;
+    var evDia=todas.find(function(e){
+      if(e.fecha!==fStr) return false;
+      if(agFiltro==='dinero') return e.tipo==='pago';
+      if(agFiltro==='tareas') return e.tipo==='tarea';
+      return true;
+    });
+    var punto=evDia?('<span style="width:4px;height:4px;border-radius:50%;background:'+evDia.color+';display:inline-block"></span>'):'<span style="width:4px;height:4px;display:inline-block"></span>';
+    diasBoxes.push('<div onclick="agDiaSel='+(activo?'null':("'"+fStr+"'"))+';render()" style="flex:1;padding:7px 0 6px;border-radius:11px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;background:'+(activo?AG.accBg2:AG.bg4)+';border:1px solid '+(activo?AG.cian:'transparent')+'">'
+      +'<span style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:'+(activo?AG.cian2:AG.txt5)+'">'+DOW_ABBR[d.getDay()]+'</span>'
+      +'<span style="font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:'+(activo?AG.txt1:AG.txt5)+'">'+d.getDate()+'</span>'
+      +punto
+      +'</div>');
+  }
+  var tiraHtml='<div style="padding:0 16px 12px;display:flex;gap:5px;overflow-x:auto;scrollbar-width:none">'+diasBoxes.join('')+'</div>';
+
+  var filtradas=todas.filter(function(e){
+    if(agFiltro==='dinero'&&e.tipo!=='pago') return false;
+    if(agFiltro==='tareas'&&e.tipo!=='tarea') return false;
+    if(agDiaSel&&e.fecha!==agDiaSel) return false;
+    return true;
+  });
+
+  var mi=MESES.indexOf(m.nombre);
+  var finMes=mi>=0?new Date(m.año,mi+1,0).getDate():30;
+  var mesLbl=mi>=0?MESES_ABBR_MIN[mi].toUpperCase():'';
+  var hoyMismoMes=(m.año===new Date().getFullYear()&&mi===new Date().getMonth());
+  var quincenaVigente=hoyMismoMes?(new Date().getDate()<=15?'q1':'q2'):null;
+
+  function grupoHtml(which){
+    var items=filtradas.filter(function(e){return e.which===which;}).sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
+    var dineroTot=items.filter(function(e){return e.tipo==='pago'&&!e.esIngreso&&!e.gastoPagado;}).reduce(function(a,e){return a+(e.monto||0);},0);
+    var tareasCount=items.filter(function(e){return e.tipo==='tarea'&&!e.tildado;}).length;
+    var partes=[];
+    if(dineroTot>0) partes.push(cop(dineroTot));
+    if(tareasCount>0) partes.push(tareasCount+' tarea'+(tareasCount===1?'':'s'));
+    var subtotalTxt=partes.length?partes.join(' · '):'—';
+    var rango=which==='q1'?('1–15 '+mesLbl):('16–'+finMes+' '+mesLbl);
+    var esVigente=which===quincenaVigente;
+    var head='<div style="padding:0 2px;display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px">'
+      +'<span style="font-size:10px;font-weight:800;letter-spacing:.1em;color:'+(esVigente?AG.cian:AG.txt5)+'">'+(which==='q1'?'Q1':'Q2')+' · '+esc(rango)+'</span>'
+      +'<span style="font-size:11px;font-weight:700;color:'+AG.txt5+';font-variant-numeric:tabular-nums">'+esc(subtotalTxt)+'</span>'
+      +'</div>';
+    var rowsHtml=items.length?items.map(agFilaHtml).join(''):'<div style="padding:10px 2px;font-size:12px;color:'+AG.txt5+'">Nada por aquí.</div>';
+    return head+rowsHtml;
+  }
+
+  var cuerpoHtml='<div style="padding:0 16px 20px">'+grupoHtml('q1')+grupoHtml('q2')+'</div>';
+  return headerHtml+filtroHtml+tiraHtml+cuerpoHtml;
+}
+
+// Una fila de la agenda (pago o tarea), en cualquiera de sus tres orígenes.
+function agFilaHtml(e){
+  var d=new Date(e.fecha+'T12:00:00');
+  var dias=diasHasta(e.fecha+'T12:00:00');
+  var vencePronto=e.tipo==='pago'&&!e.gastoPagado&&dias<=7&&dias>=0;
+  var vencido=(dias<0)&&!((e.tipo==='pago'&&e.gastoPagado)||(e.tipo==='tarea'&&e.tildado));
+  var tildada=e.tipo==='tarea'&&e.tildado;
+
+  var bg=AG.bg5,bd=AG.bd1,numColor=AG.txt3,tituloColor=AG.txt2,subColor=AG.txt5,dowColor=AG.txt5,barra=e.color;
+  if(vencePronto||vencido){ bg=AG.amb6; bd=AG.amb5; numColor=AG.amb2; tituloColor=AG.amb4; subColor=AG.amb3; dowColor=AG.amb3; barra=vencido?AG.rojo:AG.amb1; }
+  if(tildada){ bg='#0D1729'; tituloColor=AG.txt5; subColor=AG.txt5; dowColor=AG.txt5; barra='#475569'; bd=AG.bd1; }
+
+  var subTxt=dias===0?'Hoy':dias<0?('hace '+Math.abs(dias)+' día'+(Math.abs(dias)===1?'':'s')):('en '+dias+' día'+(dias===1?'':'s'));
+
+  var tituloHtml='<div style="font-size:13.5px;font-weight:700;color:'+tituloColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(tildada?';text-decoration:line-through':'')+'">'+esc(e.concepto)+'</div>';
+
+  var slotDerecho;
+  if(e.tipo==='pago'){
+    var montoColor=e.esIngreso?AG.cian2:AG.txt3;
+    var etiquetaTxt=null, etiquetaBg=null, etiquetaColor=null;
+    if(e.esIngreso){ etiquetaTxt='INGRESO'; etiquetaBg=AG.accBg2; etiquetaColor=AG.cian2; }
+    else if(vencePronto){ etiquetaTxt='EN '+dias+' DÍA'+(dias===1?'':'S'); etiquetaBg=AG.amb5; etiquetaColor=AG.amb4; }
+    else if(e.repetir&&e.repetir!=='nunca'){ etiquetaTxt='RECURRENTE'; etiquetaBg=AG.bd3; etiquetaColor=AG.txt5; }
+    else if(e.origen==='manual'){ etiquetaTxt='MANUAL'; etiquetaBg=AG.bd3; etiquetaColor=AG.txt5; }
+    slotDerecho='<div style="text-align:right;flex-shrink:0">'
+      +'<div style="font-size:13.5px;font-weight:800;font-variant-numeric:tabular-nums;color:'+montoColor+'">'+(e.monto?cop(e.monto):'')+'</div>'
+      +(etiquetaTxt?'<div style="display:inline-block;margin-top:3px;font-size:9.5px;font-weight:800;letter-spacing:.05em;padding:2px 6px;border-radius:5px;background:'+etiquetaBg+';color:'+etiquetaColor+'">'+etiquetaTxt+'</div>':'')
+      +'</div>';
+  } else {
+    slotDerecho='<div onclick="event.stopPropagation();agToggleTarea(\''+e.id+'\')" style="width:24px;height:24px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;min-height:24px;'
+      +(tildada?('background:'+AG.cian+';border:1.5px solid '+AG.cian):('background:transparent;border:1.5px solid #64748B'))+'">'
+      +(tildada?'<span style="font-size:12px;font-weight:800;color:#052B33">✓</span>':'')
+      +'</div>';
+  }
+
+  var clickable=(e.origen==='manual');
+  var onclickRow=clickable?(' onclick="agAbrirDetalle(\''+e.id+'\')"'):'';
+
+  return '<div'+onclickRow+' style="padding:11px 12px 11px 0;background:'+bg+';border:1px solid '+bd+';border-radius:13px;display:flex;align-items:center;gap:11px;overflow:hidden;margin-bottom:8px;min-height:44px'+(clickable?';cursor:pointer':'')+'">'
+    +'<div style="width:3px;align-self:stretch;border-radius:0 2px 2px 0;background:'+barra+';flex-shrink:0"></div>'
+    +'<div style="flex:0 0 34px;text-align:center">'
+    +'<div style="font-size:16px;font-weight:800;color:'+numColor+';font-variant-numeric:tabular-nums;line-height:1.1">'+d.getDate()+'</div>'
+    +'<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:'+dowColor+'">'+DOW_ABBR[d.getDay()]+'</div>'
+    +'</div>'
+    +'<div style="flex:1 1 auto;min-width:0">'+tituloHtml+'<div style="font-size:11px;color:'+subColor+'">'+subTxt+'</div></div>'
+    +slotDerecho
+    +'</div>';
+}
+
+// ── Tildar una tarea ─────────────────────────────────────────────────────────
+function agToggleTarea(id){
+  var m=getM();
+  var it=agendaArr(m).find(function(x){return x.id===id;});
+  if(!it||it.tipo!=='tarea') return;
+  it.tildado=!it.tildado;
+  save();render();
+}
+
+// ── Detalle / eliminar ───────────────────────────────────────────────────────
+function agAbrirDetalle(id){
+  var m=getM();
+  var it=agendaArr(m).find(function(x){return x.id===id;});
+  if(!it) return;
+  openModal('<div class="mtitle">'+(it.tipo==='tarea'?'Tarea':'Recordatorio')+'</div>'
+    +'<p style="font-size:14px;color:var(--txt);font-weight:600;margin-bottom:6px">'+esc(it.concepto)+'</p>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:16px">'+fmtD(it.fecha)+(it.monto?(' · '+cop(it.monto)):'')+(it.gastoId?' · enlazado a un gasto':'')+'</p>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cerrar</button>'
+    +'<button class="bpri" style="background:var(--red);color:#fff" onclick="agConfirmarBorrar(\''+id+'\')">Eliminar</button></div>');
+}
+function agConfirmarBorrar(id){
+  var m=getM();
+  var it=agendaArr(m).find(function(x){return x.id===id;});
+  if(!it){ closeModal(); return; }
+  if(!it.gastoId){
+    showConfirm('¿Eliminar '+(it.tipo==='tarea'?'esta tarea':'este recordatorio')+'?',function(){
+      m.agenda=agendaArr(m).filter(function(x){return x.id!==id;});
+      save();closeModal();render();toast('Eliminado');
+    });
+    return;
+  }
+  // Nunca se borra el par en silencio (§6): el gasto puede tener ya un pago real registrado.
+  openModal('<div class="mtitle">Recordatorio enlazado</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">Este recordatorio tiene un gasto enlazado. ¿Qué quieres eliminar?</p>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<button class="bcnl" onclick="agBorrarSoloRecordatorio(\''+id+'\')">Solo el recordatorio</button>'
+    +'<button class="bcnl" style="color:var(--red)" onclick="agBorrarAmbos(\''+id+'\')">Recordatorio y gasto</button>'
+    +'</div>'
+    +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cancelar</button></div>');
+}
+function agBorrarSoloRecordatorio(id){
+  var m=getM();
+  var it=agendaArr(m).find(function(x){return x.id===id;});
+  if(it&&it.gastoId){
+    var gasto=agBuscarGasto(m,it.gastoId,it.which);
+    if(gasto) gasto.agendaId=null;
+  }
+  m.agenda=agendaArr(m).filter(function(x){return x.id!==id;});
+  save();closeModal();render();toast('Recordatorio eliminado');
+}
+function agBorrarAmbos(id){
+  var m=getM();
+  var it=agendaArr(m).find(function(x){return x.id===id;});
+  if(it&&it.gastoId){
+    if(it.which==='q1') m.q1_gastos=(m.q1_gastos||[]).filter(function(x){return x.id!==it.gastoId;});
+    else m.q2_gastos=(m.q2_gastos||[]).filter(function(x){return x.id!==it.gastoId;});
+  }
+  m.agenda=agendaArr(m).filter(function(x){return x.id!==id;});
+  save();closeModal();render();toast('Recordatorio y gasto eliminados');
+}
+// Desde delG() (gasto-pickers.js) — el gasto tiene un recordatorio enlazado.
+function agConfirmarBorrarGasto(g,which){
+  openModal('<div class="mtitle">Gasto enlazado</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">Este gasto tiene un recordatorio enlazado en la Agenda. ¿Qué quieres eliminar?</p>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<button class="bcnl" onclick="agBorrarSoloGasto(\''+g.id+'\',\''+which+'\')">Solo el gasto</button>'
+    +'<button class="bcnl" style="color:var(--red)" onclick="agBorrarGastoYRecordatorio(\''+g.id+'\',\''+which+'\')">Gasto y recordatorio</button>'
+    +'</div>'
+    +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cancelar</button></div>');
+}
+function agBorrarSoloGasto(id,which){
+  var m=getM(),k=which==='q1'?'q1_gastos':'q2_gastos';
+  var g=(m[k]||[]).find(function(x){return x.id===id;});
+  if(g&&g.agendaId){
+    var it=agendaArr(m).find(function(x){return x.id===g.agendaId;});
+    if(it) it.gastoId=null;
+  }
+  m[k]=m[k].filter(function(x){return x.id!==id;});
+  save();closeModal();render();toast('Gasto eliminado');
+}
+function agBorrarGastoYRecordatorio(id,which){
+  var m=getM(),k=which==='q1'?'q1_gastos':'q2_gastos';
+  var g=(m[k]||[]).find(function(x){return x.id===id;});
+  if(g&&g.agendaId) m.agenda=agendaArr(m).filter(function(x){return x.id!==g.agendaId;});
+  m[k]=m[k].filter(function(x){return x.id!==id;});
+  save();closeModal();render();toast('Gasto y recordatorio eliminados');
+}
+
+// ── Enlace desde el lado del gasto (llamado desde gasto-pickers.js) ─────────────
+function agSincronizarDesdeGasto(g,m,pagado){
+  var it=agendaArr(m).find(function(x){return x.id===g.agendaId;});
+  if(!it) return;
+  if(pagado && it.repetir && it.repetir!=='nunca'){
+    agGenerarSiguienteRecurrente(it);
+  }
+}
+function agSincronizarMontoDesdeGasto(g,m){
+  var it=agendaArr(m).find(function(x){return x.id===g.agendaId;});
+  if(it) it.monto=Math.abs(g.presupuesto||0);
+}
+// Un pago recurrente NO crea doce gastos de golpe (§6): al pagar el periodo actual, se genera
+// solo el siguiente — y solo si su mes ya existe (si no, el recordatorio queda pendiente de
+// que ese mes se cree; no se fuerza su creación desde acá).
+function agGenerarSiguienteRecurrente(it){
+  var d=new Date(it.fecha+'T12:00:00');
+  if(it.repetir==='mensual') d.setMonth(d.getMonth()+1);
+  else if(it.repetir==='quincenal') d.setDate(d.getDate()+15);
+  else return;
+  var nuevaFecha=d.toISOString().slice(0,10);
+  var mesDestino=agBuscarMesPorFecha(nuevaFecha);
+  if(!mesDestino) return;
+  var yaExiste=agendaArr(mesDestino).some(function(x){return x.concepto===it.concepto&&x.fecha===nuevaFecha;});
+  if(yaExiste) return;
+  var which=agQuincenaDeFecha(nuevaFecha);
+  var nuevo={id:uid(),tipo:'pago',concepto:it.concepto,fecha:nuevaFecha,monto:it.monto,repetir:it.repetir,tildado:false,gastoId:null,which:which,formaPago:it.formaPago};
+  if(it.gastoId){
+    // Sin chequear (estado null), no "sin pagar" — igual que cualquier gasto recién creado
+    // (ver agGuardarNuevo): "sin pagar" es para uno aplazado a otra quincena, no para uno nuevo.
+    var gastoNuevo={id:uid(),nombre:it.concepto,presupuesto:Math.abs(it.monto||0),metodo:it.formaPago||'',estado:null,pagado_flag:false,sinpagar:false,agendaId:nuevo.id};
+    var lista=which==='q1'?(mesDestino.q1_gastos=mesDestino.q1_gastos||[]):(mesDestino.q2_gastos=mesDestino.q2_gastos||[]);
+    lista.push(gastoNuevo);
+    nuevo.gastoId=gastoNuevo.id;
+  }
+  agendaArr(mesDestino).push(nuevo);
+}
+
+// ── Formulario de creación ───────────────────────────────────────────────────
+function agAbrirNuevo(){
+  agFormTipo='tarea';
+  agFormRegistrarGasto=true;
+  agFormRepetirActual='nunca';
+  agFormGastoExistenteId=null;
+  openModal(agFormHtml());
+  setTimeout(function(){
+    var el=document.getElementById('ag-concepto');
+    if(el) el.focus();
+  },50);
+}
+function agMetodoOptsHtml(){
+  return (catMetodos||[]).map(function(x){return '<option>'+esc(x.nombre)+'</option>';}).join('');
+}
+function agFormHtml(){
+  var esPago=agFormTipo==='pago';
+  var hoy=new Date().toISOString().slice(0,10);
+
+  var tipoSelector='<div style="display:flex;background:'+AG.bg4+';border-radius:11px;padding:3px">'
+    +'<button type="button" onclick="agCambiarTipo(\'tarea\')" style="flex:1;padding:9px 0;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:'+(esPago?'700':'800')+';background:'+(esPago?'transparent':AG.accBg2)+';color:'+(esPago?AG.txt5:AG.cian2)+'">Tarea</button>'
+    +'<button type="button" onclick="agCambiarTipo(\'pago\')" style="flex:1;padding:9px 0;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:'+(esPago?'800':'700')+';background:'+(esPago?AG.accBg2:'transparent')+';color:'+(esPago?AG.cian2:AG.txt5)+'">Pago</button>'
+    +'</div>';
+
+  var conceptoHtml='<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';letter-spacing:.04em;margin-bottom:5px">CONCEPTO</label>'
+    +'<input id="ag-concepto" type="text" placeholder="'+(esPago?'¿Qué pago quieres recordar?':'¿Qué tienes que hacer?')+'" style="width:100%;padding:12px 13px;background:'+AG.bg4+';border:1.5px solid '+AG.cian+';border-radius:12px;font-size:15px;font-weight:700;color:'+AG.txt1+'"></div>';
+
+  var camposHtml='<div class="ig-field-row">'
+    +'<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';margin-bottom:5px">FECHA</label>'
+    +'<input id="ag-fecha" type="date" value="'+hoy+'" onchange="agActualizarBloqueGasto()" style="width:100%;padding:11px 12px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:11px;font-size:15px;font-weight:700;color:'+AG.txt3+'"></div>'
+    +(esPago?('<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';margin-bottom:5px">MONTO</label>'
+      +'<input id="ag-monto" type="text" inputmode="numeric" placeholder="opcional" oninput="maskMoneyInput(this);agActualizarBloqueGasto()" style="width:100%;padding:11px 12px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:11px;font-size:15px;font-weight:800;color:'+AG.txt1+';font-variant-numeric:tabular-nums"></div>'):'')
+    +'</div>';
+
+  var repetirOpts=[{k:'nunca',l:'Nunca'},{k:'mensual',l:'Mensual'},{k:'quincenal',l:'Quincenal'}];
+  var repetirHtml='<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';margin-bottom:5px">REPETIR</label>'
+    +'<div style="display:flex;background:'+AG.bg4+';border-radius:10px;padding:3px;gap:2px">'
+    +repetirOpts.map(function(o){
+      var isA=agFormRepetirActual===o.k;
+      return '<button type="button" id="ag-rep-'+o.k+'" onclick="agSetRepetir(\''+o.k+'\')" style="flex:1;padding:7px 0;border-radius:7px;border:none;cursor:pointer;font-size:11.5px;font-weight:'+(isA?'800':'600')+';background:'+(isA?AG.accBg2:'transparent')+';color:'+(isA?AG.cian2:AG.txt5)+'">'+o.l+'</button>';
+    }).join('')
+    +'</div></div>';
+
+  var switchHtml=esPago?agBloqueRegistrarGastoHtml():'';
+  var botonTxt=esPago?(agFormRegistrarGasto?'Crear recordatorio y gasto':'Crear recordatorio'):'Crear tarea';
+
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 18px 16px;border-bottom:1px solid '+AG.bd3+'">'
+    +'<button onclick="closeModal()" style="background:none;border:none;color:'+AG.txt5+';font-size:13px;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'<span style="font-size:14px;font-weight:800;color:'+AG.txt2+'">Nuevo en la agenda</span>'
+    +'<span style="width:56px"></span>'
+    +'</div>'
+    +'<div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:14px">'
+    +tipoSelector+conceptoHtml+camposHtml+repetirHtml+switchHtml
+    +'<button onclick="agGuardarNuevo()" style="padding:15px 0;border-radius:14px;background:'+AG.cian+';color:#052B33;border:none;font-size:15.5px;font-weight:800;cursor:pointer">'+botonTxt+'</button>'
+    +'</div>';
+}
+// El bloque "Registrarlo también como gasto" se reconstruye SOLO a sí mismo (ver
+// agActualizarBloqueGasto) en vez de todo el formulario — así escribir el monto no le quita el
+// foco/cursor al input, el mismo bug que ya se corrigió para el formulario de gastos.
+// Gastos de nivel superior de una quincena que todavía no están enlazados a ningún
+// recordatorio — candidatos para "Asociar a un gasto ya creado" en vez de crear uno nuevo.
+function agGastosDisponiblesParaAsociar(m,which){
+  var lista=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
+  return (lista||[]).filter(function(g){ return !g.esGrupo && !g.parentId && !g.agendaId; });
+}
+function agBloqueRegistrarGastoHtml(){
+  var m=getM();
+  var montoActual=document.getElementById('ag-monto')?moneyVal('ag-monto'):0;
+  var tieneMonto=montoActual>0;
+  // agFormRegistrarGasto es la preferencia del usuario (por defecto encendida) y NUNCA se toca
+  // acá solo porque el monto esté vacío en este instante — si se mutara aquí, escribir y luego
+  // borrar el monto (o simplemente abrir el formulario antes de teclear nada) la apagaría para
+  // siempre aunque el usuario nunca haya tocado el interruptor. Sin monto simplemente se
+  // muestra apagado EN PANTALLA (on=false) sin perder la preferencia real.
+  var on=agFormRegistrarGasto&&tieneMonto;
+  var fechaActual=document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10);
+  var wh=agQuincenaDeFecha(fechaActual);
+  var gastoExistente=agFormGastoExistenteId?agBuscarGasto(m,agFormGastoExistenteId,wh):null;
+  if(agFormGastoExistenteId&&!gastoExistente) agFormGastoExistenteId=null; // cambió de quincena o ya no existe
+
+  var consecuenciaHtml=gastoExistente
+    ?('Se enlaza con <b style="color:'+AG.txt2+'">'+esc(nombreGasto(gastoExistente))+'</b>, sin tocar su estado actual')
+    :('Queda en <b style="color:'+AG.cian+'">'+wh.toUpperCase()+'</b>, sin chequear (como cualquier gasto nuevo)');
+
+  var asociarHtml='';
+  if(on){
+    asociarHtml=gastoExistente
+      ?('<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid '+AG.bd4+';padding-top:12px">'
+        +'<span style="font-size:12.5px;font-weight:600;color:'+AG.txt4+'">Gasto asociado</span>'
+        +'<button type="button" onclick="agQuitarGastoExistente()" style="background:none;border:none;color:'+AG.rojo+';font-size:12px;font-weight:700;cursor:pointer">Quitar</button>'
+        +'</div>')
+      :('<div style="border-top:1px solid '+AG.bd4+';padding-top:12px">'
+        +'<button type="button" onclick="agAbrirPickerGastoExistente()" style="background:none;border:none;color:'+AG.cian2+';font-size:12.5px;font-weight:700;cursor:pointer;padding:0;text-align:left">Asociar a un gasto ya creado, en vez de uno nuevo</button>'
+        +'</div>');
+  }
+
+  var formaPagoHtml=(on&&!gastoExistente)?('<div style="border-top:1px solid '+AG.bd4+';padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
+      +'<span style="font-size:12.5px;font-weight:600;color:'+AG.txt4+'">Forma de pago</span>'
+      +'<select id="ag-formapago" style="background:none;border:none;color:'+AG.txt2+';font-size:13px;font-weight:700;text-align:right;outline:none">'+agMetodoOptsHtml()+'</select>'
+      +'</div>'):'';
+
+  return '<div id="ag-bloque-gasto" style="padding:14px;background:'+AG.bg3+';border:1px solid '+AG.accBg3+';border-radius:14px;display:flex;flex-direction:column;gap:12px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
+    +'<div style="min-width:0">'
+    +'<div style="font-size:13.5px;font-weight:800;color:'+AG.txt2+'">Registrarlo también como gasto</div>'
+    +'<div style="font-size:11.5px;color:'+AG.txt5+';margin-top:2px">'+consecuenciaHtml+'</div>'
+    +'</div>'
+    +'<button type="button" onclick="agToggleSwitchGasto()" id="ag-switch" style="width:44px;height:26px;border-radius:13px;padding:3px;border:none;cursor:'+(tieneMonto?'pointer':'not-allowed')+';flex-shrink:0;background:'+(on?AG.cian:AG.bd3)+';opacity:'+(tieneMonto?'1':'.45')+'">'
+    +'<span style="display:block;width:20px;height:20px;border-radius:50%;background:'+(on?'#052B33':AG.txt5)+';transform:translateX('+(on?'18px':'0')+');transition:transform .15s ease"></span>'
+    +'</button>'
+    +'</div>'
+    +(!tieneMonto?'<div style="font-size:11px;color:'+AG.txt5+'">Sin monto no hay nada que registrar: quedará solo como recordatorio.</div>':'')
+    +formaPagoHtml
+    +asociarHtml
+    +'</div>';
+}
+function agActualizarBloqueGasto(){
+  var wrap=document.getElementById('ag-bloque-gasto');
+  if(!wrap) return; // tipo Tarea: el bloque ni existe
+  wrap.outerHTML=agBloqueRegistrarGastoHtml();
+}
+function agToggleSwitchGasto(){
+  var monto=document.getElementById('ag-monto')?moneyVal('ag-monto'):0;
+  if(monto<=0) return;
+  agFormRegistrarGasto=!agFormRegistrarGasto;
+  agActualizarBloqueGasto();
+}
+function agQuitarGastoExistente(){
+  agFormGastoExistenteId=null;
+  agActualizarBloqueGasto();
+}
+// Guarda lo tecleado antes de salir al picker de pantalla completa, para poder reconstruir el
+// formulario tal cual estaba al volver (con "Cancelar" o al elegir un gasto).
+function agCapturarSnapshot(){
+  return {
+    concepto: document.getElementById('ag-concepto')?document.getElementById('ag-concepto').value:'',
+    fecha: document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10),
+    monto: document.getElementById('ag-monto')?document.getElementById('ag-monto').value:''
+  };
+}
+function agRestaurarSnapshot(){
+  openModal(agFormHtml());
+  var snap=agFormSnapshot;
+  agFormSnapshot=null;
+  if(!snap) return;
+  var cEl=document.getElementById('ag-concepto'); if(cEl) cEl.value=snap.concepto||'';
+  var fEl=document.getElementById('ag-fecha'); if(fEl) fEl.value=snap.fecha||fEl.value;
+  var mEl=document.getElementById('ag-monto'); if(mEl) mEl.value=snap.monto||'';
+  agSetRepetir(agFormRepetirActual);
+}
+function agAbrirPickerGastoExistente(){
+  var m=getM();
+  var fecha=document.getElementById('ag-fecha').value||new Date().toISOString().slice(0,10);
+  var which=agQuincenaDeFecha(fecha);
+  var gastos=agGastosDisponiblesParaAsociar(m,which);
+  if(!gastos.length){ showAlert('No hay gastos de '+which.toUpperCase()+' sin asociar todavía.'); return; }
+  agFormSnapshot=agCapturarSnapshot();
+  var itemsHtml=gastos.map(function(g){
+    return '<div onclick="agElegirGastoExistente(\''+g.id+'\')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--brd);cursor:pointer">'
+      +'<span style="font-size:14px;font-weight:600;color:var(--txt)">'+esc(nombreGasto(g))+'</span>'
+      +'<span style="font-size:13px;color:var(--mut);flex-shrink:0">'+cop(g.presupuesto)+'</span>'
+      +'</div>';
+  }).join('');
+  openModal('<div class="mtitle">Asociar a un gasto</div>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:12px">Gastos de '+which.toUpperCase()+' sin recordatorio todavía</p>'
+    +'<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+itemsHtml+'</div>'
+    +'<button class="bcnl" style="width:100%" onclick="agRestaurarSnapshot()">Cancelar</button>');
+}
+function agElegirGastoExistente(gastoId){
+  agFormGastoExistenteId=gastoId;
+  agRestaurarSnapshot();
+}
+function agSetRepetir(k){
+  agFormRepetirActual=k;
+  ['nunca','mensual','quincenal'].forEach(function(kk){
+    var btn=document.getElementById('ag-rep-'+kk);
+    if(!btn) return;
+    var active=kk===k;
+    btn.style.background=active?AG.accBg2:'transparent';
+    btn.style.color=active?AG.cian2:AG.txt5;
+    btn.style.fontWeight=active?'800':'600';
+  });
+}
+// Cambiar Tarea/Pago sí reconstruye el formulario entero (aparece/desaparece el campo Monto y
+// el bloque de gasto) — se preservan concepto y fecha ya escritos para no perder lo tecleado.
+function agCambiarTipo(tipo){
+  var concepto=document.getElementById('ag-concepto')?document.getElementById('ag-concepto').value:'';
+  var fecha=document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10);
+  agFormTipo=tipo;
+  agFormGastoExistenteId=null;
+  openModal(agFormHtml());
+  var cEl=document.getElementById('ag-concepto'); if(cEl) cEl.value=concepto;
+  var fEl=document.getElementById('ag-fecha'); if(fEl) fEl.value=fecha;
+  agSetRepetir(agFormRepetirActual);
+  setTimeout(function(){ if(cEl) cEl.focus(); },50);
+}
+
+function agGuardarNuevo(){
+  var concepto=(document.getElementById('ag-concepto').value||'').trim();
+  if(!concepto){ showAlert('Escribe qué quieres agendar'); return; }
+  var fecha=document.getElementById('ag-fecha').value||new Date().toISOString().slice(0,10);
+  var m=getM();
+
+  if(agFormTipo==='tarea'){
+    var tarea={id:uid(),tipo:'tarea',concepto:concepto,fecha:fecha,monto:null,repetir:'nunca',tildado:false,gastoId:null,which:agQuincenaDeFecha(fecha),formaPago:null};
+    agendaArr(m).push(tarea);
+    save();closeModal();render();toast('Tarea agregada ✓');
+    return;
+  }
+
+  var monto=moneyVal('ag-monto')||0;
+  var registrarGasto=agFormRegistrarGasto&&monto>0;
+  var which=agQuincenaDeFecha(fecha);
+  var item={id:uid(),tipo:'pago',concepto:concepto,fecha:fecha,monto:monto>0?monto:null,repetir:agFormRepetirActual,tildado:false,gastoId:null,which:which,formaPago:null};
+  var gastoCreado=null, gastoAsociado=null;
+
+  if(registrarGasto){
+    if(agFormGastoExistenteId) gastoAsociado=agBuscarGasto(m,agFormGastoExistenteId,which);
+    if(gastoAsociado){
+      // Se enlaza a un gasto YA CREADO, sin tocar su estado/monto actual — es él quien manda
+      // de ahí en adelante (ver agSincronizarMontoDesdeGasto: solo sincroniza mientras "sin
+      // pagar", y este gasto puede llevar cualquier estado ya).
+      gastoAsociado.agendaId=item.id;
+      item.gastoId=gastoAsociado.id;
+      item.formaPago=gastoAsociado.metodo||null;
+    } else {
+      var formaPago=document.getElementById('ag-formapago')?document.getElementById('ag-formapago').value:((catMetodos[0]||{}).nombre||'');
+      // Sin chequear (estado null), no "sin pagar": ese estado es para un gasto YA EXISTENTE
+      // que se aplaza a otra quincena, no para uno recién creado — nace igual que cualquier
+      // gasto nuevo (círculo vacío, sin revisar todavía).
+      gastoCreado={id:uid(),nombre:concepto,presupuesto:monto,metodo:formaPago,estado:null,pagado_flag:false,sinpagar:false,agendaId:item.id};
+      var lista=which==='q1'?(m.q1_gastos=m.q1_gastos||[]):(m.q2_gastos=m.q2_gastos||[]);
+      lista.push(gastoCreado);
+      item.gastoId=gastoCreado.id;
+      item.formaPago=formaPago;
+    }
+  }
+  agendaArr(m).push(item);
+  save();
+  agFormGastoExistenteId=null;
+  agMostrarConfirmacion(item,gastoCreado||gastoAsociado,!!gastoAsociado);
+}
+
+function agMostrarConfirmacion(item,gasto,esExistente){
+  var d=new Date(item.fecha+'T12:00:00');
+  var checkHtml='<div style="width:46px;height:46px;border-radius:23px;background:'+AG.accBg2+';border:1.5px solid '+AG.cian+';display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:'+AG.cian2+'">'+icon('check',22)+'</div>';
+  var tarjetaRecordatorio='<div style="flex:1;padding:12px;background:'+AG.bg5+';border:1px solid '+AG.bd1+';border-radius:12px;min-width:0">'
+    +'<div style="font-size:9px;font-weight:800;color:'+AG.txt5+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Recordatorio</div>'
+    +'<div style="font-size:13px;font-weight:700;color:'+AG.txt2+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(item.concepto)+'</div>'
+    +'<div style="font-size:11px;color:'+AG.txt5+';margin-top:2px">'+d.getDate()+' · '+(item.which?item.which.toUpperCase():'')+'</div>'
+    +'</div>';
+  var tarjetaGasto=gasto?('<div style="flex:1;padding:12px;background:'+AG.bg5+';border:1px solid '+AG.bd1+';border-radius:12px;min-width:0">'
+    +'<div style="font-size:9px;font-weight:800;color:'+AG.txt5+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Gasto'+(esExistente?' (ya existía)':'')+'</div>'
+    +'<div style="font-size:13px;font-weight:700;color:'+AG.txt2+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(gasto.metodo||'')+'</div>'
+    +(esExistente?''
+      :'<div style="display:inline-block;margin-top:4px;font-size:9px;font-weight:800;letter-spacing:.05em;padding:2px 6px;border-radius:5px;background:'+AG.bd3+';color:'+AG.txt5+'">SIN CHEQUEAR</div>')
+    +'</div>'):'';
+  var notaCierre='Cuando tildes el recordatorio el '+d.getDate()+', el gasto pasa a pagado solo. No tienes que volver aquí.';
+  openModal('<div style="padding:24px 20px;text-align:center">'
+    +checkHtml
+    +'<div style="font-size:17px;font-weight:800;color:'+AG.txt2+';margin-bottom:4px">Listo</div>'
+    +(gasto?('<div style="font-size:12.5px;color:'+AG.txt5+';margin-bottom:18px">'+(esExistente?'El recordatorio quedó enlazado con el gasto':'Se crearon dos cosas enlazadas entre sí')+'</div>'
+      +'<div style="font-size:10px;font-weight:800;color:'+AG.txt5+';letter-spacing:.05em;margin-bottom:6px">ENLAZADO CON</div>'
+      +'<div style="display:flex;gap:8px;text-align:left;margin-bottom:14px">'+tarjetaRecordatorio+tarjetaGasto+'</div>'
+      +'<p style="font-size:11.5px;color:'+AG.txt5+';line-height:1.5;margin-bottom:18px">'+notaCierre+'</p>')
+      :'<div style="font-size:12.5px;color:'+AG.txt5+';margin-bottom:18px">Recordatorio creado</div>')
+    +'<button class="bpri" style="width:100%" onclick="closeModal();render()">Listo</button>'
+    +'</div>');
+}
