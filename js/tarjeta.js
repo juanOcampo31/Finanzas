@@ -200,6 +200,24 @@ function getTC(m, tcId){
 function listTCIds(m){
   return Object.keys(m.tarjetas||{});
 }
+// migrateMonth (auth.js) crea siempre una tarjeta "tc1" por defecto, incluso en un mes nuevo
+// donde el usuario nunca configuró ninguna — así que listTCIds() nunca da vacío y el panel de
+// Tarjeta en Inicio se mostraba siempre, aunque no se hubiera "creado" ninguna de verdad. Una
+// tarjeta se considera un simple placeholder (nunca tocada) si sigue con su nombre por defecto,
+// sin movimientos y sin ningún dato de info (cupo/fechas) cargado.
+function tcEsPlaceholder(t){
+  if(!t) return true;
+  const sinMovimientos=!Array.isArray(t.movimientos)||t.movimientos.length===0;
+  const info=t.info||{};
+  const sinInfo=!info.cupo && !info.fechaCorte && !info.fechaPago;
+  const nombrePorDefecto=!t.nombre||t.nombre==='Tarjeta';
+  return sinMovimientos && sinInfo && nombrePorDefecto;
+}
+// Ids de tarjetas que el usuario realmente configuró (ver tcEsPlaceholder) — usado en Inicio
+// para no mostrar el panel de Tarjeta cuando en realidad no se ha creado ninguna.
+function listTCIdsReales(m){
+  return listTCIds(m).filter(function(tid){ return !tcEsPlaceholder(m.tarjetas[tid]); });
+}
 function saveTC(id){
   const m=getM(); const t=getTC(m);
   const desc=document.getElementById('tc-d').value.trim();

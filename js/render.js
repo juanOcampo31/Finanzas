@@ -518,9 +518,12 @@ function renderInicio(m){
   const qcardsHtml=buildQCardsHtml(m,homeQ,'selectHomeQ','DISPONIBLE',calcDisponibleQuincena(m,'q1'),calcDisponibleQuincena(m,'q2'),calcVencidosQuincena(m,'q1'),calcVencidosQuincena(m,'q2'));
 
   // Tarjeta de crédito (reutiliza los mismos datos de la pestaña Tarjeta y la selección
-  // actual de tarjeta, curTC, para mostrar la misma que se eligió ahí o desde el picker)
-  const tcIds=listTCIds(m);
-  const homeTid=(curTC&&m.tarjetas[curTC])?curTC:tcIds[0];
+  // actual de tarjeta, curTC, para mostrar la misma que se eligió ahí o desde el picker).
+  // Solo tarjetas REALES (ver tcEsPlaceholder, tarjeta.js) — si el usuario nunca creó
+  // ninguna, no tiene sentido mostrar el panel con el "tc1" vacío que migrateMonth crea
+  // por defecto en todo mes nuevo.
+  const tcIds=listTCIdsReales(m);
+  const homeTid=(curTC&&tcIds.indexOf(curTC)>=0)?curTC:tcIds[0];
   const tcHtml=tcIds.length?buildTcMiniHtml(m,homeTid,'sw(2)',buildTcPickerHtml(m,tcIds,homeTid,false)):'';
 
   const list=homeQ==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
@@ -756,15 +759,14 @@ function renderGastos(gastos,which) {
     +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
     +'Filtrar '+icon(isOpen?'chevronUp':'chevronDown',10)
     +'</button>';
-  var noteFilterRow='<div class="glist-note-row'+(sinPagarCount>0?' has-note':'')+'">'
-    +(sinPagarCount>0?'<span class="glist-note-txt">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</span>':'<span></span>')
-    +filterBtnHtml
-    +'</div>';
+  var noteFilterRow=sinPagarCount>0
+    ?'<div class="glist-note-row has-note"><span class="glist-note-txt">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</span></div>'
+    :'';
 
   return '<div class="glist-card">'
     +'<div class="glist-head">'
     +'<span class="glist-title"><span style="color:var(--acc)">Gastos Q'+qLabel+'</span> · '+topGastosAll.length+'</span>'
-    +'<span class="glist-sub">'+pagadosCount+' de '+topGastosAll.length+' pagados</span>'
+    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+pagadosCount+' de '+topGastosAll.length+' pagados'+filterBtnHtml+'</span>'
     +'</div>'
     +'<div class="glist-totals">'
     +'<div class="glist-tot"><div class="glist-tot-lbl">TOTAL Q'+qLabel+'</div><div class="glist-tot-val" style="color:var(--txt)">'+cop(total)+'</div></div>'
@@ -778,27 +780,6 @@ function renderGastos(gastos,which) {
     +sortPillsHtml
     +'<div style="height:1px;background:var(--brd);margin:0 0 4px"></div>'
     +'<div id="glist-rows-'+which+'">'+rows+'</div>'
-    +resumenQuincenaHtml(pagado,pendienteQ)
-    +'</div>';
-}
-// Pie de la lista de gastos de una quincena — mismo formato que "Resumen del periodo" de la
-// pestaña Tarjeta (anillo compras/abonos), aquí con pagado (verde) vs por pagar (rojo).
-function resumenQuincenaHtml(pagado,pendiente){
-  const totalQ=pagado+pendiente;
-  if(totalQ<=0) return '';
-  const pagadoDeg=(pagado/totalQ)*360;
-  const icSwap='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
-  return '<div style="display:flex;align-items:center;gap:12px;padding:14px;border-top:1px solid var(--brd)">'
-    +'<div style="width:34px;height:34px;border-radius:10px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icSwap+'</div>'
-    +'<div style="flex:1;min-width:0">'
-    +'<div style="font-size:11px;color:var(--mut);margin-bottom:3px">Resumen de la quincena</div>'
-    +'<div style="font-size:13px"><span style="color:var(--mut)">Pagado</span> <span style="font-weight:600;color:var(--grn)">'+cop(pagado)+'</span>'
-    +'<span style="color:var(--mut);margin:0 5px">|</span><span style="color:var(--mut)">Por pagar</span> <span style="font-weight:600;color:var(--red)">'+cop(pendiente)+'</span></div>'
-    +'</div>'
-    +'<div style="position:relative;width:44px;height:44px;flex-shrink:0">'
-    +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--grn) '+pagadoDeg+'deg,var(--red) 0deg)"></div>'
-    +'<div style="position:absolute;inset:8px;border-radius:50%;background:var(--surf)"></div>'
-    +'</div>'
     +'</div>';
 }
 // ── CALENDARIO ───────────────────────────────────────────────────────────────

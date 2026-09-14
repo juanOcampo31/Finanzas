@@ -834,6 +834,7 @@ let tcInfoOpen  = false;                        // info tarjeta expandida
 let curIngQ = 'q1'; // quincena seleccionada actualmente en la pestaña Ingresos
 let curNomQ = 'q1'; // quincena seleccionada actualmente en la pestaña Nómina
 let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
+let nomResumenOpen = false;                       // "Resumen de <mes>" en la pestaña Nómina — colapsado por defecto
 // Desgloses expandibles de cada bloque del Resumen del mes — todos colapsados por defecto.
 // Cada pill además navega a su pestaña correspondiente al seleccionarse (ver selectStat()).
 let statBreakdownOpen = {basico:false, ingresos:false, gastos:false, tarjeta:false, dispQ1:false, dispQ2:false};

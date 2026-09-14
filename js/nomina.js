@@ -73,10 +73,14 @@ function renderNom(m) {
   }
 
   const resumenHtml='<div class="nom-resumen">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleNomResumen()">'
     +'<div class="nom-resumen-title">Resumen de '+m.nombre.toLowerCase()+'</div>'
+    +'<div style="display:flex;align-items:center;gap:6px">'
     +'<div class="nom-resumen-sub">'+(diasQ1c+diasQ2c)+' días · 2 pagos</div>'
+    +'<span id="nom-resumen-chev" style="display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;color:var(--mut);transform:rotate('+(nomResumenOpen?'180deg':'0deg')+');transition:transform .15s ease">'+icon('chevronDown',13)+'</span>'
     +'</div>'
+    +'</div>'
+    +'<div id="nom-resumen-body" style="display:'+(nomResumenOpen?'block':'none')+'">'
     +'<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:8px">'
     +'<div><div class="nom-resumen-lbl">Neto del mes</div>'
     +'<div class="nom-resumen-val"><span class="nom-resumen-cur">$</span>'+Math.round(n1+n2).toLocaleString('es-CO')+'</div></div>'
@@ -93,6 +97,7 @@ function renderNom(m) {
     +'<div class="nom-resumen-stat"><div class="nom-resumen-stat-lbl">Extras</div><div class="nom-resumen-stat-val">'+cop(mesExtras)+'</div></div>'
     +'</div>'
     +'<div class="nom-resumen-edit" onclick="editBasico()">'+btnIcon('edit',12)+'Editar básico y bonos</div>'
+    +'</div>'
     +'</div>';
 
   function fmtDLocal(dt){ return dt.getDate()+' '+MESES_ABBR_MIN[dt.getMonth()]; }
@@ -152,5 +157,13 @@ function renderNom(m) {
 function selectNomQ(q){
   curNomQ=q;
   render();
+}
+// Colapsa/expande la tarjeta "Resumen de <mes>" al inicio de la pestaña Nómina.
+function toggleNomResumen(){
+  nomResumenOpen=!nomResumenOpen;
+  const body=document.getElementById('nom-resumen-body');
+  const chev=document.getElementById('nom-resumen-chev');
+  if(body) body.style.display=nomResumenOpen?'block':'none';
+  if(chev) chev.style.transform='rotate('+(nomResumenOpen?'180deg':'0deg')+')';
 }
 
