@@ -39,6 +39,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 84px}
 .scroll.scroll-home{overflow-y:hidden;background:var(--bg-2);padding:10px 12px 0}
 .home-view{display:flex;flex-direction:column;height:100%;gap:8px}
+/* Inicio ya no vive dentro de .scroll-home (ver render.js) — su .home-view no debe quedar
+   forzado a 100% de alto (eso comprimía el contenido en vez de dejarlo desbordar hacia el
+   scroll normal de .scroll, como ya pasa en Tarjeta/Ingresos). */
+.scroll:not(.scroll-home) .home-view{height:auto}
 .card{background:var(--surf);border-radius:var(--r);border:1px solid var(--brd);margin-bottom:10px;overflow:hidden}
 .chead{padding:10px 14px 8px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center}
 .ctitle{font-size:13px;font-weight:600;color:var(--txt)}
@@ -204,7 +208,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .tc-mini-chev{color:#4B5B75;display:flex;flex-shrink:0}
 .tc-mini-foot{margin-top:8px;padding-top:8px;border-top:1px solid var(--brd);font-size:10px;font-weight:700;color:var(--mut)}
 
-.glist-card{flex:0 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--surf);border-radius:14px;padding-bottom:14px}
+.glist-card{background:var(--surf);border-radius:14px;overflow:hidden}
 .glist-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px 6px}
 .glist-title{font-size:13px;font-weight:800;color:var(--txt)}
 .glist-sub{font-size:10.5px;color:var(--mut)}
@@ -226,7 +230,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .cred-hero-stats{display:flex;align-items:stretch;gap:0;margin-top:10px;padding-top:9px;border-top:1px solid var(--brd)}
 .cred-hero-stat{flex:1;min-width:0}
 .cred-hero-stat-lbl{font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--mut);text-transform:uppercase}
-.cred-hero-stat-val{font-size:18px;font-weight:800;letter-spacing:-.02em;margin-top:1px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cred-hero-stat-val{font-size:14.5px;font-weight:800;letter-spacing:-.015em;margin-top:1px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .cred-list{display:flex;flex-direction:column;gap:0}
 
@@ -260,7 +264,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .nom-hero-stats{display:flex;align-items:stretch;gap:0;margin-top:11px;padding-top:10px;border-top:1px solid var(--brd)}
 .nom-hero-stat{flex:1;min-width:0}
 .nom-hero-stat-lbl{font-size:9px;font-weight:800;letter-spacing:.07em;color:var(--mut);text-transform:uppercase}
-.nom-hero-stat-val{font-size:19px;font-weight:800;letter-spacing:-.025em;margin-top:1px;font-variant-numeric:tabular-nums}
+.nom-hero-stat-val{font-size:15px;font-weight:800;letter-spacing:-.02em;margin-top:1px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .nom-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid rgba(148,163,184,.09)}
 .nom-row-info{flex:1;min-width:0}
@@ -268,7 +272,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .nom-row-nota{font-size:10px;font-weight:700;color:#6B7C96;margin-top:1px}
 .nom-row-badge{font-size:9px;font-weight:800;color:#6B7C96;background:rgba(148,163,184,.12);padding:1px 5px;border-radius:5px}
 .nom-row-val{font-size:13.5px;font-weight:800}
-.nom-lists{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:10px;padding-bottom:70px}
+.nom-lists{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:10px;padding-bottom:84px}
 .nom-panel{flex-shrink:0;background:var(--surf);border:1px solid var(--brd2);border-radius:14px;overflow:hidden}
 .nom-sec-head{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-left:3px solid transparent}
 .nom-sec-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}

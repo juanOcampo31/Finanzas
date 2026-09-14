@@ -346,7 +346,10 @@ function render() {
 
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===curTab));
   const el=document.getElementById('scroll');
-  el.classList.toggle('scroll-home', homeActive||curTab===3||curTab===4);
+  // Inicio ya NO usa el modo "scroll-home" (encabezado fijo + scroll interno propio de la
+  // card de gastos): ahora se comporta exactamente como Tarjeta/Ingresos — toda la pantalla
+  // se desplaza junto (ver .glist-card en style.css, que dejó de tener su propio flex/scroll).
+  el.classList.toggle('scroll-home', curTab===3||curTab===4);
   if      (curTab===0) el.innerHTML=renderInicio(m);
   else if (curTab===1) el.innerHTML=renderIngresos(m);
   else if (curTab===2) el.innerHTML=renderTC(m);
@@ -746,11 +749,14 @@ function renderGastos(gastos,which) {
       var isA=opt.k===activeSort;
       return '<button onclick="setGSort(\''+which+'\',\''+opt.k+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(isA?'var(--acc)':'var(--surf2)')+';color:'+(isA?'#0F172A':'var(--mut)')+';">'+opt.lbl+'</button>';
     }).join('');
-    panelHtml='<div style="border-bottom:1px solid var(--brd);background:var(--bg);padding:6px 0">'
-      +'<div style="padding:0 14px 4px"><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Filtrar</div>'
-      +'<div style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none">'+filterPills+'</div></div>'
-      +'<div style="padding:6px 14px 2px"><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Ordenar</div>'
-      +'<div style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none">'+sortPills+'</div></div>'
+    // flex-wrap (no overflow-x con scroll oculto): así se ven TODAS las opciones de una vez,
+    // sin depender de un gesto lateral que no era descubrible (no había ninguna pista visual
+    // de que se podía deslizar, así que las opciones que no cabían quedaban invisibles).
+    panelHtml='<div style="margin:0 14px 10px;padding:10px 12px;background:var(--bg-2);border:1px solid var(--brd2);border-radius:14px">'
+      +'<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Filtrar</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:5px">'+filterPills+'</div></div>'
+      +'<div><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Ordenar</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:5px">'+sortPills+'</div></div>'
       +'</div>';
   }
   var sortPillsHtml=panelHtml;
