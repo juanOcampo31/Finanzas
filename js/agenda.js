@@ -24,12 +24,27 @@ let agFormRegistrarGasto=true;
 let agFormRepetirActual='nunca';
 let agFormGastoExistenteId=null; // gasto YA CREADO al que se enlaza este pago, en vez de crear uno nuevo
 let agFormSnapshot=null;         // valores tecleados, para volver del picker de "gasto existente" sin perderlos
+// La quincena normalmente se deduce del día de la fecha (1-15 → Q1, 16-fin → Q2), pero eso
+// asume que la Q2 ya se pagó justo el día 16 — si un gasto cae, por ejemplo, el 24 pero la Q2
+// todavía no se ha pagado, sigue siendo plata de la Q1. null = usar la deducida por fecha;
+// 'q1'/'q2' = el usuario la corrigió a mano en el formulario.
+let agFormQuincenaManual=null;
 
 // ── Datos ────────────────────────────────────────────────────────────────────
 function agendaArr(m){ if(!Array.isArray(m.agenda)) m.agenda=[]; return m.agenda; }
 function agQuincenaDeFecha(fecha){
   var day=parseInt((fecha||'').split('-')[2],10)||1;
   return day<=15?'q1':'q2';
+}
+// La que realmente se usa en el formulario: la deducida por fecha, salvo que el usuario la
+// haya corregido a mano (ver agFormQuincenaManual).
+function agQuincenaResuelta(fecha){
+  return agFormQuincenaManual||agQuincenaDeFecha(fecha);
+}
+function agSetQuincenaManual(q){
+  agFormQuincenaManual=q;
+  agFormGastoExistenteId=null; // una asociación a un gasto de la otra quincena ya no aplica
+  agActualizarBloqueGasto();
 }
 function agBuscarGasto(m,gastoId,which){
   var lista=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
@@ -393,6 +408,7 @@ function agAbrirNuevo(){
   agFormRegistrarGasto=true;
   agFormRepetirActual='nunca';
   agFormGastoExistenteId=null;
+  agFormQuincenaManual=null;
   openModal(agFormHtml());
   setTimeout(function(){
     var el=document.getElementById('ag-concepto');
@@ -463,9 +479,18 @@ function agBloqueRegistrarGastoHtml(){
   // muestra apagado EN PANTALLA (on=false) sin perder la preferencia real.
   var on=agFormRegistrarGasto&&tieneMonto;
   var fechaActual=document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10);
-  var wh=agQuincenaDeFecha(fechaActual);
+  var wh=agQuincenaResuelta(fechaActual);
   var gastoExistente=agFormGastoExistenteId?agBuscarGasto(m,agFormGastoExistenteId,wh):null;
   if(agFormGastoExistenteId&&!gastoExistente) agFormGastoExistenteId=null; // cambió de quincena o ya no existe
+
+  // La quincena la sugiere la fecha, pero es editable: un gasto del 24 sigue siendo de la Q1
+  // si esa Q2 todavía no se ha pagado, por ejemplo.
+  var quincenaHtml='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
+    +'<span style="font-size:12.5px;font-weight:600;color:'+AG.txt4+'">Quincena</span>'
+    +'<div style="display:flex;background:'+AG.bg4+';border-radius:9px;padding:3px;gap:2px">'
+    +'<button type="button" onclick="agSetQuincenaManual(\'q1\')" style="padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:'+(wh==='q1'?'800':'600')+';background:'+(wh==='q1'?AG.accBg2:'transparent')+';color:'+(wh==='q1'?AG.cian2:AG.txt5)+'">Q1</button>'
+    +'<button type="button" onclick="agSetQuincenaManual(\'q2\')" style="padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:'+(wh==='q2'?'800':'600')+';background:'+(wh==='q2'?AG.accBg2:'transparent')+';color:'+(wh==='q2'?AG.cian2:AG.txt5)+'">Q2</button>'
+    +'</div></div>';
 
   var consecuenciaHtml=gastoExistente
     ?('Se enlaza con <b style="color:'+AG.txt2+'">'+esc(nombreGasto(gastoExistente))+'</b>, sin tocar su estado actual')
@@ -499,6 +524,7 @@ function agBloqueRegistrarGastoHtml(){
     +'</button>'
     +'</div>'
     +(!tieneMonto?'<div style="font-size:11px;color:'+AG.txt5+'">Sin monto no hay nada que registrar: quedará solo como recordatorio.</div>':'')
+    +'<div style="border-top:1px solid '+AG.bd4+';padding-top:12px">'+quincenaHtml+'</div>'
     +formaPagoHtml
     +asociarHtml
     +'</div>';
@@ -540,7 +566,7 @@ function agRestaurarSnapshot(){
 function agAbrirPickerGastoExistente(){
   var m=getM();
   var fecha=document.getElementById('ag-fecha').value||new Date().toISOString().slice(0,10);
-  var which=agQuincenaDeFecha(fecha);
+  var which=agQuincenaResuelta(fecha);
   var gastos=agGastosDisponiblesParaAsociar(m,which);
   if(!gastos.length){ showAlert('No hay gastos de '+which.toUpperCase()+' sin asociar todavía.'); return; }
   agFormSnapshot=agCapturarSnapshot();
@@ -599,7 +625,7 @@ function agGuardarNuevo(){
 
   var monto=moneyVal('ag-monto')||0;
   var registrarGasto=agFormRegistrarGasto&&monto>0;
-  var which=agQuincenaDeFecha(fecha);
+  var which=agQuincenaResuelta(fecha);
   var item={id:uid(),tipo:'pago',concepto:concepto,fecha:fecha,monto:monto>0?monto:null,repetir:agFormRepetirActual,tildado:false,gastoId:null,which:which,formaPago:null};
   var gastoCreado=null, gastoAsociado=null;
 
@@ -627,6 +653,7 @@ function agGuardarNuevo(){
   agendaArr(m).push(item);
   save();
   agFormGastoExistenteId=null;
+  agFormQuincenaManual=null;
   agMostrarConfirmacion(item,gastoCreado||gastoAsociado,!!gastoAsociado);
 }
 
