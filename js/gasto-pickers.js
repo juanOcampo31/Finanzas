@@ -191,7 +191,7 @@ function guardarNuevoGastoGuardadoDesdePicker(){
     openGastoTemplates(); toast('Gasto agregado');
   }
 }
-function openGasto(g,which,parentId){
+function openGasto(g,which,parentId,skipFocus){
   const e=g||{nombre:'',presupuesto:0,metodo:'',pagado_real:null,estado:null,pagado_flag:false};
   // isE (¿existe ya el gasto?) se basa en si trae id, no solo en si "g" es un objeto — al
   // reabrir el formulario tras elegir algo en el picker de Forma de pago/Grupo (ver
@@ -478,15 +478,22 @@ function openGasto(g,which,parentId){
     +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
     +delBtn;
   openModal(html);
-  // Foco + selección automática en "Valor" al abrir el formulario: en móvil dispara el
-  // teclado numérico de una vez (el input ya tiene inputmode="numeric") sin que el usuario
-  // tenga que tocarlo primero, y con el valor seleccionado alcanza con escribir para
-  // reemplazarlo. El setTimeout es necesario porque openModal recién acaba de inyectar el
-  // HTML — sin él, el input todavía no está listo para recibir foco en algunos navegadores.
-  setTimeout(function(){
-    const pEl=document.getElementById('g-p');
-    if(pEl){ pEl.focus(); pEl.select(); }
-  },50);
+  // Foco + selección automática en "Valor" SOLO al abrir el formulario de verdad (por primera
+  // vez): en móvil dispara el teclado numérico de una vez (el input ya tiene
+  // inputmode="numeric") sin que el usuario tenga que tocarlo primero, y con el valor
+  // seleccionado alcanza con escribir para reemplazarlo. skipFocus=true cuando en realidad esto
+  // es un RE-render tras volver de un picker interno (Forma de pago/Grupo/Crédito/plantilla, ver
+  // reabrirGastoDesdePending) — antes se repetía este foco+selección cada vez que se volvía de
+  // cualquiera de esos pickers, tirando al usuario de vuelta a "Valor" con el teclado numérico
+  // encima justo cuando quería seguir editando otro campo distinto.
+  if(!skipFocus){
+    // El setTimeout es necesario porque openModal recién acaba de inyectar el HTML — sin él, el
+    // input todavía no está listo para recibir foco en algunos navegadores.
+    setTimeout(function(){
+      const pEl=document.getElementById('g-p');
+      if(pEl){ pEl.focus(); pEl.select(); }
+    },50);
+  }
 }
 // Lápiz junto a "Nombre" al editar un gasto ya guardado (ver nameFieldHtml en openGasto):
 // el input nace readonly para no permitir renombrar sin querer un gasto que puede estar

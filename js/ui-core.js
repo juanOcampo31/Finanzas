@@ -77,7 +77,7 @@ function reabrirGastoDesdePending(){
   if(!_gastoFormPending) return;
   const {data,wh,pid}=_gastoFormPending;
   _gastoFormPending=null;
-  openGasto(data,wh,pid);
+  openGasto(data,wh,pid,true); // skipFocus: es un re-render, no una apertura nueva del formulario
 }
 function cerrarPickerYVolver(){
   if(_gastoFormPending) reabrirGastoDesdePending(); else closeModal();
