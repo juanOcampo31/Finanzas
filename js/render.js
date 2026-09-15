@@ -344,7 +344,14 @@ function render() {
     tcBreakdownEl.style.display='none';
   }
 
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===curTab));
+  // La barra inferior solo muestra 4 botones (Inicio/Nómina/Agenda/Más) — Ingresos, Tarjeta y
+  // Créditos viven detrás de "Más" (ver openMasMenu, ui-core.js), así que ya no hay una
+  // correspondencia 1:1 entre posición del botón y curTab: cada botón declara en data-tabs
+  // qué valores de curTab lo dejan "activo" (el de "Más" lista varios, separados por coma).
+  document.querySelectorAll('.tab').forEach(function(t){
+    var tabs=(t.dataset.tabs||'').split(',').map(Number);
+    t.classList.toggle('active',tabs.indexOf(curTab)>=0);
+  });
   // Punto ámbar de la pestaña Agenda (ver index.html): se actualiza acá, en cada render(), en
   // vez de solo al entrar a esa pestaña — así avisa aunque el usuario esté en cualquier otra.
   const agendaDotEl=document.getElementById('agendaTabDot');

@@ -420,9 +420,9 @@ function executeWipeAll(){
 }
 
 // Punto medio: NO se bloquea al instante al pasar a segundo plano (cambiar de app, apagar
-// pantalla, etc.), pero sí se vuelve a pedir el PIN si al regresar ya pasaron 5+ minutos
-// en segundo plano. Menos de 5 min → sigue desbloqueada tal cual la dejaste.
-const AUTO_LOCK_MS = 5*60*1000;
+// pantalla, etc.), pero sí se vuelve a pedir el PIN si al regresar ya pasaron 3+ minutos
+// en segundo plano. Menos de 3 min → sigue desbloqueada tal cual la dejaste.
+const AUTO_LOCK_MS = 3*60*1000;
 let bgHiddenAt = null;
 document.addEventListener('visibilitychange', function(){
   if(document.hidden){

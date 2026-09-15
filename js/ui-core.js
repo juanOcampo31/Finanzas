@@ -1,5 +1,17 @@
 // ── Navegación ────────────────────────────────────────────────────────────────
 function sw(i){curTab=i;headerUserMenuOpen=false;headerMonthPanelOpen=false;render();}
+// La barra inferior solo tiene espacio para 4 botones (Inicio/Nómina/Agenda/Más) — Ingresos,
+// Tarjeta y Créditos quedan detrás de este menú "⋮" en vez de competir por el mismo ancho.
+function openMasMenu(){
+  function fila(label,tab){
+    return '<div onclick="closeModal();sw('+tab+')" style="padding:14px 4px;font-size:15px;font-weight:600;color:var(--txt);border-bottom:1px solid var(--brd);cursor:pointer">'+esc(label)+'</div>';
+  }
+  openModal('<div class="mtitle">Más</div>'
+    +'<div style="display:flex;flex-direction:column">'
+    +fila('Ingresos',1)+fila('Tarjeta',2)+fila('Créditos',4)
+    +'</div>'
+    +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
+}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openModal(h){document.getElementById('mc').innerHTML=h;document.getElementById('mbg').classList.add('open');}
