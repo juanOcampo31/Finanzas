@@ -239,7 +239,7 @@ function agFilaHtml(e){
   if(vencePronto||vencido){ bg=AG.amb6; bd=AG.amb5; numColor=AG.amb2; tituloColor=AG.amb4; subColor=AG.amb3; dowColor=AG.amb3; barra=vencido?AG.rojo:AG.amb1; }
   if(tildada){ bg='#0D1729'; tituloColor=AG.txt5; subColor=AG.txt5; dowColor=AG.txt5; barra='#475569'; bd=AG.bd1; }
 
-  var subTxt=dias===0?'Hoy':dias<0?('hace '+Math.abs(dias)+' día'+(Math.abs(dias)===1?'':'s')):('en '+dias+' día'+(dias===1?'':'s'));
+  var subTxt=(dias===0?'Hoy':dias<0?('hace '+Math.abs(dias)+' día'+(Math.abs(dias)===1?'':'s')):('en '+dias+' día'+(dias===1?'':'s')))+(e.hora?(' · '+e.hora):'');
 
   var tituloHtml='<div style="font-size:13.5px;font-weight:700;color:'+tituloColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(tildada?';text-decoration:line-through':'')+'">'+esc(e.concepto)+'</div>';
 
@@ -292,7 +292,7 @@ function agAbrirDetalle(id){
   if(!it) return;
   openModal('<div class="mtitle">'+(it.tipo==='tarea'?'Tarea':'Recordatorio')+'</div>'
     +'<p style="font-size:14px;color:var(--txt);font-weight:600;margin-bottom:6px">'+esc(it.concepto)+'</p>'
-    +'<p style="font-size:12px;color:var(--mut);margin-bottom:16px">'+fmtD(it.fecha)+(it.monto?(' · '+cop(it.monto)):'')+(it.gastoId?' · enlazado a un gasto':'')+'</p>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:16px">'+fmtD(it.fecha)+(it.hora?(' · '+it.hora):'')+(it.monto?(' · '+cop(it.monto)):'')+(it.gastoId?' · enlazado a un gasto':'')+'</p>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cerrar</button>'
     +'<button class="bpri" style="background:var(--red);color:#fff" onclick="agConfirmarBorrar(\''+id+'\')">Eliminar</button></div>');
 }
@@ -433,9 +433,11 @@ function agFormHtml(){
   var camposHtml='<div class="ig-field-row">'
     +'<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';margin-bottom:5px">FECHA</label>'
     +'<input id="ag-fecha" type="date" value="'+hoy+'" onchange="agActualizarBloqueGasto()" style="width:100%;padding:11px 12px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:11px;font-size:15px;font-weight:700;color:'+AG.txt3+'"></div>'
+    +'<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';margin-bottom:5px">HORA</label>'
+    +'<input id="ag-hora" type="time" style="width:100%;padding:11px 12px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:11px;font-size:15px;font-weight:700;color:'+AG.txt3+'"></div>'
+    +'</div>'
     +(esPago?('<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';margin-bottom:5px">MONTO</label>'
-      +'<input id="ag-monto" type="text" inputmode="numeric" placeholder="opcional" oninput="maskMoneyInput(this);agActualizarBloqueGasto()" style="width:100%;padding:11px 12px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:11px;font-size:15px;font-weight:800;color:'+AG.txt1+';font-variant-numeric:tabular-nums"></div>'):'')
-    +'</div>';
+      +'<input id="ag-monto" type="text" inputmode="numeric" placeholder="opcional" oninput="maskMoneyInput(this);agActualizarBloqueGasto()" style="width:100%;padding:11px 12px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:11px;font-size:15px;font-weight:800;color:'+AG.txt1+';font-variant-numeric:tabular-nums"></div>'):'');
 
   var repetirOpts=[{k:'nunca',l:'Nunca'},{k:'mensual',l:'Mensual'},{k:'quincenal',l:'Quincenal'}];
   var repetirHtml='<div><label style="display:block;font-size:11px;font-weight:700;color:'+AG.txt5+';margin-bottom:5px">REPETIR</label>'
@@ -470,14 +472,10 @@ function agGastosDisponiblesParaAsociar(m,which){
 }
 function agBloqueRegistrarGastoHtml(){
   var m=getM();
-  var montoActual=document.getElementById('ag-monto')?moneyVal('ag-monto'):0;
-  var tieneMonto=montoActual>0;
-  // agFormRegistrarGasto es la preferencia del usuario (por defecto encendida) y NUNCA se toca
-  // acá solo porque el monto esté vacío en este instante — si se mutara aquí, escribir y luego
-  // borrar el monto (o simplemente abrir el formulario antes de teclear nada) la apagaría para
-  // siempre aunque el usuario nunca haya tocado el interruptor. Sin monto simplemente se
-  // muestra apagado EN PANTALLA (on=false) sin perder la preferencia real.
-  var on=agFormRegistrarGasto&&tieneMonto;
+  // El monto ya NO es requisito para encender "Registrarlo también como gasto" ni para asociar
+  // uno ya creado (ese hereda su propio valor) — solo se exige, al guardar, cuando se va a crear
+  // un gasto NUEVO (ver agGuardarNuevo).
+  var on=agFormRegistrarGasto;
   var fechaActual=document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10);
   var wh=agQuincenaResuelta(fechaActual);
   var gastoExistente=agFormGastoExistenteId?agBuscarGasto(m,agFormGastoExistenteId,wh):null;
@@ -519,11 +517,10 @@ function agBloqueRegistrarGastoHtml(){
     +'<div style="font-size:13.5px;font-weight:800;color:'+AG.txt2+'">Registrarlo también como gasto</div>'
     +'<div style="font-size:11.5px;color:'+AG.txt5+';margin-top:2px">'+consecuenciaHtml+'</div>'
     +'</div>'
-    +'<button type="button" onclick="agToggleSwitchGasto()" id="ag-switch" style="width:44px;height:26px;border-radius:13px;padding:3px;border:none;cursor:'+(tieneMonto?'pointer':'not-allowed')+';flex-shrink:0;background:'+(on?AG.cian:AG.bd3)+';opacity:'+(tieneMonto?'1':'.45')+'">'
+    +'<button type="button" onclick="agToggleSwitchGasto()" id="ag-switch" style="width:44px;height:26px;border-radius:13px;padding:3px;border:none;cursor:pointer;flex-shrink:0;background:'+(on?AG.cian:AG.bd3)+'">'
     +'<span style="display:block;width:20px;height:20px;border-radius:50%;background:'+(on?'#052B33':AG.txt5)+';transform:translateX('+(on?'18px':'0')+');transition:transform .15s ease"></span>'
     +'</button>'
     +'</div>'
-    +(!tieneMonto?'<div style="font-size:11px;color:'+AG.txt5+'">Sin monto no hay nada que registrar: quedará solo como recordatorio.</div>':'')
     +'<div style="border-top:1px solid '+AG.bd4+';padding-top:12px">'+quincenaHtml+'</div>'
     +formaPagoHtml
     +asociarHtml
@@ -535,8 +532,6 @@ function agActualizarBloqueGasto(){
   wrap.outerHTML=agBloqueRegistrarGastoHtml();
 }
 function agToggleSwitchGasto(){
-  var monto=document.getElementById('ag-monto')?moneyVal('ag-monto'):0;
-  if(monto<=0) return;
   agFormRegistrarGasto=!agFormRegistrarGasto;
   agActualizarBloqueGasto();
 }
@@ -550,6 +545,7 @@ function agCapturarSnapshot(){
   return {
     concepto: document.getElementById('ag-concepto')?document.getElementById('ag-concepto').value:'',
     fecha: document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10),
+    hora: document.getElementById('ag-hora')?document.getElementById('ag-hora').value:'',
     monto: document.getElementById('ag-monto')?document.getElementById('ag-monto').value:''
   };
 }
@@ -560,6 +556,7 @@ function agRestaurarSnapshot(){
   if(!snap) return;
   var cEl=document.getElementById('ag-concepto'); if(cEl) cEl.value=snap.concepto||'';
   var fEl=document.getElementById('ag-fecha'); if(fEl) fEl.value=snap.fecha||fEl.value;
+  var hEl=document.getElementById('ag-hora'); if(hEl) hEl.value=snap.hora||'';
   var mEl=document.getElementById('ag-monto'); if(mEl) mEl.value=snap.monto||'';
   agSetRepetir(agFormRepetirActual);
 }
@@ -583,6 +580,16 @@ function agAbrirPickerGastoExistente(){
 }
 function agElegirGastoExistente(gastoId){
   agFormGastoExistenteId=gastoId;
+  // Al asociar un gasto ya creado, el recordatorio hereda su nombre y su valor — es el gasto
+  // quien manda ahora, así que no tiene sentido dejar lo que el usuario haya tecleado antes.
+  var m=getM();
+  var fecha=(agFormSnapshot&&agFormSnapshot.fecha)||new Date().toISOString().slice(0,10);
+  var which=agQuincenaResuelta(fecha);
+  var gasto=agBuscarGasto(m,gastoId,which);
+  if(gasto&&agFormSnapshot){
+    agFormSnapshot.concepto=nombreGasto(gasto);
+    agFormSnapshot.monto=gasto.presupuesto?moneyInputFmt(gasto.presupuesto):'';
+  }
   agRestaurarSnapshot();
 }
 function agSetRepetir(k){
@@ -601,11 +608,13 @@ function agSetRepetir(k){
 function agCambiarTipo(tipo){
   var concepto=document.getElementById('ag-concepto')?document.getElementById('ag-concepto').value:'';
   var fecha=document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10);
+  var hora=document.getElementById('ag-hora')?document.getElementById('ag-hora').value:'';
   agFormTipo=tipo;
   agFormGastoExistenteId=null;
   openModal(agFormHtml());
   var cEl=document.getElementById('ag-concepto'); if(cEl) cEl.value=concepto;
   var fEl=document.getElementById('ag-fecha'); if(fEl) fEl.value=fecha;
+  var hEl=document.getElementById('ag-hora'); if(hEl) hEl.value=hora;
   agSetRepetir(agFormRepetirActual);
   setTimeout(function(){ if(cEl) cEl.focus(); },50);
 }
@@ -614,23 +623,27 @@ function agGuardarNuevo(){
   var concepto=(document.getElementById('ag-concepto').value||'').trim();
   if(!concepto){ showAlert('Escribe qué quieres agendar'); return; }
   var fecha=document.getElementById('ag-fecha').value||new Date().toISOString().slice(0,10);
+  var hora=(document.getElementById('ag-hora')?document.getElementById('ag-hora').value:'')||null;
   var m=getM();
 
   if(agFormTipo==='tarea'){
-    var tarea={id:uid(),tipo:'tarea',concepto:concepto,fecha:fecha,monto:null,repetir:'nunca',tildado:false,gastoId:null,which:agQuincenaDeFecha(fecha),formaPago:null};
+    var tarea={id:uid(),tipo:'tarea',concepto:concepto,fecha:fecha,hora:hora,monto:null,repetir:'nunca',tildado:false,gastoId:null,which:agQuincenaDeFecha(fecha),formaPago:null};
     agendaArr(m).push(tarea);
     save();closeModal();render();toast('Tarea agregada ✓');
     return;
   }
 
   var monto=moneyVal('ag-monto')||0;
-  var registrarGasto=agFormRegistrarGasto&&monto>0;
+  var registrarGasto=agFormRegistrarGasto;
   var which=agQuincenaResuelta(fecha);
-  var item={id:uid(),tipo:'pago',concepto:concepto,fecha:fecha,monto:monto>0?monto:null,repetir:agFormRepetirActual,tildado:false,gastoId:null,which:which,formaPago:null};
+  var gastoAsociadoPreCheck=agFormGastoExistenteId?agBuscarGasto(m,agFormGastoExistenteId,which):null;
+  // El monto solo es obligatorio para crear un gasto NUEVO — uno ya asociado hereda su propio valor.
+  if(registrarGasto&&!gastoAsociadoPreCheck&&monto<=0){ showAlert('Ingresa el valor del gasto'); return; }
+  var item={id:uid(),tipo:'pago',concepto:concepto,fecha:fecha,hora:hora,monto:monto>0?monto:(gastoAsociadoPreCheck?gastoAsociadoPreCheck.presupuesto:null),repetir:agFormRepetirActual,tildado:false,gastoId:null,which:which,formaPago:null};
   var gastoCreado=null, gastoAsociado=null;
 
   if(registrarGasto){
-    if(agFormGastoExistenteId) gastoAsociado=agBuscarGasto(m,agFormGastoExistenteId,which);
+    if(agFormGastoExistenteId) gastoAsociado=gastoAsociadoPreCheck;
     if(gastoAsociado){
       // Se enlaza a un gasto YA CREADO, sin tocar su estado/monto actual — es él quien manda
       // de ahí en adelante (ver agSincronizarMontoDesdeGasto: solo sincroniza mientras "sin

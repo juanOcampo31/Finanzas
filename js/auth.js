@@ -845,6 +845,7 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 let curTab = 0;
 let homeQ = 'q1'; // quincena seleccionada dentro de la vista Inicio
 let homeQAutoDone = false; // ya se aplicó el default automático de homeQ según la fecha de hoy
+let curNomQAutoDone = false; // igual que homeQAutoDone, pero para curNomQ (ver homeQParaMes, render.js)
 let tcTipo = 'Compra';
 
 function save(){

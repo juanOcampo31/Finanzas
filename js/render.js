@@ -221,6 +221,12 @@ function render() {
     homeQAutoDone=true;
     homeQ=homeQParaMes(m);
   }
+  // Misma lógica que Inicio (ver homeQParaMes arriba), aplicada a la pestaña Nómina: arranca
+  // en la quincena en curso según la fecha de hoy, no siempre en Q1.
+  if(!curNomQAutoDone){
+    curNomQAutoDone=true;
+    curNomQ=homeQParaMes(m);
+  }
   const homeActive = curTab===0;
   document.getElementById('headerRow').innerHTML = renderHeaderTop(m);
   const userMenuEl=document.getElementById('userMenuPanel');
@@ -359,10 +365,13 @@ function render() {
     agendaDotEl.style.display=agEntradasProximos7(m).length>0?'block':'none';
   }
   const el=document.getElementById('scroll');
-  // Inicio ya NO usa el modo "scroll-home" (encabezado fijo + scroll interno propio de la
-  // card de gastos): ahora se comporta exactamente como Tarjeta/Ingresos — toda la pantalla
-  // se desplaza junto (ver .glist-card en style.css, que dejó de tener su propio flex/scroll).
-  el.classList.toggle('scroll-home', curTab===3||curTab===4);
+  // Inicio y Créditos ya NO usan el modo "scroll-home" (encabezado fijo + scroll interno
+  // propio): ambos se apoyan en .glist-card, que dejó de tener su propio flex/scroll (ver
+  // style.css) — sin sacarlos de scroll-home, su lista quedaba sin ninguna forma de
+  // desplazarse (overflow-y:hidden por fuera y sin scroll propio por dentro). Ahora se
+  // comportan como Tarjeta/Ingresos: toda la pantalla se desplaza junto. Nómina sigue en
+  // scroll-home porque .nom-lists sí conserva su propio scroll interno.
+  el.classList.toggle('scroll-home', curTab===3);
   if      (curTab===0) el.innerHTML=renderInicio(m);
   else if (curTab===1) el.innerHTML=renderIngresos(m);
   else if (curTab===2) el.innerHTML=renderTC(m);
@@ -466,13 +475,17 @@ function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,venc
     const negIcon=val<0?'<span title="Disponible negativo" style="color:var(--red);display:inline-flex;vertical-align:-2px;margin-left:5px">'+icon('alertTriangle',13)+'</span>':'';
     const vencIcon=(!negIcon&&venc&&venc.length)?'<span title="Cuota de crédito vencida" style="color:var(--amb);display:inline-flex;vertical-align:-2px;margin-left:5px">'+icon('alertTriangle',13)+'</span>':'';
     const sepHtml='<div class="qcard-sep"></div>';
-    const pagoTxtColor=active?'var(--acc)':'var(--txt)';
-    // Solo la palabra "pagado" del sub-texto (fecha de pago ya en el pasado) se pinta de rojo.
+    // Misma idea que en Nómina: si esta quincena ya se pagó, el valor y el texto "Pago {fecha}"
+    // se muestran en gris en vez de a la par de la que sigue en curso (ver qTab en nomina.js).
+    // La palabra "pagado" del sub-texto se deja tal cual estaba (en rojo, el estándar actual).
+    const yaPagada=pago.sub==='pagado';
+    const valStyle=yaPagada?' style="color:var(--mut)"':'';
+    const pagoTxtColor=yaPagada?'var(--mut)':(active?'var(--acc)':'var(--txt)');
     const pagoSubStyle=pago.sub==='pagado'?' style="color:var(--red)"':'';
     return '<div class="qcard'+(active?' active':'')+'" onclick="'+selectFn+'(\''+qKey+'\')">'
       +'<div class="qcard-top"><span class="qcard-lbl'+(active?' active':'')+'">'+label+'</span><span class="qcard-range">'+rango+'</span></div>'
       +'<div class="qcard-disp-lbl">'+valueLbl+'</div>'
-      +'<div class="qcard-disp-val"><span class="qcard-cur">$</span>'+(val<0?'-':'')+Math.abs(Math.round(val)).toLocaleString('es-CO')+negIcon+vencIcon+'</div>'
+      +'<div class="qcard-disp-val"'+valStyle+'><span class="qcard-cur">$</span>'+(val<0?'-':'')+Math.abs(Math.round(val)).toLocaleString('es-CO')+negIcon+vencIcon+'</div>'
       +sepHtml
       +'<div class="qcard-pago-row"><span class="qcard-dot'+(active?' active':'')+'"></span><span class="qcard-pago-txt" style="color:'+pagoTxtColor+'">Pago '+pago.fecha+'</span><span class="qcard-pago-sub"'+pagoSubStyle+'>'+pago.sub+'</span></div>'
       +'</div>';
@@ -789,7 +802,7 @@ function renderGastos(gastos,which) {
     +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+pagadosCount+' de '+topGastosAll.length+' pagados'+filterBtnHtml+'</span>'
     +'</div>'
     +'<div class="glist-totals">'
-    +'<div class="glist-tot"><div class="glist-tot-lbl">TOTAL Q'+qLabel+'</div><div class="glist-tot-val" style="color:var(--txt)">'+cop(total)+'</div></div>'
+    +'<div class="glist-tot"><div class="glist-tot-lbl">GASTOS Q'+qLabel+'</div><div class="glist-tot-val" style="color:var(--txt)">'+cop(total)+'</div></div>'
     +'<div class="glist-div"></div>'
     +'<div class="glist-tot"><div class="glist-tot-lbl">PAGADO</div><div class="glist-tot-val" style="color:var(--grn)">'+cop(pagado)+'</div></div>'
     +'<div class="glist-div"></div>'

@@ -64,11 +64,14 @@ function renderNom(m) {
   const stPago=diasStatus(diasPago);
   const pagoTxt=diasPago<0?'Ya pagado':('Llega el '+DOW_FULL[fechaQ.getDay()]+' '+fechaQ.getDate()+' · '+stPago.txt);
 
-  function qTab(qKey,label,fecha,neto){
+  // Una quincena cuya fecha de pago ya pasó se muestra en gris (mismo criterio "Ya pagado" que
+  // ya usa pagoTxt más abajo) — el saldo sigue ahí para consulta, pero en gris deja claro que
+  // ya pasó, en vez de parecer un valor "actual" a la par del de la quincena que sigue en curso.
+  function qTab(qKey,label,fecha,neto,yaPagada){
     const active=curNomQ===qKey;
     return '<div class="nomq-tab'+(active?' active':'')+'" onclick="selectNomQ(\''+qKey+'\')">'
       +'<div class="nomq-tab-lbl">'+label+' <span class="nomq-tab-fecha">· '+fecha+'</span></div>'
-      +'<div class="nomq-tab-val">'+cop(neto)+'</div>'
+      +'<div class="nomq-tab-val"'+(yaPagada?' style="color:var(--mut)"':'')+'>'+cop(neto)+'</div>'
       +'</div>';
   }
 
@@ -101,11 +104,11 @@ function renderNom(m) {
     +'</div>';
 
   function fmtDLocal(dt){ return dt.getDate()+' '+MESES_ABBR_MIN[dt.getMonth()]; }
-  const tabsHtml='<div class="nomq-tabs">'+qTab('q1','Q1',fmtDLocal(fechaQ1),n1)+qTab('q2','Q2',fmtDLocal(fechaQ2),n2)+'</div>';
+  const tabsHtml='<div class="nomq-tabs">'+qTab('q1','Q1',fmtDLocal(fechaQ1),n1,diasHasta(fechaQ1)<0)+qTab('q2','Q2',fmtDLocal(fechaQ2),n2,diasHasta(fechaQ2)<0)+'</div>';
 
   const heroHtml='<div class="nom-hero">'
     +'<div class="nom-hero-lbl">Neto a recibir '+which.toUpperCase()+'</div>'
-    +'<div class="nom-hero-val"><span class="nom-hero-cur">$</span>'+Math.round(netoQ).toLocaleString('es-CO')+'</div>'
+    +'<div class="nom-hero-val"'+(diasPago<0?' style="color:var(--mut)"':'')+'><span class="nom-hero-cur">$</span>'+Math.round(netoQ).toLocaleString('es-CO')+'</div>'
     +'<div class="nom-hero-pago" style="color:'+(diasPago>=0?'var(--acc)':'var(--mut)')+'">'+pagoTxt+'</div>'
     +'<div class="nom-hero-stats">'
     +'<div class="nom-hero-stat"><div class="nom-hero-stat-lbl" style="color:var(--grn)">Devengado</div><div class="nom-hero-stat-val" style="color:var(--grn)">'+cop(devQ)+'</div></div>'

@@ -328,7 +328,7 @@ function confirmCreateMonth(){
   if(!nm||nk==null) return;
   moverCuotasVencidasAlMesSiguiente(db[nk-1],nm);
   db[nk]=nm;
-  save();curM=nk;curTab=0;homeQ=homeQParaMes(nm);
+  save();curM=nk;curTab=0;homeQ=homeQParaMes(nm);curNomQ=homeQ;
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};

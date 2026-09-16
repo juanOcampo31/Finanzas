@@ -196,7 +196,7 @@ async function bajarBackupNubeDesdeLock(){
     repararGastosHuerfanosDeGrupo();
     const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
     curM=keys.length?keys[keys.length-1]:0;
-    curTab=0; homeQ=homeQParaMes(db[curM]);
+    curTab=0; homeQ=homeQParaMes(db[curM]); curNomQ=homeQ;
     localStorage.setItem('fin26_last_sync_at', String(Date.now()));
     await save();
     clearPinRecoveryBackup();

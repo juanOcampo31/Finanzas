@@ -683,6 +683,7 @@ function toggleMesDetalle(k){
 function goToMonth(k){
   curM=k;
   homeQ=homeQParaMes(db[k]);
+  curNomQ=homeQParaMes(db[k]);
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};

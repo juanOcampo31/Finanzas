@@ -73,6 +73,75 @@ async function exportJSON(){
   toast('Backup cifrado exportado ✓');
 }
 
+// Compara el db actual contra uno importado para mostrar QUÉ cambia antes de reemplazar todo
+// (ver procesarBackupParseado). Empareja meses por (año,nombre) y no por su key numérica, porque
+// esa key es solo el orden de creación en CADA dispositivo — el mes "3" de uno puede no ser el
+// mismo mes que el "3" del otro (ver agBuscarMesPorFecha en agenda.js, mismo criterio).
+function compararBackupsDb(actual, importado){
+  function indexar(dbObj){
+    var idx={};
+    Object.keys(dbObj||{}).forEach(function(k){
+      var m=dbObj[k];
+      idx[(m.año||'')+'|'+(m.nombre||'')]=m;
+    });
+    return idx;
+  }
+  function labelMes(m){ return (m.nombre||'?')+' '+(m.año||''); }
+  var idxActual=indexar(actual), idxImportado=indexar(importado);
+  var out={mesesNuevos:[],mesesEliminados:[],mesesModificados:[]};
+  Object.keys(idxImportado).forEach(function(key){
+    if(!idxActual[key]) out.mesesNuevos.push(labelMes(idxImportado[key]));
+  });
+  Object.keys(idxActual).forEach(function(key){
+    if(!idxImportado[key]) out.mesesEliminados.push(labelMes(idxActual[key]));
+  });
+  Object.keys(idxImportado).forEach(function(key){
+    if(!idxActual[key]) return;
+    var a=idxActual[key], b=idxImportado[key];
+    if(JSON.stringify(a)===JSON.stringify(b)) return;
+    var detalles=[];
+    ['q1_gastos','q2_gastos'].forEach(function(campo){
+      var la=(a[campo]||[]).filter(function(g){return !g.esGrupo;});
+      var lb=(b[campo]||[]).filter(function(g){return !g.esGrupo;});
+      var idsA={}; la.forEach(function(g){idsA[g.id]=g;});
+      var idsB={}; lb.forEach(function(g){idsB[g.id]=g;});
+      var nuevos=lb.filter(function(g){return !idsA[g.id];}).length;
+      var eliminados=la.filter(function(g){return !idsB[g.id];}).length;
+      var modificados=lb.filter(function(g){return idsA[g.id]&&JSON.stringify(idsA[g.id])!==JSON.stringify(g);}).length;
+      if(nuevos||eliminados||modificados){
+        var totalA=la.reduce(function(s,g){return s+(g.presupuesto||0);},0);
+        var totalB=lb.reduce(function(s,g){return s+(g.presupuesto||0);},0);
+        var partes=[];
+        if(nuevos) partes.push(nuevos+' nuevo'+(nuevos===1?'':'s'));
+        if(eliminados) partes.push(eliminados+' eliminado'+(eliminados===1?'':'s'));
+        if(modificados) partes.push(modificados+' modificado'+(modificados===1?'':'s'));
+        var deltaTxt=(totalB!==totalA)?(' ('+(totalB>totalA?'+':'-')+cop(Math.abs(totalB-totalA))+')'):'';
+        detalles.push((campo==='q1_gastos'?'Q1':'Q2')+': '+partes.join(', ')+deltaTxt);
+      }
+    });
+    if(JSON.stringify(a.nomina)!==JSON.stringify(b.nomina)) detalles.push('nómina modificada');
+    if(JSON.stringify(a.tarjetas)!==JSON.stringify(b.tarjetas)) detalles.push('tarjeta modificada');
+    if(JSON.stringify(a.ingresos)!==JSON.stringify(b.ingresos)) detalles.push('ingresos modificados');
+    if(JSON.stringify(a.agenda)!==JSON.stringify(b.agenda)) detalles.push('agenda modificada');
+    if(!detalles.length) detalles.push('otros cambios');
+    out.mesesModificados.push({label:labelMes(b),detalles:detalles});
+  });
+  return out;
+}
+// Arma el bloque "Cambios detectados" del modal de importar, a partir de compararBackupsDb.
+function cambiosBackupHtml(cambios){
+  var partes=[];
+  if(cambios.mesesNuevos.length) partes.push('<div style="margin-bottom:8px"><b style="color:var(--txt)">Meses nuevos:</b> '+esc(cambios.mesesNuevos.join(', '))+'</div>');
+  if(cambios.mesesEliminados.length) partes.push('<div style="margin-bottom:8px"><b style="color:var(--red)">Ya no estarán:</b> '+esc(cambios.mesesEliminados.join(', '))+'</div>');
+  if(cambios.mesesModificados.length){
+    partes.push('<div style="margin-bottom:6px"><b style="color:var(--txt)">Meses con cambios:</b></div>'
+      +'<ul style="margin:0 0 8px 18px;padding:0">'+cambios.mesesModificados.map(function(mm){
+        return '<li style="margin-bottom:4px">'+esc(mm.label)+': '+esc(mm.detalles.join(' · '))+'</li>';
+      }).join('')+'</ul>');
+  }
+  if(!partes.length) return '<div style="color:var(--mut)">No se detectaron cambios respecto a lo que ya tienes.</div>';
+  return partes.join('');
+}
 // Descifra/valida un backup ya parseado (objeto JS, sea el envelope {encrypted:true,...} o el
 // formato viejo sin cifrar) y muestra la confirmación de "reemplazar todo" — compartido entre
 // importJSON (archivo local) y bajarBackupNube (Firestore, ver js/sync.js), que solo difieren en
@@ -117,10 +186,15 @@ async function procesarBackupParseado(parsed, origenLabel){
       nombre: importedPayload.nombre||null,
       q2DiasFijos: !!importedPayload.q2DiasFijos
     };
+    const cambios=compararBackupsDb(db, importedDb);
     openModal('<div class="mtitle">Importar backup</div>'
-      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
+      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:12px">'
       +'Origen: <b style="color:var(--txt)">'+esc(origenLabel)+'</b><br>'
-      +'Meses encontrados: <b style="color:var(--txt)">'+Object.keys(importedDb).length+'</b><br><br>'
+      +'Meses encontrados: <b style="color:var(--txt)">'+Object.keys(importedDb).length+'</b></p>'
+      +'<div style="font-size:12.5px;color:var(--txt);line-height:1.5;max-height:220px;overflow-y:auto;background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:14px">'
+      +cambiosBackupHtml(cambios)
+      +'</div>'
+      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'
       +'<b style="color:var(--red)">¿Reemplazar todos los datos actuales?</b> Esta acción no se puede deshacer.</p>'
       +'<div class="macts">'
       +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
@@ -169,7 +243,7 @@ function confirmImport(){
   // Reset navigation
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
   curM=keys[keys.length-1]; // go to last month
-  curTab=0;homeQ=homeQParaMes(db[curM]);
+  curTab=0;homeQ=homeQParaMes(db[curM]);curNomQ=homeQ;
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
