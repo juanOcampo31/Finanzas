@@ -164,31 +164,45 @@ function calcTCSaldo(m, tcId){
 // su presupuesto se sigue sincronizando, pero no genera su propio "Abono TC" — y si quedó uno
 // de una versión anterior de la app (que sí los creaba en ambas quincenas), se elimina.
 function syncTCGrupo(m){
-  [{which:'q1',list:m.q1_gastos||[]},{which:'q2',list:m.q2_gastos||[]}].forEach(function(entry){
-    var which=entry.which, list=entry.list;
-    var gruposLigados=list.filter(function(g){return g.esGrupo&&g.tcCardId;});
-    if(which==='q1'){
-      gruposLigados.forEach(function(g){
-        var idx=list.findIndex(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
-        if(idx>=0) list.splice(idx,1);
+  var listas={q1:m.q1_gastos||[], q2:m.q2_gastos||[]};
+  var gruposPorQ={
+    q1: listas.q1.filter(function(g){return g.esGrupo&&g.tcCardId;}),
+    q2: listas.q2.filter(function(g){return g.esGrupo&&g.tcCardId;})
+  };
+  gruposPorQ.q1.forEach(function(g){
+    var idx=listas.q1.findIndex(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
+    if(idx>=0) listas.q1.splice(idx,1);
+  });
+  ['q1','q2'].forEach(function(which){
+    gruposPorQ[which].forEach(function(g){ g.presupuesto=calcTCSaldo(m, g.tcCardId); });
+  });
+
+  gruposPorQ.q2.forEach(function(g){
+    var saldo=g.presupuesto;
+    // Los gastos ya presupuestados dentro de ESTE MISMO grupo (su instancia en Q1 y en Q2, misma
+    // tarjeta) que todavía no se han pagado van a convertirse en su propio abono al pagarse (ver
+    // marcarGastoPagado, que registra un "Abono" en la tarjeta) — así que se restan del "Abono
+    // TC" para no pedirle ese dinero al usuario dos veces: una vez al pagar cada gasto suelto, y
+    // otra vez de más al pagar el abono grande por el saldo completo.
+    var gruposMismaTarjeta=[g].concat(gruposPorQ.q1.filter(function(g1){return g1.tcCardId===g.tcCardId;}));
+    var idsGrupos=gruposMismaTarjeta.map(function(x){return x.id;});
+    var pendientesGrupo=['q1','q2'].reduce(function(acc,wh){
+      return acc+listas[wh].filter(function(s){
+        return idsGrupos.indexOf(s.parentId)>=0 && !s.esGrupo && !s.pagado_flag && !s.sinpagar && s.nombre!=='Abono TC';
+      }).reduce(function(a,s){return a+Math.abs(s.presupuesto||0);},0);
+    },0);
+    var abonoSugerido=Math.max(0, Math.round((saldo-pendientesGrupo)*100)/100);
+    var abonoGasto=listas.q2.find(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
+    if(abonoGasto){
+      if(!abonoGasto.pagado_flag) abonoGasto.presupuesto=abonoSugerido;
+    } else {
+      listas.q2.push({
+        id:uid(),nombre:'Abono TC',presupuesto:abonoSugerido,
+        metodo:g.metodo||'BBVA',pagado_real:null,estado:null,pagado_flag:false,
+        sinpagar:false,parentId:g.id,esGrupo:false,tcLinked:false,
+        cuotas_total:0,cuota_actual:0
       });
     }
-    gruposLigados.forEach(function(g){
-      var saldo=calcTCSaldo(m, g.tcCardId);
-      g.presupuesto=saldo;
-      if(which!=='q2') return;
-      var abonoGasto=list.find(function(s){return s.parentId===g.id&&s.nombre==='Abono TC';});
-      if(abonoGasto){
-        if(!abonoGasto.pagado_flag) abonoGasto.presupuesto=saldo;
-      } else {
-        list.push({
-          id:uid(),nombre:'Abono TC',presupuesto:saldo,
-          metodo:g.metodo||'BBVA',pagado_real:null,estado:null,pagado_flag:false,
-          sinpagar:false,parentId:g.id,esGrupo:false,tcLinked:false,
-          cuotas_total:0,cuota_actual:0
-        });
-      }
-    });
   });
 }
 function getTC(m, tcId){

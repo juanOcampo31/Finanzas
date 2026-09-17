@@ -829,6 +829,14 @@ function toggleGG(groupId,wrapId,chevId){
   ch.style.transform=open?'rotate(90deg)':'rotate(0)';
   ch.style.color=open?'var(--acc)':'var(--mut)';
 }
+// Chip compacto "✓ $X" de una compra de tarjeta con abonos ligados (ver abonadoChip en renderTC):
+// tocarlo despliega/oculta su detalle (abonoTCDetalleHtml) sin reconstruir toda la lista de
+// movimientos, mismo patrón que toggleGG.
+function toggleTCAbono(movId){
+  tcAbonoOpen[movId]=!tcAbonoOpen[movId];
+  const w=document.getElementById('tcab-'+movId);
+  if(w) w.style.display=tcAbonoOpen[movId]?'block':'none';
+}
 
 function convertirGrupo(id,which){
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
@@ -982,10 +990,11 @@ function renderTC(m) {
   // 3 y otro del 20 quedaban plegados bajo una sola fila "Gasolina", había que expandirla para
   // ver/editar cada uno) — EXCEPTO los abonos ligados a una compra puntual (movimientoId, ver
   // abrirAbonoMovimiento en tarjeta.js): esos no aparecen como fila propia en la lista general,
-  // se resumen en un desplegable bajo su compra — mismo patrón visual que "Abono a capital" en
-  // el detalle de un crédito (ver abonoDetailsHtml en creditos.js): un <details> con el total
-  // abonado y saldo antes/después, y cada abono individual con su botón de eliminar.
-  function abonoTCDetailsHtml(compra,ligados){
+  // se resumen en el chip "✓ $X" de su compra (ver abonadoChip) — tocarlo despliega este detalle
+  // (total abonado, saldo antes/después, cada abono individual con su botón de eliminar), igual
+  // que "Abono a capital" en el detalle de un crédito (ver abonoDetailsHtml en creditos.js), pero
+  // con el estado de abierto/cerrado en tcAbonoOpen para no perderlo entre renders (ver toggleTCAbono).
+  function abonoTCDetalleHtml(compra,ligados){
     var color='var(--grn)';
     var totalAbonado=ligados.reduce(function(a,y){return a+Math.abs(y.valor||0);},0);
     var saldoAntes=Math.abs(compra.valor||0);
@@ -1003,15 +1012,12 @@ function renderTC(m) {
         +'<button onclick="event.stopPropagation();confirmarEliminarAbonoTC(\''+y.id+'\')" style="background:none;border:1px solid rgba(248,113,113,.4);border-radius:var(--r2);padding:3px 7px;font-size:9px;color:var(--red);cursor:pointer">Eliminar</button>'
         +'</span></div>';
     }).join('');
-    var etiqueta=ligados.length+' abono'+(ligados.length>1?'s':'')+' registrado'+(ligados.length>1?'s':'');
-    return '<details style="padding:9px 12px;border-bottom:1px solid var(--brd);background:rgba(0,0,0,.12)" onclick="event.stopPropagation()">'
-      +'<summary style="font-size:11px;color:'+color+';font-weight:600;cursor:pointer">'+btnIcon('dollar',12)+etiqueta+'</summary>'
-      +'<div style="margin-top:6px;padding:8px 10px;background:var(--surf2);border-radius:var(--r2);font-size:11px;color:var(--mut)">'
+    return '<div style="padding:8px 10px;background:var(--surf2);border-radius:var(--r2);font-size:11px;color:var(--mut)">'
       +'<div style="display:flex;justify-content:space-between"><span>Total abonado</span><span style="color:'+color+';font-weight:600">'+cop(totalAbonado)+'</span></div>'
       +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo antes</span><span>'+cop(saldoAntes)+'</span></div>'
       +'<div style="display:flex;justify-content:space-between;margin-top:2px"><span>Saldo después</span><span style="color:'+saldoDespuesColor+';font-weight:600">'+saldoDespuesTxt+'</span></div>'
       +compsHtml
-      +'</div></details>';
+      +'</div>';
   }
 
   var abonosPorCompra={};
@@ -1042,10 +1048,13 @@ function renderTC(m) {
     // abonoTCDetailsHtml, mismo criterio.
     var saldoMov=ligados?Math.round((Math.abs(x.valor||0)-totalAbonado)*100)/100:Math.abs(x.valor||0);
 
-    var extraInfo='', abonarBtn='';
+    var extraInfo='', abonarBtn='', abonadoChip='';
     if(!ab){
       if(saldoMov>0){
         abonarBtn='<button onclick="event.stopPropagation();abrirAbonoMovimiento(\''+x.id+'\')" style="background:var(--acc-d);color:var(--acc);border:1px solid var(--acc);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap">Abonar</button>';
+      }
+      if(ligados&&totalAbonado>0){
+        abonadoChip='<span class="tc-abonado-chip" onclick="event.stopPropagation();toggleTCAbono(\''+x.id+'\')">'+icon('check',9)+cop(totalAbonado)+'</span>';
       }
     } else if(x.movimientoId){
       var compraOrigen=tc.find(function(y){return y.id===x.movimientoId;});
@@ -1068,7 +1077,7 @@ function renderTC(m) {
       +'<div class="tcic '+(ab?'a':'c')+'">'+icon(ab?'arrowDown':'arrowUp',14)+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div class="tcdesc">'+esc(x.descripcion||'Sin descripción')+'</div>'
-      +'<div class="tcdate">'+fmtD(x.fecha)+'</div>'
+      +'<div class="tcdate" style="display:flex;align-items:center;gap:6px">'+fmtD(x.fecha)+abonadoChip+'</div>'
       +extraInfo
       +'</div>'
       +'<div style="text-align:right;display:flex;align-items:center;gap:8px">'
@@ -1076,7 +1085,7 @@ function renderTC(m) {
       +'<div>'+valorOriginalHtml+tcValHtml+'</div>'
       +'</div>'
       +'</div>'
-      +(ligados&&ligados.length?abonoTCDetailsHtml(x,ligados):'')
+      +(ligados&&ligados.length?('<div id="tcab-'+x.id+'" style="display:'+(tcAbonoOpen[x.id]?'block':'none')+';padding:0 14px 10px">'+abonoTCDetalleHtml(x,ligados)+'</div>'):'')
       +'</div>';
   }).join('');
 

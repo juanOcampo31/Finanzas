@@ -980,7 +980,7 @@ function desmarcarGastoPagado(g,m){
 }
 // Tarjeta a la que pertenece el grupo de este gasto (esGrupo+tcCardId), o null si no vive
 // dentro de un grupo así — usado para decidir si al pagar corresponde preguntar a qué
-// movimiento se asocia el abono (ver abrirPickerMovimientoTCAlPagar).
+// movimiento se asocia el abono (ver toggleP y abrirAsociarPagosGrupoTC).
 function tcCardIdDeGasto(g,m){
   if(!g.parentId) return null;
   const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
@@ -1003,37 +1003,21 @@ function toggleP(e,id,which){
     openPagoModal(g,which);
   } else {
     if(bloquearPagoFueraDeOrden(g)) return;
-    // Si el gasto vive en un grupo vinculado a una tarjeta, antes de marcarlo pagado se
-    // pregunta a qué movimiento (Compra) corresponde ese pago — reemplaza el campo fijo que
-    // antes vivía en el formulario de edición: ahora la asociación se hace justo al pagar.
+    // Si el gasto vive en un grupo vinculado a una tarjeta con compras registradas, se pregunta
+    // a qué movimiento corresponde este pago — misma modal de "Asociar pagos a la tarjeta" que
+    // usa pagar el grupo entero de un tirón (ver abrirAsociarPagosGrupoTC), reutilizada acá con
+    // un solo candidato para que la experiencia sea idéntica sin importar por dónde se pague.
     const tcCardId=tcCardIdDeGasto(g,m);
     if(tcCardId){
-      abrirPickerMovimientoTCAlPagar(id,which,tcCardId);
-      return;
+      const compras=(getTC(m,tcCardId).movimientos||[]).filter(function(mv){return mv.tipo==='Compra';});
+      if(compras.length){
+        abrirAsociarPagosGrupoTC([g],compras,which,function(){});
+        return;
+      }
     }
     marcarGastoPagado(g,m);
     save();render();
   }
-}
-// Picker de pantalla completa que se abre al tocar el check de un gasto dentro de un grupo de
-// tarjeta (ver toggleP) — mismo esqueleto que abrirPickerCredito/abrirPickerGrupo, pero no pasa
-// por _gastoFormPending (no hay ningún formulario abierto en este punto, solo la lista de
-// gastos): "Cancelar" simplemente cierra el modal sin marcar nada como pagado.
-function abrirPickerMovimientoTCAlPagar(id,which,tcCardId){
-  const m=getM(),t=getTC(m,tcCardId);
-  const compras=(t.movimientos||[]).filter(function(mv){return mv.tipo==='Compra';});
-  function fila(movId,label){ return pickerItemRow("confirmarPagoConMovimientoTC('"+id+"','"+which+"',"+(movId?"'"+movId+"'":"''")+")",label,false); }
-  const itemsHtml=fila('','Abono genérico (sin asociar a un movimiento)')
-    +compras.map(function(mv){return fila(mv.id,(mv.descripcion||'Sin descripción')+' · '+cop(Math.abs(mv.valor||0)));}).join('');
-  renderPickerModal('¿A qué movimiento corresponde este pago?',itemsHtml);
-}
-function confirmarPagoConMovimientoTC(id,which,movId){
-  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
-  const g=list.find(function(x){return x.id===id;});
-  if(!g){closeModal();return;}
-  g.tcMovimientoOrigenId=movId||null;
-  marcarGastoPagado(g,m);
-  save();closeModal();render();
 }
 // Checkbox del encabezado de un grupo (ver g-group-head en render.js): antes solo mostraba en
 // vivo si ya estaban todos los subgastos pagados, sin acción propia — tocar el grupo no hacía
@@ -1051,33 +1035,88 @@ function confirmarPagoConMovimientoTC(id,which,movId){
 function toggleGrupoPagado(e,gid,which){
   e.stopPropagation();
   const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const grupo=list.find(function(x){return x.id===gid;});
   const subs=list.filter(function(x){return x.parentId===gid&&!x.sinpagar;});
   if(!subs.length) return;
   const allPaid=subs.every(function(s){return s.pagado_flag;});
-  var pendientesManual=[], bloqueados=[];
-  // Si "Abono TC" (el auto-generado que ya cubre TODO el saldo pendiente de la tarjeta, ver
-  // syncTCGrupo) está sin pagar y se va a pagar en este mismo lote, los demás gastos del grupo
-  // agregados a mano NO deben crear su propio movimiento en la tarjeta — ya quedan cubiertos
-  // por el abono consolidado de "Abono TC"; crear uno aparte por cada uno duplicaría el pago
-  // sobre la misma deuda (ver marcarGastoPagado, parámetro sinMovimientoTC).
-  var abonoTCEnEsteLote=subs.some(function(s){return s.nombre==='Abono TC'&&!s.pagado_flag;});
+  if(allPaid){
+    subs.forEach(function(s){ desmarcarGastoPagado(s,m); });
+    save();render();
+    return;
+  }
+  var candidatos=[], pendientesManual=[], bloqueados=[];
   subs.forEach(function(s){
-    if(allPaid){ desmarcarGastoPagado(s,m); return; }
     if(s.pagado_flag || s.presupuesto<0) return;
     if(s.metodo==='PSE' || s.mensualidad){ pendientesManual.push(nombreGasto(s)); return; }
     if(s.creditoId && s.numCuota && creditos[s.creditoId]){
       var pendNum=cuotaAnteriorPendiente(creditos[s.creditoId],s.numCuota-1);
       if(pendNum!=null){ bloqueados.push(nombreGasto(s)+' (cuota '+pendNum+' sin pagar)'); return; }
     }
-    marcarGastoPagado(s,m,{sinMovimientoTC:abonoTCEnEsteLote&&s.nombre!=='Abono TC'});
+    candidatos.push(s);
   });
-  save();render();
-  if(!allPaid && (pendientesManual.length||bloqueados.length)){
-    var partes=[];
-    if(bloqueados.length) partes.push('Fuera de orden — '+bloqueados.join(', ')+'.');
-    if(pendientesManual.length) partes.push('Requieren pago manual (PSE/mensualidad) — '+pendientesManual.join(', ')+'.');
-    showAlert(partes.join(' '),{title:'Algunos gastos no se marcaron como pagados'});
+  function avisoRestantes(){
+    if(pendientesManual.length||bloqueados.length){
+      var partes=[];
+      if(bloqueados.length) partes.push('Fuera de orden — '+bloqueados.join(', ')+'.');
+      if(pendientesManual.length) partes.push('Requieren pago manual (PSE/mensualidad) — '+pendientesManual.join(', ')+'.');
+      showAlert(partes.join(' '),{title:'Algunos gastos no se marcaron como pagados'});
+    }
   }
+  if(!candidatos.length){ avisoRestantes(); return; }
+
+  // Si el grupo está ligado a una tarjeta con movimientos "Compra" registrados, se ofrece
+  // asociar de una sola vez a qué compra corresponde cada abono del lote — la misma modal que
+  // usa toggleP para pagar un solo gasto de este mismo grupo. "Abono TC" ya NO cubre todo el
+  // saldo pendiente (syncTCGrupo le resta los demás gastos del grupo sin pagar), así que cada
+  // uno, ese incluido, sí debe crear su propio movimiento al pagarse.
+  var compras=(grupo&&grupo.tcCardId)?((getTC(m,grupo.tcCardId).movimientos||[]).filter(function(mv){return mv.tipo==='Compra';})):[];
+  if(grupo&&grupo.tcCardId&&compras.length){
+    abrirAsociarPagosGrupoTC(candidatos,compras,which,avisoRestantes);
+    return;
+  }
+
+  candidatos.forEach(function(s){ marcarGastoPagado(s,m); });
+  save();render();
+  avisoRestantes();
+}
+// Modal de "pagar todo el grupo" cuando la tarjeta tiene compras registradas: un select por cada
+// gasto del lote para asociarlo (opcional) a una compra puntual, en vez del abono genérico —
+// mismo criterio de vinculación que un pago individual, pero para todos a la vez.
+function abrirAsociarPagosGrupoTC(candidatos,compras,which,avisoRestantes){
+  var comprasOptsHtml=compras.map(function(mv){
+    return '<option value="'+mv.id+'">'+esc(mv.descripcion||'Sin descripción')+' · '+cop(Math.abs(mv.valor||0))+'</option>';
+  }).join('');
+  var filasHtml=candidatos.map(function(s,i){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">'
+      +'<div style="min-width:0;flex:1;margin-right:8px"><div style="font-size:13.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(nombreGasto(s))+'</div>'
+      +'<div style="font-size:12px;color:var(--mut)">'+cop(s.presupuesto)+'</div></div>'
+      +'<select id="tcg-mov-'+i+'" style="max-width:150px;flex-shrink:0;background:var(--surf2);border:1px solid var(--brd);border-radius:8px;padding:6px 8px;font-size:12.5px;color:var(--txt)">'
+      +'<option value="">Abono genérico</option>'+comprasOptsHtml+'</select>'
+      +'</div>';
+  }).join('');
+  openModal('<div class="mtitle">Asociar pagos a la tarjeta</div>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:10px">Elige a qué compra corresponde cada abono (opcional).</p>'
+    +'<div style="max-height:340px;overflow-y:auto">'+filasHtml+'</div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="confirmarAsociarPagosGrupoTC()">Confirmar pagos</button>'
+    +'</div>');
+  window._tcgPagoBatch={candidatosIds:candidatos.map(function(s){return s.id;}),which:which,avisoRestantes:avisoRestantes};
+}
+function confirmarAsociarPagosGrupoTC(){
+  var batch=window._tcgPagoBatch;
+  if(!batch){ closeModal(); return; }
+  var m=getM(),list=batch.which==='q1'?m.q1_gastos:m.q2_gastos;
+  batch.candidatosIds.forEach(function(id,i){
+    var s=list.find(function(x){return x.id===id;});
+    if(!s) return;
+    var sel=document.getElementById('tcg-mov-'+i);
+    s.tcMovimientoOrigenId=(sel&&sel.value)?sel.value:null;
+    marcarGastoPagado(s,m);
+  });
+  window._tcgPagoBatch=null;
+  save();closeModal();render();
+  if(batch.avisoRestantes) batch.avisoRestantes();
 }
 
 function openPagoModal(g,which){
@@ -1113,9 +1152,9 @@ function openPagoModal(g,which){
       +'</div></div>';
   }
 
-  // Si el gasto vive en un grupo de tarjeta, un select en línea (no un picker de pantalla
-  // completa aparte, ya hay varios campos en este mismo modal) para asociar el pago a un
-  // movimiento puntual — mismo tratamiento que el check simple en toggleP/abrirPickerMovimientoTCAlPagar.
+  // Si el gasto vive en un grupo de tarjeta, un select en línea (no una modal aparte, ya hay
+  // varios campos en este mismo formulario) para asociar el pago a un movimiento puntual —
+  // mismo criterio de asociación que el check simple en toggleP/abrirAsociarPagosGrupoTC.
   var tcMovField='';
   var tcCardIdPago=tcCardIdDeGasto(g,getM());
   if(tcCardIdPago){

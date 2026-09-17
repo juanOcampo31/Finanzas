@@ -830,6 +830,7 @@ let headerUserMenuOpen=false;   // panel del menú de usuario (bloque de identid
 let headerMonthPanelOpen=false; // panel del selector de mes (pastilla derecha), en el header
 let igHelpOpen=false;           // panel de ayuda ("?") de Información general — colapsado por defecto
 let gGroupOpen  = {};  // group open state: {groupId: bool}
+let tcAbonoOpen = {};  // detalle de abonos de una compra de tarjeta expandido: {movimientoId: bool}
 let curTC = null; // id de la tarjeta seleccionada actualmente
 let tcInfoOpen  = false;                        // info tarjeta expandida
 let curIngQ = 'q1'; // quincena seleccionada actualmente en la pestaña Ingresos
