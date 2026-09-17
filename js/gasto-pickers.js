@@ -1079,40 +1079,79 @@ function toggleGrupoPagado(e,gid,which){
   save();render();
   avisoRestantes();
 }
-// Modal de "pagar todo el grupo" cuando la tarjeta tiene compras registradas: un select por cada
-// gasto del lote para asociarlo (opcional) a una compra puntual, en vez del abono genérico —
-// mismo criterio de vinculación que un pago individual, pero para todos a la vez.
+// Modal de "pagar todo el grupo" cuando la tarjeta tiene compras registradas: por cada gasto del
+// lote se puede elegir a qué compra asociarlo, en vez de dejarlo como abono genérico — mismo
+// criterio de vinculación que un pago individual, pero para todos a la vez. Cada fila usa un
+// botón que abre un picker de pantalla completa (mismo patrón que "Asociar a un gasto ya
+// creado" en Agenda, ver agAbrirPickerGastoExistente) en vez de un <select> nativo: en móvil el
+// picker nativo de un <select> no se puede tematizar (aparece con el estilo del sistema, no el
+// de la app), así que acá se construye la lista a mano para que se vea igual en cualquier
+// dispositivo. Solo hay una modal a la vez (openModal reemplaza el contenido, ver ui-core.js),
+// así que la selección en curso vive en window._tcgPagoBatch y no en el DOM.
 function abrirAsociarPagosGrupoTC(candidatos,compras,which,avisoRestantes){
-  var comprasOptsHtml=compras.map(function(mv){
-    return '<option value="'+mv.id+'">'+esc(mv.descripcion||'Sin descripción')+' · '+cop(Math.abs(mv.valor||0))+'</option>';
-  }).join('');
-  var filasHtml=candidatos.map(function(s,i){
+  window._tcgPagoBatch={candidatos:candidatos,compras:compras,which:which,avisoRestantes:avisoRestantes,seleccion:{}};
+  renderAsociarPagosGrupoTC();
+}
+function renderAsociarPagosGrupoTC(){
+  var batch=window._tcgPagoBatch;
+  if(!batch) return;
+  var filasHtml=batch.candidatos.map(function(s){
+    var movId=batch.seleccion[s.id];
+    var compraSel=movId?batch.compras.find(function(mv){return mv.id===movId;}):null;
+    var label=compraSel?esc(compraSel.descripcion||'Sin descripción'):'Abono genérico';
     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">'
-      +'<div style="min-width:0;flex:1;margin-right:8px"><div style="font-size:13.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(nombreGasto(s))+'</div>'
-      +'<div style="font-size:12px;color:var(--mut)">'+cop(s.presupuesto)+'</div></div>'
-      +'<select id="tcg-mov-'+i+'" style="max-width:150px;flex-shrink:0;background:var(--surf2);border:1px solid var(--brd);border-radius:8px;padding:6px 8px;font-size:12.5px;color:var(--txt)">'
-      +'<option value="">Abono genérico</option>'+comprasOptsHtml+'</select>'
+      +'<div style="min-width:0;flex:1;margin-right:8px"><div class="gname" style="font-weight:700">'+esc(nombreGasto(s))+'</div>'
+      +'<div class="gmeta">'+cop(s.presupuesto)+'</div></div>'
+      +'<button type="button" onclick="abrirElegirMovimientoTCG(\''+s.id+'\')" style="max-width:170px;flex-shrink:0;display:flex;align-items:center;gap:5px;background:var(--surf2);border:1px solid var(--brd);border-radius:8px;padding:6px 10px;cursor:pointer">'
+      +'<span style="font-size:12.5px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</span>'
+      +'<span style="color:var(--mut);display:flex;flex-shrink:0">'+icon('chevronDown',12)+'</span>'
+      +'</button>'
       +'</div>';
   }).join('');
   openModal('<div class="mtitle">Asociar pagos a la tarjeta</div>'
     +'<p style="font-size:12px;color:var(--mut);margin-bottom:10px">Elige a qué compra corresponde cada abono (opcional).</p>'
     +'<div style="max-height:340px;overflow-y:auto">'+filasHtml+'</div>'
     +'<div class="macts">'
-    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bcnl" onclick="cancelarAsociarPagosGrupoTC()">Cancelar</button>'
     +'<button class="bpri" onclick="confirmarAsociarPagosGrupoTC()">Confirmar pagos</button>'
     +'</div>');
-  window._tcgPagoBatch={candidatosIds:candidatos.map(function(s){return s.id;}),which:which,avisoRestantes:avisoRestantes};
+}
+// Picker de pantalla completa para elegir el movimiento de un gasto puntual del lote — al volver
+// (elegir uno o cancelar) se reconstruye renderAsociarPagosGrupoTC() con la selección puesta al día.
+function abrirElegirMovimientoTCG(gastoId){
+  var batch=window._tcgPagoBatch;
+  if(!batch) return;
+  var itemsHtml='<div onclick="elegirMovimientoTCG(\''+gastoId+'\',\'\')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--brd);cursor:pointer">'
+    +'<span style="font-size:14px;font-weight:600;color:var(--txt)">Abono genérico</span>'
+    +'<span style="font-size:12px;color:var(--mut)">Sin asociar</span></div>'
+    +batch.compras.map(function(mv){
+      return '<div onclick="elegirMovimientoTCG(\''+gastoId+'\',\''+mv.id+'\')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--brd);cursor:pointer">'
+        +'<span style="font-size:14px;font-weight:600;color:var(--txt)">'+esc(mv.descripcion||'Sin descripción')+'</span>'
+        +'<span style="font-size:13px;color:var(--mut);flex-shrink:0">'+cop(Math.abs(mv.valor||0))+'</span></div>';
+    }).join('');
+  openModal('<div class="mtitle">¿A qué movimiento corresponde?</div>'
+    +'<div style="max-height:360px;overflow-y:auto;margin-bottom:14px">'+itemsHtml+'</div>'
+    +'<button class="bcnl" style="width:100%" onclick="renderAsociarPagosGrupoTC()">Cancelar</button>');
+}
+function elegirMovimientoTCG(gastoId,movId){
+  var batch=window._tcgPagoBatch;
+  if(!batch) return;
+  batch.seleccion[gastoId]=movId||'';
+  renderAsociarPagosGrupoTC();
+}
+function cancelarAsociarPagosGrupoTC(){
+  window._tcgPagoBatch=null;
+  closeModal();
 }
 function confirmarAsociarPagosGrupoTC(){
   var batch=window._tcgPagoBatch;
   if(!batch){ closeModal(); return; }
   var m=getM(),list=batch.which==='q1'?m.q1_gastos:m.q2_gastos;
-  batch.candidatosIds.forEach(function(id,i){
-    var s=list.find(function(x){return x.id===id;});
-    if(!s) return;
-    var sel=document.getElementById('tcg-mov-'+i);
-    s.tcMovimientoOrigenId=(sel&&sel.value)?sel.value:null;
-    marcarGastoPagado(s,m);
+  batch.candidatos.forEach(function(s){
+    var g=list.find(function(x){return x.id===s.id;});
+    if(!g) return;
+    g.tcMovimientoOrigenId=batch.seleccion[s.id]||null;
+    marcarGastoPagado(g,m);
   });
   window._tcgPagoBatch=null;
   save();closeModal();render();
