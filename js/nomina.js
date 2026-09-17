@@ -61,19 +61,16 @@ function renderNom(m) {
   const lbl=isQ1?'Nómina Q1':'Nómina Q2';
   const fechaQ=isQ1?fechaQ1:fechaQ2;
   const diasPago=diasHasta(fechaQ);
-  const stPago=diasStatus(diasPago);
-  const pagoTxt=diasPago<0?'Ya pagado':('Llega el '+DOW_FULL[fechaQ.getDay()]+' '+fechaQ.getDate()+' · '+stPago.txt);
 
-  // Una quincena cuya fecha de pago ya pasó se muestra en gris (mismo criterio "Ya pagado" que
-  // ya usa pagoTxt más abajo) — el saldo sigue ahí para consulta, pero en gris deja claro que
-  // ya pasó, en vez de parecer un valor "actual" a la par del de la quincena que sigue en curso.
-  function qTab(qKey,label,fecha,neto,yaPagada){
-    const active=curNomQ===qKey;
-    return '<div class="nomq-tab'+(active?' active':'')+'" onclick="selectNomQ(\''+qKey+'\')">'
-      +'<div class="nomq-tab-lbl">'+label+' <span class="nomq-tab-fecha">· '+fecha+'</span></div>'
-      +'<div class="nomq-tab-val"'+(yaPagada?' style="color:var(--mut)"':'')+'>'+cop(neto)+'</div>'
-      +'</div>';
+  // Mismo texto y formato que usa el "Pago {fecha}" de las tarjetas Q1/Q2 en Inicio (ver qCard
+  // en render.js) — antes acá se mostraba una fecha distinta ("· 30 sep") y una frase propia
+  // ("Llega el miércoles 30 · en 13 días") en el hero, dos formatos para lo mismo.
+  function pagoInfoNom(dt){
+    const d=diasHasta(dt), st=diasStatus(d);
+    return {fecha:DOW_ABBR[dt.getDay()]+' '+dt.getDate(), sub:st.txt};
   }
+  const pagoQ1=pagoInfoNom(fechaQ1), pagoQ2=pagoInfoNom(fechaQ2);
+  const pagoHero=isQ1?pagoQ1:pagoQ2;
 
   const resumenHtml='<div class="nom-resumen">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleNomResumen()">'
@@ -103,32 +100,41 @@ function renderNom(m) {
     +'</div>'
     +'</div>';
 
-  function fmtDLocal(dt){ return dt.getDate()+' '+MESES_ABBR_MIN[dt.getMonth()]; }
-  const tabsHtml='<div class="nomq-tabs">'+qTab('q1','Q1',fmtDLocal(fechaQ1),n1,diasHasta(fechaQ1)<0)+qTab('q2','Q2',fmtDLocal(fechaQ2),n2,diasHasta(fechaQ2)<0)+'</div>';
+  // Mismos "qcards" de Q1/Q2 que usa Inicio (ver buildQCardsHtml en render.js) — antes esta
+  // pestaña tenía su propio diseño de pastillas (nomq-tab), ahora reutiliza el componente
+  // completo para que se vean idénticas, solo con "NETO" en vez de "DISPONIBLE".
+  const tabsHtml=buildQCardsHtml(m,curNomQ,'selectNomQ','NETO',n1,n2);
 
-  const heroHtml='<div class="nom-hero">'
-    +'<div class="nom-hero-lbl">Neto a recibir '+which.toUpperCase()+'</div>'
-    +'<div class="nom-hero-val"'+(diasPago<0?' style="color:var(--mut)"':'')+'><span class="nom-hero-cur">$</span>'+Math.round(netoQ).toLocaleString('es-CO')+'</div>'
-    +'<div class="nom-hero-pago" style="color:'+(diasPago>=0?'var(--acc)':'var(--mut)')+'">'+pagoTxt+'</div>'
-    +'<div class="nom-hero-stats">'
-    +'<div class="nom-hero-stat"><div class="nom-hero-stat-lbl" style="color:var(--grn)">Devengado</div><div class="nom-hero-stat-val" style="color:var(--grn)">'+cop(devQ)+'</div></div>'
+  // "Neto a recibir" con el mismo formato compacto que la mini-tarjeta de crédito en Inicio (ver
+  // buildTcMiniHtml en render.js), pero sin el chip de la izquierda y sin la etiqueta "NETO"
+  // (el valor solo, a la derecha, ya se entiende por el título) — mismo alto de panel que antes.
+  const heroHtml='<div class="tc-mini" style="padding:7px 12px">'
+    +'<div class="tc-mini-row">'
+    +'<div class="tc-mini-mid">'
+    +'<div class="tc-mini-name">Neto a recibir</div>'
+    +'<div class="tc-mini-due" style="color:'+(diasPago<0?'var(--mut)':'var(--acc)')+'">Pago '+pagoHero.fecha+' <span style="color:'+(pagoHero.sub==='pagado'?'var(--red)':'var(--mut)')+'">'+pagoHero.sub+'</span></div>'
+    +'</div>'
+    +'<div class="tc-mini-right"><span class="tc-mini-val"'+(diasPago<0?' style="color:var(--mut)"':'')+'>'+cop(netoQ)+'</span></div>'
+    +'</div>'
+    +'<div class="glist-totals" style="padding:6px 0 0;margin-top:6px;border-top:1px solid var(--brd)">'
+    +'<div class="glist-tot"><div class="glist-tot-lbl" style="color:var(--grn)">DEVENGADO</div><div class="glist-tot-val" style="color:var(--grn)">'+cop(devQ)+'</div></div>'
     +'<div class="glist-div"></div>'
-    +'<div class="nom-hero-stat"><div class="nom-hero-stat-lbl" style="color:var(--red)">Deducciones</div><div class="nom-hero-stat-val" style="color:var(--red)">'+cop(dedQ)+'</div></div>'
+    +'<div class="glist-tot"><div class="glist-tot-lbl" style="color:var(--red)">DEDUCCIONES</div><div class="glist-tot-val" style="color:var(--red)">'+cop(dedQ)+'</div></div>'
     +'<div class="glist-div"></div>'
-    +'<div class="nom-hero-stat" style="flex:.7"><div class="nom-hero-stat-lbl">Días</div><div class="nom-hero-stat-val">'+diasQ+'</div></div>'
+    +'<div class="glist-tot" style="flex:.7"><div class="glist-tot-lbl">DÍAS</div><div class="glist-tot-val">'+diasQ+'</div></div>'
     +'</div>'
     +'</div>';
 
-  var devRows='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Básico quincenal</div><div class="nom-row-nota">'+diasQ+' días</div></div><div class="nom-row-val">'+cop(bq)+'</div></div>';
+  var devRows='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Básico quincenal <span class="nom-row-nota-inline">· '+diasQ+' días</span></div></div><div class="nom-row-val">'+cop(bq)+'</div></div>';
   if(auxq>0){
-    devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Auxilio de transporte</div><div class="nom-row-nota">No es base de deducciones</div></div><div class="nom-row-val">'+cop(auxq)+'</div></div>';
+    devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Auxilio de transporte <span class="nom-row-nota-inline">· No es base de deducciones</span></div></div><div class="nom-row-val">'+cop(auxq)+'</div></div>';
   }
   if(bonq>0){
-    devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Bonos</div><div class="nom-row-nota">Solo informativo · no cuenta para el neto</div></div><div class="nom-row-val" style="color:var(--mut)">'+cop(bonq)+'</div></div>';
+    devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Bonos <span class="nom-row-nota-inline">· no cuenta para el neto</span></div></div><div class="nom-row-val" style="color:var(--mut)">'+cop(bonq)+'</div></div>';
   }
   const ingList=(m.ingresos&&m.ingresos[which])||[];
   devRows+=ingList.map(function(x){
-    return '<div class="nom-row" onclick="editIngreso(\''+x.id+'\',\''+which+'\')" style="cursor:pointer"><div class="nom-row-info"><div class="nom-row-name">'+esc(x.nombre)+'</div><div class="nom-row-nota">'+fmtD(x.fecha)+'</div></div><div class="nom-row-val">'+cop(x.valor)+'</div></div>';
+    return '<div class="nom-row" onclick="editIngreso(\''+x.id+'\',\''+which+'\')" style="cursor:pointer"><div class="nom-row-info"><div class="nom-row-name">'+esc(x.nombre)+' <span class="nom-row-nota-inline">· '+fmtD(x.fecha)+'</span></div></div><div class="nom-row-val">'+cop(x.valor)+'</div></div>';
   }).join('');
 
   var dedRows=deds.map(function(d,i){
