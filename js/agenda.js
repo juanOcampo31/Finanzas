@@ -148,20 +148,13 @@ function renderAgenda(m){
   var pendientesTareas=todas.filter(function(e){return e.tipo==='tarea'&&!e.tildado;});
   var resumen=pendientesDinero.length+' pendiente'+(pendientesDinero.length===1?'':'s')+' · '+pendientesTareas.length+' tarea'+(pendientesTareas.length===1?'':'s');
 
-  var keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
-  var mesOpts=keys.map(function(k){
-    return '<option value="'+k+'"'+(k===curM?' selected':'')+'>'+db[k].nombre.slice(0,3)+' '+db[k].año+'</option>';
-  }).join('');
-
-  var headerHtml='<div style="padding:4px 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
-    +'<div style="min-width:0">'
+  // El selector de mes propio de Agenda quedaba duplicado con la pastilla global del header
+  // (arriba del todo, con "+ Nuevo mes" — ver renderHeaderMonthPanel/toggleHeaderMonthPanel en
+  // render.js), que ya es la única fuente para cambiar o crear un mes en toda la app. Se quitó
+  // por completo de acá — para cambiar de mes se usa esa pastilla de arriba, no una propia.
+  var headerHtml='<div style="padding:4px 16px 8px">'
     +'<div style="font-size:17px;font-weight:800;color:'+AG.txt2+';letter-spacing:-.01em">Agenda</div>'
     +'<div style="font-size:11px;font-weight:600;color:'+AG.cian+'">'+esc(resumen)+'</div>'
-    +'</div>'
-    +'<div style="position:relative;display:flex;align-items:center;flex-shrink:0">'
-    +'<select onchange="curM=parseInt(this.value);agDiaSel=null;render()" style="appearance:none;-webkit-appearance:none;padding:6px 24px 6px 10px;background:'+AG.bg6+';border:1px solid '+AG.bd2+';border-radius:11px;font-size:13px;font-weight:800;color:'+AG.txt2+';outline:none">'+mesOpts+'</select>'
-    +'<span style="position:absolute;right:8px;pointer-events:none;color:'+AG.txt5+';display:flex">'+icon('chevronDown',10)+'</span>'
-    +'</div>'
     +'</div>';
 
   function filtroBtn(k,lbl){

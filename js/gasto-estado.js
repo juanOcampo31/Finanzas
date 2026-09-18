@@ -134,7 +134,12 @@ function buildDraftMonth(){
           cuota_actual: nxtCuota,
           fecha_pago: null,
           comprobante: null,
-          mensualidad: nxtMens
+          mensualidad: nxtMens,
+          // El recordatorio de Agenda al que este gasto apuntaba era del mes VIEJO (ver más
+          // abajo, nm.agenda se vacía) — sin limpiar esto, el gasto del mes nuevo parecía "ya
+          // tener un recordatorio" (agGastosDisponiblesParaAsociar lo excluía) aunque ese
+          // recordatorio real seguía siendo el de hace un mes, con su fecha vieja.
+          agendaId: null
         });
       });
   }
@@ -151,6 +156,15 @@ function buildDraftMonth(){
   const q2Copiado = copyGastosIds(nm.q2_gastos);
   nm.q1_gastos = remapParents(q1Copiado);
   nm.q2_gastos = remapParents(q2Copiado);
+
+  // Los recordatorios manuales de Agenda son del mes que se está cerrando, no del que empieza
+  // (ver comentario en agenda.js: "Vive per-mes en m.agenda... solo entradas MANUALES") — sin
+  // este reseteo, la copia profunda de arriba los duplicaba tal cual en el mes nuevo, con la
+  // fecha vieja del mes anterior y agendaId ya limpiado arriba (si no, el gasto del mes nuevo
+  // parecía tener un recordatorio que en realidad seguía siendo el del mes pasado). Un pago
+  // recurrente sí debe seguir generándose para el mes nuevo, pero eso ya lo hace por su cuenta
+  // agGenerarSiguienteRecurrente (agenda.js) al pagar el periodo actual, no esta copia.
+  nm.agenda = [];
 
   var prevLinkedGroups=(lm.q2_gastos||[]).filter(function(g){return g.esGrupo&&g.tcCardId;});
   prevLinkedGroups.forEach(function(prevG){

@@ -478,20 +478,34 @@ function openGasto(g,which,parentId,skipFocus){
     +'<button class="bpri" onclick="saveG(\''+eid+'\',\''+wh+'\',\''+pid+'\')">Guardar</button></div>'
     +delBtn;
   openModal(html);
-  // Foco + selección automática en "Valor" SOLO al abrir el formulario de verdad (por primera
-  // vez): en móvil dispara el teclado numérico de una vez (el input ya tiene
-  // inputmode="numeric") sin que el usuario tenga que tocarlo primero, y con el valor
-  // seleccionado alcanza con escribir para reemplazarlo. skipFocus=true cuando en realidad esto
-  // es un RE-render tras volver de un picker interno (Forma de pago/Grupo/Crédito/plantilla, ver
-  // reabrirGastoDesdePending) — antes se repetía este foco+selección cada vez que se volvía de
-  // cualquiera de esos pickers, tirando al usuario de vuelta a "Valor" con el teclado numérico
-  // encima justo cuando quería seguir editando otro campo distinto.
+  // Selección automática del valor de "Valor" SOLO al abrir el formulario de verdad (por
+  // primera vez): con el valor ya seleccionado alcanza con escribir para reemplazarlo, sin
+  // tocar el campo primero. El truco de marcarlo readOnly antes de enfocar/seleccionar es a
+  // propósito: enfocar un input SIEMPRE dispara el teclado numérico en móvil aunque no se llame
+  // pEl.focus() explícitamente (pEl.select() por sí solo ya enfoca el campo) — pero un input
+  // readOnly puede recibir foco y mostrar su texto seleccionado SIN que el navegador abra el
+  // teclado. En cuanto el usuario de verdad toca el campo (primer touchstart/mousedown) se
+  // quita el readOnly, así ese mismo toque ya lo deja editable con el teclado normal. skipFocus
+  // =true cuando en realidad esto es un RE-render tras volver de un picker interno (Forma de
+  // pago/Grupo/Crédito/plantilla, ver reabrirGastoDesdePending) — antes se repetía esta
+  // selección cada vez que se volvía de cualquiera de esos pickers, tirando al usuario de vuelta
+  // a "Valor" justo cuando quería seguir editando otro campo distinto.
   if(!skipFocus){
     // El setTimeout es necesario porque openModal recién acaba de inyectar el HTML — sin él, el
-    // input todavía no está listo para recibir foco en algunos navegadores.
+    // input todavía no está listo para recibir la selección en algunos navegadores.
     setTimeout(function(){
       const pEl=document.getElementById('g-p');
-      if(pEl){ pEl.focus(); pEl.select(); }
+      if(!pEl) return;
+      pEl.readOnly=true;
+      pEl.focus();
+      pEl.select();
+      function habilitarEdicion(){
+        pEl.readOnly=false;
+        pEl.removeEventListener('touchstart',habilitarEdicion);
+        pEl.removeEventListener('mousedown',habilitarEdicion);
+      }
+      pEl.addEventListener('touchstart',habilitarEdicion,{once:true});
+      pEl.addEventListener('mousedown',habilitarEdicion,{once:true});
     },50);
   }
 }

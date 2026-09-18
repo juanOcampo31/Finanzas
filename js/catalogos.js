@@ -688,6 +688,7 @@ function goToMonth(k){
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
   curTC=null;
+  agDiaSel=null; // el día seleccionado en Agenda era de OTRO mes, ya no aplica al cambiar de mes
   closeModal();render();
 }
 
