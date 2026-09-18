@@ -1,12 +1,13 @@
 ﻿// Sube este número cada vez que despliegues cambios en index.html/CSS/JS.
 // Si lo olvidas, los usuarios seguirán viendo la versión anterior offline
 // hasta que haya red disponible para revalidar.
-const CACHE_VERSION = '2.70';
+const CACHE_VERSION = '2.71';
 const CACHE = 'finanzas-' + CACHE_VERSION;
 const FILES = ['./', './index.html', './style.css',
   './js/core.js', './js/auth.js', './js/creditos.js', './js/format-utils.js', './js/nomina-calc.js',
   './js/render.js', './js/nomina.js', './js/ui-core.js', './js/gasto-pickers.js', './js/tarjeta.js',
   './js/nomina-deducciones.js', './js/catalogos.js', './js/gasto-estado.js', './js/agenda.js', './js/export-main.js',
+  './js/sync.js',
   './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 // La pantalla de login pregunta la versión por postMessage para mostrarla:
@@ -17,10 +18,18 @@ self.addEventListener('message', e => {
   }
 });
 
+// c.addAll(FILES) usaba fetch() normal, que puede reusar la caché HTTP del navegador (o de
+// GitHub Pages) en vez de bajar el archivo de verdad — así, aunque el Service Worker detectara
+// la versión nueva y activara la caché "finanzas-X.XX", algunos .js podían quedar precacheados
+// con el contenido VIEJO. { cache: 'reload' } fuerza que cada archivo se traiga fresco de red al
+// instalar una versión nueva, sin tocar el resto del comportamiento (fetch en tiempo real sigue
+// siendo stale-while-revalidate normal).
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => c.addAll(FILES))
+      .then(c => Promise.all(FILES.map(url =>
+        fetch(url, { cache: 'reload' }).then(res => c.put(url, res))
+      )))
       .then(() => self.skipWaiting())
   );
 });
