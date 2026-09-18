@@ -18,7 +18,8 @@ var AG={
 
 // Estado de la pantalla (transitorio, no se guarda)
 let agFiltro='todo';        // 'todo' | 'dinero' | 'tareas'
-let agDiaSel=null;          // fecha 'YYYY-MM-DD' seleccionada en la tira de 10 días, o null
+let agDiaSel=null;          // fecha 'YYYY-MM-DD' seleccionada en la tira de 10 días o en el calendario, o null
+let agMesCompletoAbierto=false; // false = tira de 10 días; true = calendario del mes completo
 let agFormTipo='tarea';     // tipo activo en el formulario de creación
 let agFormRegistrarGasto=true;
 let agFormRepetirActual='nunca';
@@ -152,24 +153,42 @@ function renderAgenda(m){
     return '<option value="'+k+'"'+(k===curM?' selected':'')+'>'+db[k].nombre.slice(0,3)+' '+db[k].año+'</option>';
   }).join('');
 
-  var headerHtml='<div style="padding:4px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
+  var headerHtml='<div style="padding:4px 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
     +'<div style="min-width:0">'
-    +'<div style="font-size:19px;font-weight:800;color:'+AG.txt2+';letter-spacing:-.01em">Agenda</div>'
-    +'<div style="font-size:11.5px;font-weight:600;color:'+AG.cian+'">'+esc(resumen)+'</div>'
+    +'<div style="font-size:17px;font-weight:800;color:'+AG.txt2+';letter-spacing:-.01em">Agenda</div>'
+    +'<div style="font-size:11px;font-weight:600;color:'+AG.cian+'">'+esc(resumen)+'</div>'
     +'</div>'
     +'<div style="position:relative;display:flex;align-items:center;flex-shrink:0">'
-    +'<select onchange="curM=parseInt(this.value);agDiaSel=null;render()" style="appearance:none;-webkit-appearance:none;padding:7px 24px 7px 10px;background:'+AG.bg6+';border:1px solid '+AG.bd2+';border-radius:11px;font-size:13px;font-weight:800;color:'+AG.txt2+';outline:none">'+mesOpts+'</select>'
+    +'<select onchange="curM=parseInt(this.value);agDiaSel=null;render()" style="appearance:none;-webkit-appearance:none;padding:6px 24px 6px 10px;background:'+AG.bg6+';border:1px solid '+AG.bd2+';border-radius:11px;font-size:13px;font-weight:800;color:'+AG.txt2+';outline:none">'+mesOpts+'</select>'
     +'<span style="position:absolute;right:8px;pointer-events:none;color:'+AG.txt5+';display:flex">'+icon('chevronDown',10)+'</span>'
     +'</div>'
     +'</div>';
 
   function filtroBtn(k,lbl){
     var isA=agFiltro===k;
-    return '<button onclick="agFiltro=\''+k+'\';render()" style="flex:1;padding:7px 13px;border-radius:9px;border:none;cursor:pointer;font-size:12px;font-weight:'+(isA?'800':'700')+';background:'+(isA?AG.accBg2:'transparent')+';color:'+(isA?AG.cian2:AG.txt5)+'">'+lbl+'</button>';
+    return '<button onclick="agFiltro=\''+k+'\';render()" style="flex:1;padding:6px 13px;border-radius:9px;border:none;cursor:pointer;font-size:12px;font-weight:'+(isA?'800':'700')+';background:'+(isA?AG.accBg2:'transparent')+';color:'+(isA?AG.cian2:AG.txt5)+'">'+lbl+'</button>';
   }
-  var filtroHtml='<div style="padding:0 16px 11px"><div style="display:flex;background:'+AG.bg4+';border-radius:12px;padding:4px;gap:4px">'
+  var filtroHtml='<div style="padding:0 16px 8px"><div style="display:flex;background:'+AG.bg4+';border-radius:12px;padding:4px;gap:4px">'
     +filtroBtn('todo','Todo')+filtroBtn('dinero','Dinero')+filtroBtn('tareas','Tareas')
     +'</div></div>';
+
+  var mi=MESES.indexOf(m.nombre);
+  var finMes=mi>=0?new Date(m.año,mi+1,0).getDate():30;
+  var mesLbl=mi>=0?MESES_ABBR_MIN[mi].toUpperCase():'';
+  var hoyReal=new Date();
+  var hoyMismoMes=(m.año===hoyReal.getFullYear()&&mi===hoyReal.getMonth());
+  var quincenaVigente=hoyMismoMes?(hoyReal.getDate()<=15?'q1':'q2'):null;
+
+  // Un punto por día con evento, compartido entre la tira de 10 días y el calendario del mes.
+  function agPuntoDia(fStr){
+    var ev=todas.find(function(e){
+      if(e.fecha!==fStr) return false;
+      if(agFiltro==='dinero') return e.tipo==='pago';
+      if(agFiltro==='tareas') return e.tipo==='tarea';
+      return true;
+    });
+    return {tiene:!!ev,color:ev?ev.color:null};
+  }
 
   var hoy=new Date(); hoy.setHours(0,0,0,0);
   var diasBoxes=[];
@@ -177,20 +196,53 @@ function renderAgenda(m){
     var d=new Date(hoy); d.setDate(d.getDate()+i);
     var fStr=d.toISOString().slice(0,10);
     var activo=agDiaSel===fStr;
-    var evDia=todas.find(function(e){
-      if(e.fecha!==fStr) return false;
-      if(agFiltro==='dinero') return e.tipo==='pago';
-      if(agFiltro==='tareas') return e.tipo==='tarea';
-      return true;
-    });
-    var punto=evDia?('<span style="width:4px;height:4px;border-radius:50%;background:'+evDia.color+';display:inline-block"></span>'):'<span style="width:4px;height:4px;display:inline-block"></span>';
-    diasBoxes.push('<div onclick="agDiaSel='+(activo?'null':("'"+fStr+"'"))+';render()" style="flex:1;padding:7px 0 6px;border-radius:11px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;background:'+(activo?AG.accBg2:AG.bg4)+';border:1px solid '+(activo?AG.cian:'transparent')+'">'
-      +'<span style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:'+(activo?AG.cian2:AG.txt5)+'">'+DOW_ABBR[d.getDay()]+'</span>'
-      +'<span style="font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:'+(activo?AG.txt1:AG.txt5)+'">'+d.getDate()+'</span>'
+    var esHoy=(i===0); // el primer día de la tira SIEMPRE es hoy (ver "var hoy" arriba)
+    var pd=agPuntoDia(fStr);
+    var punto=pd.tiene?('<span style="width:4px;height:4px;border-radius:50%;background:'+pd.color+';display:inline-block"></span>'):'<span style="width:4px;height:4px;display:inline-block"></span>';
+    // "Hoy" se distingue con un borde propio aunque no esté seleccionado (ver esHoy arriba) —
+    // antes ningún día quedaba marcado como "hoy" en la tira, solo se veía cuál estaba
+    // seleccionado (agDiaSel), que es un estado aparte y no siempre coincide con la fecha real.
+    var borde=activo?AG.cian:(esHoy?AG.cian+'88':'transparent');
+    diasBoxes.push('<div onclick="agDiaSel='+(activo?'null':("'"+fStr+"'"))+';render()" style="flex:1;padding:5px 0 4px;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;background:'+(activo?AG.accBg2:'transparent')+';border:1px solid '+borde+'">'
+      +'<span style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:'+(activo?AG.cian2:esHoy?AG.cian:AG.txt5)+'">'+(esHoy?'HOY':DOW_ABBR[d.getDay()])+'</span>'
+      +'<span style="font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:'+(activo?AG.txt1:esHoy?AG.txt2:AG.txt5)+'">'+d.getDate()+'</span>'
       +punto
       +'</div>');
   }
-  var tiraHtml='<div style="padding:0 16px 12px;display:flex;gap:5px;overflow-x:auto;scrollbar-width:none">'+diasBoxes.join('')+'</div>';
+  // Mismo panel de fondo agrupador que el calendario del mes completo (ver mesGridHtml) — antes
+  // cada día tenía su propio fondo suelto, sin nada que los agrupara visualmente como una unidad.
+  var tiraHtml='<div style="margin:0 16px 8px;padding:8px 6px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:14px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none">'+diasBoxes.join('')+'</div>';
+
+  // Calendario del mes completo (ver agToggleMesCompleto) — mismo criterio de "hoy"/seleccionado/
+  // punto de evento que la tira de 10 días, pero en grilla de 7 columnas para ver el mes entero
+  // de un vistazo en vez de solo los próximos 10 días.
+  var mesGridHtml='';
+  if(agMesCompletoAbierto&&mi>=0){
+    var primerDia=new Date(m.año,mi,1);
+    var offset=primerDia.getDay();
+    var celdas=[];
+    for(var b=0;b<offset;b++){ celdas.push('<div></div>'); }
+    for(var dNum=1;dNum<=finMes;dNum++){
+      var fStr2=new Date(m.año,mi,dNum).toISOString().slice(0,10);
+      var activo2=agDiaSel===fStr2;
+      var esHoy2=hoyMismoMes&&dNum===hoyReal.getDate();
+      var pd2=agPuntoDia(fStr2);
+      var punto2=pd2.tiene?('<span style="width:4px;height:4px;border-radius:50%;background:'+pd2.color+';display:block;margin:1px auto 0"></span>'):'<span style="width:4px;height:4px;display:block;margin:1px auto 0"></span>';
+      var borde2=activo2?AG.cian:(esHoy2?AG.cian+'88':'transparent');
+      celdas.push('<div onclick="agDiaSel='+(activo2?'null':("'"+fStr2+"'"))+';render()" style="height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;background:'+(activo2?AG.accBg2:'transparent')+';border:1px solid '+borde2+'">'
+        +'<span style="font-size:11px;font-weight:'+(esHoy2?'800':'600')+';color:'+(activo2?AG.txt1:esHoy2?AG.cian:AG.txt3)+'">'+dNum+'</span>'
+        +punto2
+        +'</div>');
+    }
+    var dowHeadHtml=DOW_ABBR.map(function(dw){return '<div style="text-align:center;font-size:8.5px;font-weight:700;color:'+AG.txt5+';text-transform:uppercase;padding-bottom:2px">'+dw+'</div>';}).join('');
+    mesGridHtml='<div style="margin:0 16px 8px;padding:7px 6px;background:'+AG.bg4+';border:1px solid '+AG.bd1+';border-radius:14px">'
+      +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px">'+dowHeadHtml+celdas.join('')+'</div></div>';
+  }
+
+  var toggleMesHtml='<div style="padding:0 16px 8px;display:flex;justify-content:flex-end">'
+    +'<button onclick="agMesCompletoAbierto=!agMesCompletoAbierto;render()" style="background:none;border:none;color:'+AG.cian+';font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:3px;padding:0">'
+    +(agMesCompletoAbierto?'Ver menos':'Ver mes completo')+icon(agMesCompletoAbierto?'chevronUp':'chevronDown',11)
+    +'</button></div>';
 
   var filtradas=todas.filter(function(e){
     if(agFiltro==='dinero'&&e.tipo!=='pago') return false;
@@ -198,12 +250,6 @@ function renderAgenda(m){
     if(agDiaSel&&e.fecha!==agDiaSel) return false;
     return true;
   });
-
-  var mi=MESES.indexOf(m.nombre);
-  var finMes=mi>=0?new Date(m.año,mi+1,0).getDate():30;
-  var mesLbl=mi>=0?MESES_ABBR_MIN[mi].toUpperCase():'';
-  var hoyMismoMes=(m.año===new Date().getFullYear()&&mi===new Date().getMonth());
-  var quincenaVigente=hoyMismoMes?(new Date().getDate()<=15?'q1':'q2'):null;
 
   function grupoHtml(which){
     var items=filtradas.filter(function(e){return e.which===which;}).sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
@@ -215,16 +261,17 @@ function renderAgenda(m){
     var subtotalTxt=partes.length?partes.join(' · '):'—';
     var rango=which==='q1'?('1–15 '+mesLbl):('16–'+finMes+' '+mesLbl);
     var esVigente=which===quincenaVigente;
-    var head='<div style="padding:0 2px;display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px">'
+    var head='<div style="padding:0 2px;display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px">'
       +'<span style="font-size:10px;font-weight:800;letter-spacing:.1em;color:'+(esVigente?AG.cian:AG.txt5)+'">'+(which==='q1'?'Q1':'Q2')+' · '+esc(rango)+'</span>'
       +'<span style="font-size:11px;font-weight:700;color:'+AG.txt5+';font-variant-numeric:tabular-nums">'+esc(subtotalTxt)+'</span>'
       +'</div>';
-    var rowsHtml=items.length?items.map(agFilaHtml).join(''):'<div style="padding:10px 2px;font-size:12px;color:'+AG.txt5+'">Nada por aquí.</div>';
+    var rowsHtml=items.length?items.map(agFilaHtml).join(''):'<div style="padding:8px 2px;font-size:12px;color:'+AG.txt5+'">Nada por aquí.</div>';
     return head+rowsHtml;
   }
 
   var cuerpoHtml='<div style="padding:0 16px 20px">'+grupoHtml('q1')+grupoHtml('q2')+'</div>';
-  return headerHtml+filtroHtml+tiraHtml+cuerpoHtml;
+  var calendarioHtml=agMesCompletoAbierto?mesGridHtml:tiraHtml;
+  return headerHtml+filtroHtml+toggleMesHtml+calendarioHtml+cuerpoHtml;
 }
 
 // Una fila de la agenda (pago o tarea), en cualquiera de sus tres orígenes.
@@ -265,7 +312,7 @@ function agFilaHtml(e){
   var clickable=(e.origen==='manual');
   var onclickRow=clickable?(' onclick="agAbrirDetalle(\''+e.id+'\')"'):'';
 
-  return '<div'+onclickRow+' style="padding:11px 12px 11px 0;background:'+bg+';border:1px solid '+bd+';border-radius:13px;display:flex;align-items:center;gap:11px;overflow:hidden;margin-bottom:8px;min-height:44px'+(clickable?';cursor:pointer':'')+'">'
+  return '<div'+onclickRow+' style="padding:8px 12px 8px 0;background:'+bg+';border:1px solid '+bd+';border-radius:13px;display:flex;align-items:center;gap:11px;overflow:hidden;margin-bottom:6px;min-height:40px'+(clickable?';cursor:pointer':'')+'">'
     +'<div style="width:3px;align-self:stretch;border-radius:0 2px 2px 0;background:'+barra+';flex-shrink:0"></div>'
     +'<div style="flex:0 0 34px;text-align:center">'
     +'<div style="font-size:16px;font-weight:800;color:'+numColor+';font-variant-numeric:tabular-nums;line-height:1.1">'+d.getDate()+'</div>'
@@ -418,9 +465,35 @@ function agAbrirNuevo(){
 function agMetodoOptsHtml(){
   return (catMetodos||[]).map(function(x){return '<option>'+esc(x.nombre)+'</option>';}).join('');
 }
+// Fecha con la que arranca el formulario de "Nuevo en la agenda": si el mes seleccionado en
+// Agenda (curM) es el mes real de hoy, usa la fecha real de hoy — si no (el usuario cambió de
+// mes con el selector de arriba), usa el día 1 de ESE mes. Antes siempre usaba la fecha real de
+// hoy sin importar qué mes estuviera viendo, así que crear un pago mientras se veía un mes
+// distinto al actual quedaba con una fecha de otro mes por accidente, y "Asociar a un gasto ya
+// creado" terminaba buscando en la quincena de ese día real (mes equivocado en la práctica).
+function agFechaPorDefecto(){
+  var real=new Date();
+  var realIso=real.toISOString().slice(0,10);
+  var m=getM();
+  if(!m) return realIso;
+  var mi=MESES.indexOf(m.nombre);
+  var esMesReal=(m.año===real.getFullYear() && mi===real.getMonth());
+  if(esMesReal) return realIso;
+  return new Date(m.año,mi,1).toISOString().slice(0,10);
+}
+// A qué mes (objeto db) pertenece el formulario según la fecha tecleada — NO necesariamente el
+// mes seleccionado en Agenda (curM/getM()). Si el usuario cambia la fecha a otro mes (ej. está
+// viendo septiembre pero registra un pago de octubre), todo el formulario debe operar sobre
+// octubre: buscar "gastos ya creados" ahí, y si no lo hace también el recordatorio termina
+// guardado en un mes y su gasto asociado en otro, lo cual rompe la sincronización entre ambos
+// (agSincronizarDesdeGasto busca el recordatorio dentro del MISMO mes que el gasto). Si ese mes
+// todavía no existe en la app, se recurre al mes seleccionado como mejor opción disponible.
+function agMesDeFecha(fecha){
+  return agBuscarMesPorFecha(fecha)||getM();
+}
 function agFormHtml(){
   var esPago=agFormTipo==='pago';
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=agFechaPorDefecto();
 
   var tipoSelector='<div style="display:flex;background:'+AG.bg4+';border-radius:11px;padding:3px">'
     +'<button type="button" onclick="agCambiarTipo(\'tarea\')" style="flex:1;padding:9px 0;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:'+(esPago?'700':'800')+';background:'+(esPago?'transparent':AG.accBg2)+';color:'+(esPago?AG.txt5:AG.cian2)+'">Tarea</button>'
@@ -464,19 +537,27 @@ function agFormHtml(){
 // El bloque "Registrarlo también como gasto" se reconstruye SOLO a sí mismo (ver
 // agActualizarBloqueGasto) en vez de todo el formulario — así escribir el monto no le quita el
 // foco/cursor al input, el mismo bug que ya se corrigió para el formulario de gastos.
-// Gastos de nivel superior de una quincena que todavía no están enlazados a ningún
-// recordatorio — candidatos para "Asociar a un gasto ya creado" en vez de crear uno nuevo.
+// Gastos de una quincena que todavía no están enlazados a ningún recordatorio — candidatos
+// para "Asociar a un gasto ya creado" en vez de crear uno nuevo. Incluye los que viven dentro
+// de un grupo (ej. "Odontología" bajo un grupo "Salud"): antes se excluían con !g.parentId, así
+// que cualquier gasto agrupado (algo muy común) nunca aparecía en este picker, aunque siguiera
+// siendo un gasto real y pagable igual que uno suelto — solo se excluye el grupo en sí mismo
+// (esGrupo, que no es un gasto pagable) y el que ya tenga su propio recordatorio.
 function agGastosDisponiblesParaAsociar(m,which){
   var lista=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
-  return (lista||[]).filter(function(g){ return !g.esGrupo && !g.parentId && !g.agendaId; });
+  return (lista||[]).filter(function(g){ return !g.esGrupo && !g.agendaId; });
 }
 function agBloqueRegistrarGastoHtml(){
-  var m=getM();
   // El monto ya NO es requisito para encender "Registrarlo también como gasto" ni para asociar
   // uno ya creado (ese hereda su propio valor) — solo se exige, al guardar, cuando se va a crear
   // un gasto NUEVO (ver agGuardarNuevo).
   var on=agFormRegistrarGasto;
   var fechaActual=document.getElementById('ag-fecha')?document.getElementById('ag-fecha').value:new Date().toISOString().slice(0,10);
+  // El mes de trabajo lo decide la FECHA tecleada, no el mes que está seleccionado en Agenda
+  // (curM/getM()) — si difieren (ej. registrando en septiembre un pago de octubre), todo el
+  // bloque debe operar sobre el mes real de esa fecha, o "asociar a un gasto ya creado" busca en
+  // el mes equivocado (ver agMesDeFecha).
+  var m=agMesDeFecha(fechaActual);
   var wh=agQuincenaResuelta(fechaActual);
   var gastoExistente=agFormGastoExistenteId?agBuscarGasto(m,agFormGastoExistenteId,wh):null;
   if(agFormGastoExistenteId&&!gastoExistente) agFormGastoExistenteId=null; // cambió de quincena o ya no existe
@@ -561,15 +642,20 @@ function agRestaurarSnapshot(){
   agSetRepetir(agFormRepetirActual);
 }
 function agAbrirPickerGastoExistente(){
-  var m=getM();
   var fecha=document.getElementById('ag-fecha').value||new Date().toISOString().slice(0,10);
+  var m=agMesDeFecha(fecha);
   var which=agQuincenaResuelta(fecha);
   var gastos=agGastosDisponiblesParaAsociar(m,which);
   if(!gastos.length){ showAlert('No hay gastos de '+which.toUpperCase()+' sin asociar todavía.'); return; }
   agFormSnapshot=agCapturarSnapshot();
+  var listaCompleta=which==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
   var itemsHtml=gastos.map(function(g){
+    // Si vive dentro de un grupo (ej. "Odontología" bajo "Salud"), se aclara de cuál — sin esto
+    // un gasto agrupado se veía igual que uno suelto y no quedaba claro dónde encontrarlo luego.
+    var grupoPadre=g.parentId?listaCompleta.find(function(x){return x.id===g.parentId;}):null;
+    var subTxt=grupoPadre?('<div style="font-size:11px;color:var(--mut);margin-top:1px">en '+esc(nombreGasto(grupoPadre))+'</div>'):'';
     return '<div onclick="agElegirGastoExistente(\''+g.id+'\')" style="padding:13px 4px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--brd);cursor:pointer">'
-      +'<span style="font-size:14px;font-weight:600;color:var(--txt)">'+esc(nombreGasto(g))+'</span>'
+      +'<span><span style="font-size:14px;font-weight:600;color:var(--txt);display:block">'+esc(nombreGasto(g))+'</span>'+subTxt+'</span>'
       +'<span style="font-size:13px;color:var(--mut);flex-shrink:0">'+cop(g.presupuesto)+'</span>'
       +'</div>';
   }).join('');
@@ -582,8 +668,8 @@ function agElegirGastoExistente(gastoId){
   agFormGastoExistenteId=gastoId;
   // Al asociar un gasto ya creado, el recordatorio hereda su nombre y su valor — es el gasto
   // quien manda ahora, así que no tiene sentido dejar lo que el usuario haya tecleado antes.
-  var m=getM();
   var fecha=(agFormSnapshot&&agFormSnapshot.fecha)||new Date().toISOString().slice(0,10);
+  var m=agMesDeFecha(fecha);
   var which=agQuincenaResuelta(fecha);
   var gasto=agBuscarGasto(m,gastoId,which);
   if(gasto&&agFormSnapshot){
@@ -624,12 +710,20 @@ function agGuardarNuevo(){
   if(!concepto){ showAlert('Escribe qué quieres agendar'); return; }
   var fecha=document.getElementById('ag-fecha').value||new Date().toISOString().slice(0,10);
   var hora=(document.getElementById('ag-hora')?document.getElementById('ag-hora').value:'')||null;
-  var m=getM();
+  // El mes de destino lo decide la fecha tecleada, no el mes seleccionado en Agenda (ver
+  // agMesDeFecha) — si el usuario está viendo septiembre pero la fecha cae en octubre, el
+  // recordatorio (y su gasto, si aplica) deben quedar en octubre para que ambos sigan viviendo
+  // en el MISMO mes (agSincronizarDesdeGasto busca el recordatorio ahí). Después de guardar, la
+  // vista salta a ese mes para que el recordatorio recién creado no "desaparezca" de pantalla.
+  var m=agMesDeFecha(fecha);
+  var mKey=Object.keys(db).find(function(k){return db[k]===m;});
 
   if(agFormTipo==='tarea'){
     var tarea={id:uid(),tipo:'tarea',concepto:concepto,fecha:fecha,hora:hora,monto:null,repetir:'nunca',tildado:false,gastoId:null,which:agQuincenaDeFecha(fecha),formaPago:null};
     agendaArr(m).push(tarea);
-    save();closeModal();render();toast('Tarea agregada ✓');
+    save();
+    if(mKey!=null) curM=parseInt(mKey,10);
+    closeModal();render();toast('Tarea agregada ✓');
     return;
   }
 
@@ -665,6 +759,7 @@ function agGuardarNuevo(){
   }
   agendaArr(m).push(item);
   save();
+  if(mKey!=null) curM=parseInt(mKey,10);
   agFormGastoExistenteId=null;
   agFormQuincenaManual=null;
   agMostrarConfirmacion(item,gastoCreado||gastoAsociado,!!gastoAsociado);

@@ -41,7 +41,8 @@ const ICONS = {
   calculator:'<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>',
   percent:'<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
   barChart:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
-  externalLink:'<path d="M7 17L17 7"/><path d="M8 7h9v9"/>'
+  externalLink:'<path d="M7 17L17 7"/><path d="M8 7h9v9"/>',
+  snowflake:'<line x1="12" y1="2" x2="12" y2="22"/><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5.64" y1="18.36" x2="18.36" y2="5.64"/>'
 };
 function icon(name, size){
   size=size||15;

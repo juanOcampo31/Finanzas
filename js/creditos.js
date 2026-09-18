@@ -5,21 +5,54 @@ function calcCuotaPMT(valorPrestamo, tasa, cuotas){
   return valorPrestamo*tasa/(1-Math.pow(1+tasa,-cuotas));
 }
 
-function generarFechasCredito(fechaInicioStr, cuotas, frecuencia){
+// congelamientos: [{idx, periodos}] — "congelar" una cuota (ver openCongelarModal) no agrega
+// cuotas nuevas ni cambia cuántas hay, solo empuja su fecha (y la de todas las que siguen)
+// `periodos` pasos más adelante de lo normal — un mes extra por periodo si es mensual, una
+// quincena extra si es quincenal. idx es el mismo índice 0-based que usan pagos[]/abonos[].
+function extraPeriodosEnCuota(congelamientos,idx){
+  return (congelamientos||[]).filter(function(c){return c.idx===idx;}).reduce(function(a,c){return a+(c.periodos||0);},0);
+}
+// Un paso de la alternación quincenal (15 / fin de mes) a partir de una posición (y,m,sigEsFinMes)
+// — devuelve la fecha de ESE paso y la posición ya lista para el siguiente. Compartido entre el
+// bucle normal y el congelamiento en la cuota 0 (avanzar el ancla misma, ver más abajo), para no
+// duplicar la alternación en dos sitios que antes podían desincronizarse.
+function siguientePasoQuincena(y,m,sigEsFinMes){
+  if(sigEsFinMes){
+    var ultimo=new Date(y,m+1,0).getDate();
+    var fecha=new Date(y,m,ultimo);
+    var m2=m+1, y2=y; if(m2>11){m2=0;y2++;}
+    return {fecha:fecha, y:y2, m:m2, sigEsFinMes:false};
+  }
+  return {fecha:new Date(y,m,15), y:y, m:m, sigEsFinMes:true};
+}
+function generarFechasCredito(fechaInicioStr, cuotas, frecuencia, congelamientos){
   // frecuencia: 'mensual' o 'quincenal'
-  // La fecha de inicio ES la fecha de la primera cuota
+  // La fecha de inicio ES la fecha de la primera cuota — salvo que la cuota 0 misma tenga un
+  // congelamiento (idx:0): en ese caso el ancla se empuja `periodos` pasos antes de generar nada
+  // más, así congelar la primera cuota funciona igual que congelar cualquier otra (antes esto no
+  // tenía ningún efecto: el bucle que aplica congelamientos empezaba en k=1, y la cuota 0 siempre
+  // quedaba fija en fechaInicioStr tal cual, ignorando silenciosamente el congelamiento).
   const fechas=[];
   const inicio=new Date(fechaInicioStr+'T12:00:00');
-  fechas.push(fechaInicioStr);
+  const extra0=extraPeriodosEnCuota(congelamientos,0);
   if(frecuencia==='mensual'){
     var esFinDeMes = inicio.getDate() >= 28 || inicio.getDate()===new Date(inicio.getFullYear(),inicio.getMonth()+1,0).getDate();
-    var cursor=new Date(inicio.getFullYear(),inicio.getMonth()+1,1);
+    var inicioEfectivo=inicio;
+    if(extra0>0){
+      var y0=inicio.getFullYear(), m0=inicio.getMonth();
+      for(var e0=0;e0<extra0;e0++){ m0++; if(m0>11){m0=0;y0++;} }
+      inicioEfectivo = esFinDeMes ? new Date(y0,m0+1,0) : new Date(y0,m0,inicio.getDate());
+    }
+    fechas.push(inicioEfectivo.toISOString().slice(0,10));
+    var cursor=new Date(inicioEfectivo.getFullYear(),inicioEfectivo.getMonth()+1,1);
     for(var k=1;k<cuotas;k++){
+      var extra=extraPeriodosEnCuota(congelamientos,k);
+      for(var e=0;e<extra;e++){ cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1); }
       if(esFinDeMes){
         var d=new Date(cursor.getFullYear(),cursor.getMonth()+1,0);
         fechas.push(d.toISOString().slice(0,10));
       } else {
-        var d2=new Date(cursor.getFullYear(),cursor.getMonth(),inicio.getDate());
+        var d2=new Date(cursor.getFullYear(),cursor.getMonth(),inicioEfectivo.getDate());
         fechas.push(d2.toISOString().slice(0,10));
       }
       cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);
@@ -39,16 +72,22 @@ function generarFechasCredito(fechaInicioStr, cuotas, frecuencia){
       if(esFinDeMesInicio){ m++; if(m>11){m=0;y++;} var sigEsFinMes=false; }
       else { var sigEsFinMes=true; } // inicio fue el 15 → siguiente es fin de mes mismo mes
     }
+    var fechaInicioEfectiva=fechaInicioStr;
+    for(var e0q=0;e0q<extra0;e0q++){
+      var pasoInicio=siguientePasoQuincena(y,m,sigEsFinMes);
+      fechaInicioEfectiva=pasoInicio.fecha.toISOString().slice(0,10);
+      y=pasoInicio.y; m=pasoInicio.m; sigEsFinMes=pasoInicio.sigEsFinMes;
+    }
+    fechas.push(fechaInicioEfectiva);
     for(var k=1;k<cuotas;k++){
-      if(sigEsFinMes){
-        var ultimoDia=new Date(y,m+1,0).getDate();
-        fechas.push(new Date(y,m,ultimoDia).toISOString().slice(0,10));
-        sigEsFinMes=false;
-        m++; if(m>11){m=0;y++;}
-      } else {
-        fechas.push(new Date(y,m,15).toISOString().slice(0,10));
-        sigEsFinMes=true;
+      var extraQ=extraPeriodosEnCuota(congelamientos,k);
+      for(var eq=0;eq<extraQ;eq++){
+        var pasoSkip=siguientePasoQuincena(y,m,sigEsFinMes);
+        y=pasoSkip.y; m=pasoSkip.m; sigEsFinMes=pasoSkip.sigEsFinMes;
       }
+      var pasoReal=siguientePasoQuincena(y,m,sigEsFinMes);
+      fechas.push(pasoReal.fecha.toISOString().slice(0,10));
+      y=pasoReal.y; m=pasoReal.m; sigEsFinMes=pasoReal.sigEsFinMes;
     }
   }
   return fechas;
@@ -96,7 +135,7 @@ function calcAmortizacionSinCache(cred){
   const cuotasContrato=cred.cuotas||1; // plazo originalmente pactado (tope del bucle)
   const cuotaPMT=calcCuotaPMT(total,tasa,cuotasContrato);
   const valorCuota=cred.valorCuotaManual||Math.round(cuotaPMT);
-  const fechas=generarFechasCredito(cred.fechaInicio,cuotasContrato,cred.frecuencia||'quincenal');
+  const fechas=generarFechasCredito(cred.fechaInicio,cuotasContrato,cred.frecuencia||'quincenal',cred.congelamientos);
 
   const pagos=cred.pagos||[];
   const detalle=cred.pagoDetalle||{};
@@ -239,8 +278,8 @@ function renderCreditos(m){
   const ringColors=['var(--acc)','var(--pur)','var(--grn)','var(--amb)'];
 
   if(!ids.length){
-    return '<div class="cred-hero"><div class="cred-hero-lbl">Saldo total que debo</div>'
-      +'<div class="cred-hero-val"><span class="cred-hero-cur">$</span>0</div></div>'
+    return '<div class="nom-resumen"><div class="nom-resumen-lbl">Saldo total que debo</div>'
+      +'<div class="nom-resumen-val"><span class="nom-resumen-cur">$</span>0</div></div>'
       +'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('dollar',36)+'</div><p>Sin créditos. Toca + para crear uno.</p></div>';
   }
 
@@ -303,15 +342,18 @@ function renderCreditos(m){
       +'</div></div>';
   }).join('');
 
-  var heroHtml='<div class="cred-hero">'
-    +'<div class="cred-hero-lbl">Saldo total que debo</div>'
-    +'<div class="cred-hero-val"><span class="cred-hero-cur">$</span>'+Math.round(saldoTotal).toLocaleString('es-CO')+'</div>'
-    +'<div class="cred-hero-stats">'
-    +'<div class="cred-hero-stat"><div class="cred-hero-stat-lbl" style="color:var(--red)">Cuotas del mes</div><div class="cred-hero-stat-val" style="color:var(--red)">'+cop(cuotasMes)+'</div></div>'
+  // Mismo formato de encabezado que "Resumen del mes" en Nómina (ver nom-resumen en nomina.js) y
+  // los mismos "3 totales" que ya usan Gastos y ese resumen (glist-totals) — antes este panel
+  // tenía su propio juego de clases (cred-hero-*) casi idéntico, duplicado sin necesidad.
+  var heroHtml='<div class="nom-resumen">'
+    +'<div class="nom-resumen-lbl">Saldo total que debo</div>'
+    +'<div class="nom-resumen-val"><span class="nom-resumen-cur">$</span>'+Math.round(saldoTotal).toLocaleString('es-CO')+'</div>'
+    +'<div class="glist-totals" style="padding:6px 0 0;margin-top:6px;border-top:1px solid var(--brd)">'
+    +'<div class="glist-tot"><div class="glist-tot-lbl" style="color:var(--red)">CUOTAS DEL MES</div><div class="glist-tot-val" style="color:var(--red)">'+cop(cuotasMes)+'</div></div>'
     +'<div class="glist-div"></div>'
-    +'<div class="cred-hero-stat"><div class="cred-hero-stat-lbl">Créditos activos</div><div class="cred-hero-stat-val">'+activosCount+'</div></div>'
+    +'<div class="glist-tot"><div class="glist-tot-lbl">CRÉDITOS ACTIVOS</div><div class="glist-tot-val">'+activosCount+'</div></div>'
     +'<div class="glist-div"></div>'
-    +'<div class="cred-hero-stat" style="cursor:pointer" onclick="toggleCredProxPago()"><div class="cred-hero-stat-lbl" style="color:var(--acc)">Próximo pago</div><div class="cred-hero-stat-val" style="color:var(--acc)">'+proximoFmt+'</div>'
+    +'<div class="glist-tot" style="cursor:pointer" onclick="toggleCredProxPago()"><div class="glist-tot-lbl" style="color:var(--acc)">PRÓXIMO PAGO</div><div class="glist-tot-val" style="color:var(--acc)">'+proximoFmt+'</div>'
     +(activos.length?'<div style="font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+activos.length+(activos.length===1?' crédito ▾':' créditos ▾')+'</div>':'')
     +'</div>'
     +'</div>'
@@ -324,34 +366,27 @@ function renderCreditos(m){
     var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
     var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
     var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
-    return '<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:14px;margin:0 14px 12px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-      +'<div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+esc(cr.nombre)+mensPill+'</div>'
-      +'<div style="font-size:11px;color:var(--mut);margin-top:2px">'+frecLbl+'</div></div>'
-      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;'+(x.activo?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(x.activo?'Activo':'Pagado')+'</div>'
+    return '<div onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+x.id+'\')" style="cursor:pointer;background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin:0 14px 10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
+      +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
+      +'<span style="font-size:14px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
+      +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
+      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+(x.activo?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(x.activo?'Activo':'Pagado')+'</div>'
       +'</div>'
-      +'<div style="display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--brd)">'
-      +'<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+      +'<div style="position:relative;width:64px;height:64px;flex-shrink:0">'
       +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+x.color+' '+(x.pct*3.6)+'deg,var(--brd) 0deg)"></div>'
-      +'<div style="position:absolute;inset:7px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
-      +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
-      +'<div style="font-size:8px;color:var(--mut)">Completado</div>'
+      +'<div style="position:absolute;inset:6px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
+      +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
+      +'<div style="font-size:9px;color:var(--mut)">'+x.pagadas+'/'+amort.rows.length+'</div>'
       +'</div></div>'
-      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0">'
-      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(x.saldoActual)+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
-      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Próximo pago</div><div style="font-size:14px;font-weight:700;color:'+x.color+'">'+proximaFecha+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
+      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(x.saldoActual)+'</div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Próximo pago</div><div style="font-size:13px;font-weight:700;color:'+x.color+'">'+proximaFecha+'</div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
       +'</div>'
       +'</div>'
-      +'<div style="margin-top:10px">'
-      +'<div style="height:4px;background:var(--brd);border-radius:4px;overflow:hidden">'
-      +'<div style="height:100%;width:'+x.pct+'%;background:'+x.color+';border-radius:4px"></div></div>'
-      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:5px">'
-      +'<span>'+x.pagadas+' / '+amort.rows.length+' cuotas pagadas</span>'
-      +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
-      +'</div></div>'
-      +'<button onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
       +'</div>';
   }).join('');
 
@@ -438,34 +473,27 @@ function openCreditosMenu(){
     var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
     var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
     var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
-    return '<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:14px;margin-bottom:12px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-      +'<div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+esc(cr.nombre)+mensPill+'</div>'
-      +'<div style="font-size:11px;color:var(--mut);margin-top:2px">'+frecLbl+'</div></div>'
-      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;'+(x.activo?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(x.activo?'Activo':'Pagado')+'</div>'
+    return '<div onclick="creditoDetalleDesdeModal=true;openCreditoDetalle(\''+x.id+'\')" style="cursor:pointer;background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
+      +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
+      +'<span style="font-size:14px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
+      +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
+      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+(x.activo?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(x.activo?'Activo':'Pagado')+'</div>'
       +'</div>'
-      +'<div style="display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--brd)">'
-      +'<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+      +'<div style="position:relative;width:64px;height:64px;flex-shrink:0">'
       +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+x.color+' '+(x.pct*3.6)+'deg,var(--brd) 0deg)"></div>'
-      +'<div style="position:absolute;inset:7px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
-      +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
-      +'<div style="font-size:8px;color:var(--mut)">Completado</div>'
+      +'<div style="position:absolute;inset:6px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
+      +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
+      +'<div style="font-size:9px;color:var(--mut)">'+x.pagadas+'/'+amort.rows.length+'</div>'
       +'</div></div>'
-      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0">'
-      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(x.saldoActual)+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
-      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Próximo pago</div><div style="font-size:14px;font-weight:700;color:'+x.color+'">'+proximaFecha+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
+      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(x.saldoActual)+'</div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Próximo pago</div><div style="font-size:13px;font-weight:700;color:'+x.color+'">'+proximaFecha+'</div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
       +'</div>'
       +'</div>'
-      +'<div style="margin-top:10px">'
-      +'<div style="height:4px;background:var(--brd);border-radius:4px;overflow:hidden">'
-      +'<div style="height:100%;width:'+x.pct+'%;background:'+x.color+';border-radius:4px"></div></div>'
-      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:5px">'
-      +'<span>'+x.pagadas+' / '+amort.rows.length+' cuotas pagadas</span>'
-      +'<span>'+(x.cuotasFaltantes>0?'Faltan '+x.cuotasFaltantes+' cuotas':'Completado')+'</span>'
-      +'</div></div>'
-      +'<button onclick="creditoDetalleDesdeModal=true;openCreditoDetalle(\''+x.id+'\')" style="width:100%;margin-top:10px;background:var(--surf);border:1px solid var(--brd2);border-radius:var(--r2);padding:9px;font-size:12px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center">Ver detalles del crédito <span style="color:var(--mut);display:flex">'+icon('chevronRight',15)+'</span></button>'
       +'</div>';
   }).join(''):'<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('dollar',36)+'</div><p>Sin créditos. Crea uno nuevo.</p></div>';
 
@@ -872,10 +900,17 @@ function openCreditoDetalle(id){
     }
     var abonoPanelesHtml=eventosAbono.map(abonoDetailsHtml).join('');
 
-    return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'background:var(--acc-d)':'')+'">'
-      +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:24px;height:24px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;display:flex">'+icon('check',13)+'</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
+    // Insignia "❄ +N" cuando esta cuota tiene un congelamiento aplicado (ver openCongelarModal)
+    // — tocarla ofrece deshacerlo, igual que un abono a capital se puede eliminar.
+    var congeladaAqui=(cr.congelamientos||[]).find(function(c){return c.idx===i;});
+    var congeladaBadge=congeladaAqui
+      ?'<span onclick="event.stopPropagation();confirmarQuitarCongelamiento(\''+id+'\',\''+congeladaAqui.id+'\')" style="font-size:9px;font-weight:700;background:var(--acc-d);color:var(--acc);padding:1px 6px;border-radius:10px;margin-left:5px;vertical-align:middle;cursor:pointer">'+icon('snowflake',9)+' +'+congeladaAqui.periodos+'</span>'
+      :'';
+
+    return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'background:var(--acc-d)':'')+'">'
+      +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:22px;height:22px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;display:flex">'+icon('check',12)+'</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--txt)">Cuota '+r.numero+' de '+totalCuotas+'</div>'
+      +'<div style="font-size:12px;font-weight:600;color:var(--txt)">Cuota '+r.numero+' de '+totalCuotas+congeladaBadge+'</div>'
       +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+fechaFmt+' · saldo '+cop(r.saldo)+'</div>'
       +'<div style="font-size:10px;margin-top:1px"><span style="color:var(--grn)">Capital '+cop(r.capital)+'</span> · <span style="color:var(--red)">Interés '+cop(r.intereses)+'</span></div>'
       +'</div>'
@@ -894,53 +929,61 @@ function openCreditoDetalle(id){
   var abonoBtnHtml=puedeAbonar
     ?'<button onclick="openAbonoModal(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('dollar',13)+'Abonar a capital</button>'
     :'';
+  // Congelar solo tiene sentido con un plan calculado por esta app (no uno importado del banco,
+  // donde las fechas ya vienen dadas) y con una cuota siguiente que empujar (ver
+  // openCongelarModal/generarFechasCredito).
+  var congelarBtnHtml=puedeAbonar
+    ?'<button onclick="openCongelarModal(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('snowflake',13)+'Congelar cuota</button>'
+    :'';
   const mActual=getM();
   const tcVincNombre=(cr.tcVinculada && mActual.tarjetas && mActual.tarjetas[cr.tcVinculada])?mActual.tarjetas[cr.tcVinculada].nombre:null;
   const tcVincBadge=tcVincNombre?'<div style="font-size:11px;color:var(--mut);margin-bottom:6px">Vinculado a tarjeta: <b style="color:var(--txt)">'+esc(tcVincNombre)+'</b></div>':'';
   var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
   var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
-  var creditoHeaderHtml='<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:14px;margin-bottom:14px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-    +'<div><div style="font-size:15px;font-weight:700;color:var(--txt)">'+esc(cr.nombre)+mensPill+'</div>'
-    +'<div style="font-size:11px;color:var(--mut);margin-top:2px">'+frecLbl+'</div></div>'
-    +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;'+(activoCr?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(activoCr?'Activo':'Pagado')+'</div>'
+  var creditoHeaderHtml='<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin-bottom:8px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
+    +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
+    +'<span style="font-size:15px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
+    +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
+    +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+(activoCr?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(activoCr?'Activo':'Pagado')+'</div>'
     +'</div>'
-    +'<div style="display:flex;align-items:center;gap:14px">'
-    +'<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
+    +'<div style="display:flex;align-items:center;gap:12px">'
+    +'<div style="position:relative;width:66px;height:66px;flex-shrink:0">'
     +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--acc) '+(pctProgreso*3.6)+'deg,var(--brd) 0deg)"></div>'
-    +'<div style="position:absolute;inset:7px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
-    +'<div style="font-size:16px;font-weight:800;color:var(--txt)">'+pctProgreso+'%</div>'
-    +'<div style="font-size:8px;color:var(--mut)">Completado</div>'
+    +'<div style="position:absolute;inset:6px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
+    +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+pctProgreso+'%</div>'
+    +'<div style="font-size:9px;color:var(--mut)">'+pagadas+'/'+totalCuotas+'</div>'
     +'</div></div>'
-    +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0">'
-    +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:14px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div>'
-    +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Valor total del crédito</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
-    +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">'+(activoCr?'Próximo pago':'Cuota')+'</div><div style="font-size:14px;font-weight:700;color:var(--acc)">'+proximaFechaHdr+'</div>'
-    +'<div style="font-size:9px;color:var(--mut);margin-top:6px">Cuota del mes</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaValHdr)+'</div></div>'
+    +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+    +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div>'
+    +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Valor total del crédito</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
+    +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">'+(activoCr?'Próximo pago':'Cuota')+'</div><div style="font-size:13px;font-weight:700;color:var(--acc)">'+proximaFechaHdr+'</div>'
+    +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Cuota del mes</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaValHdr)+'</div></div>'
     +'</div>'
     +'</div>'
     +'</div>';
   openWindow(tcVincBadge
-    +'<div style="display:flex;justify-content:flex-end;gap:14px;margin-bottom:6px">'
+    +'<div style="display:flex;justify-content:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:4px">'
     +abonoBtnHtml
+    +congelarBtnHtml
     +'<button onclick="editCredito(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('edit',13)+'Editar crédito</button>'
     +'</div>'
     +creditoHeaderHtml
-    +'<div style="margin-bottom:10px">'
-    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-bottom:4px">'
+    +'<div style="margin-bottom:7px">'
+    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-bottom:3px">'
     +'<span>'+(cuotasPendientes>0?cuotasPendientes+' cuotas pendientes':'Crédito pagado')+'</span>'
     +(cuotasPendientes>0?'<span>Termina '+fechaFinFmt+'</span>':'')
     +'</div>'
-    +'<div style="height:6px;background:var(--brd);border-radius:4px;overflow:hidden">'
+    +'<div style="height:5px;background:var(--brd);border-radius:4px;overflow:hidden">'
     +'<div style="height:100%;width:'+pctProgreso+'%;background:var(--acc);border-radius:4px"></div>'
     +'</div>'
     +'</div>'
-    +'<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
+    +'<div style="display:flex;justify-content:flex-end;margin-bottom:4px">'
     +'<button onclick="toggleOcultarPagadas(\''+id+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--mut);cursor:pointer">'
     +(ocultar?'Mostrar pagadas':'Ocultar pagadas')+'</button>'
     +'</div>'
     +'<div id="cr-list" style="max-height:380px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2)">'+rowsHtml+'</div>'
-    +'<div class="macts" style="margin-top:14px">'
+    +'<div class="macts" style="margin-top:10px">'
     +'<button class="bcnl" onclick="volverDesdeCreditoDetalle()">Volver</button>'
     +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmDeleteCredito(\''+id+'\')">Eliminar</button>'
     +'</div>');
@@ -1162,6 +1205,130 @@ function confirmarAbono(id){
     console.error('Error registrando abono:',err);
     showAlert('No se pudo registrar el abono. Intenta de nuevo.');
   }
+}
+
+// "Congelar" una cuota salta N periodos (meses si es mensual, quincenas si es quincenal) antes
+// de esa cuota, sin agregar cuotas nuevas — esa y todas las siguientes se recorren esa misma
+// cantidad (ver generarFechasCredito/extraPeriodosEnCuota). Siempre se aplica sobre la PRÓXIMA
+// cuota sin pagar: no tendría sentido congelar una ya pagada, y congelar una futura sin haber
+// resuelto antes las anteriores dejaría un hueco confuso en el calendario.
+function openCongelarModal(id){
+  const cr=creditos[id]; if(!cr) return;
+  if(cr.planImportado && cr.planImportado.length){
+    showAlert('Los créditos con plan de pagos importado (fechas exactas del banco) no admiten congelar cuotas.');
+    return;
+  }
+  const estado=calcEstadoCredito(cr);
+  if(estado.proximaIdx===-1){ showAlert('Este crédito ya está pagado.'); return; }
+  const row=estado.amort.rows[estado.proximaIdx];
+  const esMensual=(cr.frecuencia==='mensual');
+  const unidadPlural=esMensual?'meses':'quincenas';
+  const fechaActualFmt=new Date(row.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
+  openModal('<div class="mtitle">Congelar cuota</div>'
+    +'<p style="font-size:13px;color:var(--mut);margin-bottom:10px">La cuota '+row.numero+' cae en <b style="color:var(--txt)">'+fechaActualFmt+'</b>. Elige cuántos '+unidadPlural+' quieres saltarte — esa cuota y todas las siguientes se recorren esa misma cantidad, sin agregar cuotas nuevas al crédito.</p>'
+    +'<div class="field"><label>'+(esMensual?'Meses':'Quincenas')+' a congelar</label>'
+    +'<input id="cg-periodos" type="number" min="1" max="12" value="1" oninput="actualizarPreviewCongelar(\''+id+'\')"></div>'
+    +'<p id="cg-preview" style="font-size:13px;color:var(--acc);font-weight:700;margin-bottom:4px"></p>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="confirmarCongelarCuota(\''+id+'\')">Congelar</button>'
+    +'</div>');
+  actualizarPreviewCongelar(id);
+}
+function actualizarPreviewCongelar(id){
+  const cr=creditos[id]; if(!cr) return;
+  const estado=calcEstadoCredito(cr);
+  const idx=estado.proximaIdx;
+  const previewEl=document.getElementById('cg-preview');
+  if(idx===-1||!previewEl) return;
+  const periodos=parseInt(document.getElementById('cg-periodos').value,10)||0;
+  if(periodos<=0){ previewEl.textContent=''; return; }
+  const congelamientosPreview=(cr.congelamientos||[]).concat([{idx:idx,periodos:periodos}]);
+  const fechasPreview=generarFechasCredito(cr.fechaInicio,cr.cuotas||1,cr.frecuencia||'quincenal',congelamientosPreview);
+  const nuevaFechaFmt=new Date(fechasPreview[idx]+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
+  previewEl.textContent='Nueva fecha de la cuota '+estado.amort.rows[idx].numero+': '+nuevaFechaFmt;
+}
+// Congelar/descongelar mueve las FECHAS de las cuotas siguientes (ver generarFechasCredito), pero
+// los gastos que esas cuotas ya tuvieran creados en meses que YA EXISTEN en la app (generados por
+// generarGastosCredito al crear esos meses) se quedan apuntando a su mes/quincena vieja si nadie
+// los reubica. Esto se llama justo después de cr.congelamientos cambia: para cada cuota SIN pagar
+// reubica su gasto al mes/quincena que le corresponde ahora (moviéndolo si el mes ya existe,
+// creándolo si el mes existe pero esa cuota aún no tenía gasto ahí, o simplemente quitándolo de
+// donde estaba si el mes destino todavía no existe — generarGastosCredito lo crea solo cuando ese
+// mes se cree). Las cuotas ya pagadas nunca se tocan: su gasto es un registro histórico.
+function resincronizarGastosCredito(crId){
+  var cr=creditos[crId]; if(!cr) return;
+  var amort=calcAmortizacion(cr);
+  var pagos=cr.pagos||[];
+
+  var existentes={}; // numCuota -> {mesKey, which:'q1'|'q2', gasto}
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    ['q1','q2'].forEach(function(w){
+      (mes[w+'_gastos']||[]).forEach(function(g){
+        if(g.creditoId===crId && g.numCuota && !g.pagado_flag){
+          existentes[g.numCuota]={mesKey:k,which:w,gasto:g};
+        }
+      });
+    });
+  });
+
+  amort.rows.forEach(function(row,idx){
+    if(pagos[idx]) return;
+    var bucket=calcQuincenaCuota(new Date(row.fecha+'T12:00:00'));
+    var mesDestinoNombre=MESES[bucket.mes];
+    var keyDestino=Object.keys(db).find(function(k){return db[k].año===bucket.año && db[k].nombre===mesDestinoNombre;});
+    var actual=existentes[row.numero];
+
+    if(!actual){
+      if(keyDestino){
+        var listaNueva=db[keyDestino][bucket.which+'_gastos']=db[keyDestino][bucket.which+'_gastos']||[];
+        listaNueva.push({
+          id:uid(), nombre:prefijoCredito(cr)+cr.nombre, presupuesto:row.valorCuota, metodo:'Nequi',
+          pagado_real:null, estado:null, pagado_flag:false, sinpagar:false, parentId:null, esGrupo:false,
+          cuotas_total:cr.cuotas, cuota_actual:row.numero, creditoId:crId, numCuota:row.numero,
+          fecha_pago:null, comprobante:null
+        });
+      }
+      return;
+    }
+    if(actual.mesKey===keyDestino && actual.which===bucket.which) return;
+
+    var mesActual=db[actual.mesKey];
+    mesActual[actual.which+'_gastos']=(mesActual[actual.which+'_gastos']||[]).filter(function(g){return g.id!==actual.gasto.id;});
+    if(keyDestino){
+      var listaDestino=db[keyDestino][bucket.which+'_gastos']=db[keyDestino][bucket.which+'_gastos']||[];
+      listaDestino.push(actual.gasto);
+    }
+  });
+}
+function confirmarCongelarCuota(id){
+  const cr=creditos[id]; if(!cr) return;
+  const estado=calcEstadoCredito(cr);
+  const idx=estado.proximaIdx;
+  if(idx===-1){ closeModal(); return; }
+  const periodos=parseInt(document.getElementById('cg-periodos').value,10)||0;
+  if(periodos<=0){ showAlert('Ingresa al menos 1.'); return; }
+  if(!cr.congelamientos) cr.congelamientos=[];
+  cr.congelamientos.push({id:uid(), idx:idx, periodos:periodos});
+  invalidarAmortCache(id);
+  resincronizarGastosCredito(id);
+  const unidad=(cr.frecuencia==='mensual')?(periodos===1?'mes':'meses'):(periodos===1?'quincena':'quincenas');
+  save();render();openCreditoDetalle(id);
+  toast('Cuota '+(idx+1)+' congelada '+periodos+' '+unidad+' — el resto del calendario se recorrió igual.');
+}
+function confirmarQuitarCongelamiento(id,congId){
+  showConfirm('Se quitará el congelamiento y esa cuota (y las siguientes) volverán a su fecha original. ¿Continuar?',function(){
+    quitarCongelamiento(id,congId);
+  });
+}
+function quitarCongelamiento(id,congId){
+  const cr=creditos[id]; if(!cr) return;
+  if(cr.congelamientos) cr.congelamientos=cr.congelamientos.filter(function(c){return c.id!==congId;});
+  invalidarAmortCache(id);
+  resincronizarGastosCredito(id);
+  save();render();openCreditoDetalle(id);
+  toast('Congelamiento eliminado');
 }
 
 // abId identifica un abono manual puntual (cr.abonos) a eliminar; abId===null identifica el
