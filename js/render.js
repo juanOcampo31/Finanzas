@@ -456,7 +456,7 @@ function selectHomeQ(q){
 // Panel de tarjetas Q1/Q2 (compartido entre Inicio e Ingresos) — misma tarjeta visual,
 // pero el valor grande y su etiqueta son configurables (disponible vs. ingresos).
 
-function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,vencQ2){
+function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,vencQ2,pagadosQ1,pagadosQ2){
   const mi=MESES.indexOf(m.nombre);
   const miSafe=mi>=0?mi:0;
   const {q1,q2}=getPago(m.año,miSafe);
@@ -470,10 +470,20 @@ function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,venc
   }
   const pagoQ1=pagoInfo(q1), pagoQ2=pagoInfo(q2);
 
-  function qCard(qKey,label,rango,val,pago,venc){
+  // "N de M pagados" (ver calcPagadosIndividualGastos) — opcional: solo Inicio lo pasa como
+  // {pagados,total} (Ingresos reutiliza este mismo componente sin ese concepto). Mismo estilo
+  // discreto que el rango de fechas ("1–15 oct", no el de la etiqueta "Q1" en negrita) — salvo
+  // que esta quincena YA pasó su fecha de pago (yaPagada) y todavía queda algo sin pagar: ahí se
+  // resalta en ámbar, porque significa que quedó un pago pendiente de una quincena vieja.
+  function qCard(qKey,label,rango,val,pago,venc,pagadosInfo){
     const active=activeQ===qKey;
-    const negIcon=val<0?'<span title="Disponible negativo" style="color:var(--red);display:inline-flex;vertical-align:-2px;margin-left:5px">'+icon('alertTriangle',13)+'</span>':'';
-    const vencIcon=(!negIcon&&venc&&venc.length)?'<span title="Cuota de crédito vencida" style="color:var(--amb);display:inline-flex;vertical-align:-2px;margin-left:5px">'+icon('alertTriangle',13)+'</span>':'';
+    // Sin saldo disponible (solo aplica al DISPONIBLE de Inicio, no al total de Ingresos): el
+    // número negativo se deja igual que siempre ("-$80.000"), solo cambia la etiqueta de arriba
+    // ("DISPONIBLE" → "SIN SALDO DISPONIBLE") para que quede claro de una que es un déficit.
+    const sinSaldo=val<0&&valueLbl==='DISPONIBLE';
+    // El ícono de alerta ya se muestra junto a "SIN SALDO DISPONIBLE" (la etiqueta de arriba,
+    // ver sinSaldo/qcard-disp-lbl) — repetirlo también junto al monto era redundante.
+    const vencIcon=(!sinSaldo&&venc&&venc.length)?'<span title="Cuota de crédito vencida" style="color:var(--amb);display:inline-flex;vertical-align:-2px;margin-left:5px">'+icon('alertTriangle',13)+'</span>':'';
     const sepHtml='<div class="qcard-sep"></div>';
     // Misma idea que en Nómina: si esta quincena ya se pagó, el valor y el texto "Pago {fecha}"
     // se muestran en gris en vez de a la par de la que sigue en curso (ver qTab en nomina.js).
@@ -482,15 +492,23 @@ function buildQCardsHtml(m,activeQ,selectFn,valueLbl,valueQ1,valueQ2,vencQ1,venc
     const valStyle=yaPagada?' style="color:var(--mut)"':'';
     const pagoTxtColor=yaPagada?'var(--mut)':(active?'var(--acc)':'var(--txt)');
     const pagoSubStyle=pago.sub==='pagado'?' style="color:var(--red)"':'';
+    var pagadosHtml='';
+    if(pagadosInfo&&pagadosInfo.total>0){
+      var hayPendientesVencidos=yaPagada&&pagadosInfo.pagados<pagadosInfo.total;
+      var pagadosTxt=pagadosInfo.pagados+' de '+pagadosInfo.total+' pagados';
+      pagadosHtml=hayPendientesVencidos
+        ?(' · <span style="color:var(--amb);font-weight:800;font-size:9.5px">'+btnIcon('alertTriangle',10)+pagadosTxt+'</span>')
+        :(' · <span style="font-weight:600;color:var(--mut);font-size:9.5px">'+pagadosTxt+'</span>');
+    }
     return '<div class="qcard'+(active?' active':'')+'" onclick="'+selectFn+'(\''+qKey+'\')">'
-      +'<div class="qcard-top"><span class="qcard-lbl'+(active?' active':'')+'">'+label+'</span><span class="qcard-range">'+rango+'</span></div>'
-      +'<div class="qcard-disp-lbl">'+valueLbl+'</div>'
-      +'<div class="qcard-disp-val"'+valStyle+'><span class="qcard-cur">$</span>'+(val<0?'-':'')+Math.abs(Math.round(val)).toLocaleString('es-CO')+negIcon+vencIcon+'</div>'
+      +'<div class="qcard-top"><span class="qcard-lbl'+(active?' active':'')+'">'+label+pagadosHtml+'</span><span class="qcard-range">'+rango+'</span></div>'
+      +'<div class="qcard-disp-lbl"'+(sinSaldo?' style="color:var(--red);display:flex;align-items:center;gap:4px"':'')+'>'+(sinSaldo?(btnIcon('alertTriangle',10)+'SIN SALDO DISPONIBLE'):valueLbl)+'</div>'
+      +'<div class="qcard-disp-val"'+valStyle+'><span class="qcard-cur">$</span>'+(val<0?'-':'')+Math.abs(Math.round(val)).toLocaleString('es-CO')+vencIcon+'</div>'
       +sepHtml
       +'<div class="qcard-pago-row"><span class="qcard-dot'+(active?' active':'')+'"></span><span class="qcard-pago-txt" style="color:'+pagoTxtColor+'">Pago '+pago.fecha+'</span><span class="qcard-pago-sub"'+pagoSubStyle+'>'+pago.sub+'</span></div>'
       +'</div>';
   }
-  return '<div class="qcards">'+qCard('q1','Q1',rangoQ1,valueQ1,pagoQ1,vencQ1)+qCard('q2','Q2',rangoQ2,valueQ2,pagoQ2,vencQ2)+'</div>';
+  return '<div class="qcards">'+qCard('q1','Q1',rangoQ1,valueQ1,pagoQ1,vencQ1,pagadosQ1)+qCard('q2','Q2',rangoQ2,valueQ2,pagoQ2,vencQ2,pagadosQ2)+'</div>';
 }
 
 // Mini-tarjeta compacta de crédito (compartida entre Inicio y la pestaña Tarjeta).
@@ -504,7 +522,7 @@ function buildTcMiniHtml(m,tid,onclickAttr,pickerHtml){
   var fechaPagoTxt='';
   if(info.fechaPago){
     const fp=new Date(info.fechaPago+'T12:00:00');
-    fechaPagoTxt=DOW_ABBR[fp.getDay()]+' '+fp.getDate()+' '+MESES_ABBR_MIN[fp.getMonth()];
+    fechaPagoTxt=fp.getDate()+' '+MESES_ABBR_MIN[fp.getMonth()];
   }
   var fechaCorteTxt='';
   if(info.fechaCorte){
@@ -520,7 +538,7 @@ function buildTcMiniHtml(m,tid,onclickAttr,pickerHtml){
     +'<div class="tc-mini-chip">'+(info.marca?esc(info.marca.slice(0,4).toUpperCase()):'TC')+'</div>'
     +'<div class="tc-mini-mid">'
     +'<div class="tc-mini-name">'+esc(card.nombre||('Tarjeta '+(info.marca||'')))+'</div>'
-    +(fechaPagoTxt?'<div class="tc-mini-due">Paga antes del <span style="color:var(--amb)">'+fechaPagoTxt+'</span></div>':'')
+    +(fechaPagoTxt?'<div class="tc-mini-due">Paga antes del '+fechaPagoTxt+'</div>':'')
     +'</div>'
     +'<div class="tc-mini-right"><div class="tc-mini-lbl">SALDO</div><div class="tc-mini-val">'+cop(saldo)+'</div></div>'
     +(onclickAttr?'<div class="tc-mini-chev">'+icon('chevronRight',16)+'</div>':'')
@@ -544,8 +562,31 @@ function buildTcPickerHtml(m,tcIds,activeTid,showNew){
   return '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch">'+pillsHtml+newBtn+'</div>';
 }
 
+// Cuenta cada gasto INDIVIDUAL de una quincena, incluidos los que viven dentro de un grupo (un
+// grupo en sí mismo, esGrupo, nunca cuenta — solo sus subgastos) — usado tanto en el badge de
+// la tarjeta Q1/Q2 de Inicio como en el encabezado de la lista de gastos (ver renderGastos), así
+// ambos coinciden siempre. "sinpagar" (mover a Q2/recordatorio) cuenta como resuelto/pagado.
+function calcPagadosIndividualGastos(gastos){
+  const subMap={};
+  const topGastosAll=[];
+  (gastos||[]).forEach(function(g){
+    if(g.parentId){ if(!subMap[g.parentId]) subMap[g.parentId]=[]; subMap[g.parentId].push(g); }
+    else topGastosAll.push(g);
+  });
+  function contarPagados(list){
+    return list.filter(function(x){ return x.sinpagar||x.pagado_flag; }).length;
+  }
+  const total=topGastosAll.reduce(function(a,x){
+    return a+(x.esGrupo?(subMap[x.id]||[]).length:1);
+  },0);
+  const pagados=topGastosAll.reduce(function(a,x){
+    return a+(x.esGrupo?contarPagados(subMap[x.id]||[]):(x.sinpagar||x.pagado_flag?1:0));
+  },0);
+  return {pagados:pagados, total:total};
+}
 function renderInicio(m){
-  const qcardsHtml=buildQCardsHtml(m,homeQ,'selectHomeQ','DISPONIBLE',calcDisponibleQuincena(m,'q1'),calcDisponibleQuincena(m,'q2'),calcVencidosQuincena(m,'q1'),calcVencidosQuincena(m,'q2'));
+  const cQ1=calcPagadosIndividualGastos(m.q1_gastos), cQ2=calcPagadosIndividualGastos(m.q2_gastos);
+  const qcardsHtml=buildQCardsHtml(m,homeQ,'selectHomeQ','DISPONIBLE',calcDisponibleQuincena(m,'q1'),calcDisponibleQuincena(m,'q2'),calcVencidosQuincena(m,'q1'),calcVencidosQuincena(m,'q2'),cQ1,cQ2);
 
   // Tarjeta de crédito (reutiliza los mismos datos de la pestaña Tarjeta y la selección
   // actual de tarjeta, curTC, para mostrar la misma que se eligió ahí o desde el picker).
@@ -603,14 +644,10 @@ function renderGastos(gastos,which) {
   },0);
   const sinPagarTotal=topGastosAll.filter(function(x){return x.sinpagar;}).reduce(function(a,x){return a+Math.abs(x.presupuesto||0);},0);
   const sinPagarCount=topGastosAll.filter(function(x){return x.sinpagar;}).length;
-  // "N de M pagados": el denominador (topGastosAll.length) SÍ incluye los gastos marcados
-  // "sinpagar" (mover a Q2 / recordatorio) — así que estos deben contar como pagados aquí
-  // también (ya se movieron/no se van a finalizar en esta quincena), o el badge nunca llega
-  // a "M de M" aunque todo lo demás esté realmente pagado.
-  const pagadosCount=topGastosAll.filter(function(x){
-    if(x.sinpagar) return true;
-    return x.esGrupo?(subMap[x.id]||[]).filter(function(s){return !s.sinpagar;}).every(function(s){return s.pagado_flag;})&&(subMap[x.id]||[]).length>0:x.pagado_flag;
-  }).length;
+  // "N de M pagados" ya no vive acá — se movió a la tarjeta Q1/Q2 de Inicio, junto al rango de
+  // fechas (ver calcPagadosIndividualGastos, compartida con esta misma cuenta para que ambos
+  // lugares siempre coincidan). Solo queda el total de ítems para el encabezado de la lista.
+  const totalIndividual=calcPagadosIndividualGastos(gastos).total;
   const pct=total>0?Math.round(pagado/total*100):0;
   const bc=pct<40?'pbok':pct<75?'pbw':'pbo';
   const netoQ=which==='q1'?netoQ1(getM()):netoQ2(getM());
@@ -798,8 +835,8 @@ function renderGastos(gastos,which) {
 
   return '<div class="glist-card">'
     +'<div class="glist-head">'
-    +'<span class="glist-title"><span style="color:var(--acc)">Gastos Q'+qLabel+'</span> · '+topGastosAll.length+'</span>'
-    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+pagadosCount+' de '+topGastosAll.length+' pagados'+filterBtnHtml+'</span>'
+    +'<span class="glist-title"><span style="color:var(--acc)">Gastos Q'+qLabel+'</span> · '+totalIndividual+'</span>'
+    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+filterBtnHtml+'</span>'
     +'</div>'
     +'<div class="glist-totals">'
     +'<div class="glist-tot"><div class="glist-tot-lbl">GASTOS Q'+qLabel+'</div><div class="glist-tot-val" style="color:var(--txt)">'+cop(total)+'</div></div>'
