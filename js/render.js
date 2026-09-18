@@ -558,7 +558,7 @@ function buildTcPickerHtml(m,tcIds,activeTid,showNew){
     var cardSaldo=calcTCSaldo(m,tid);
     return '<button onclick="event.stopPropagation();selectTC(\''+tid+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#06202B':'var(--mut)')+'">'+esc(t.nombre)+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
   }).join('');
-  const newBtn=showNew?'<button onclick="event.stopPropagation();openNewCard()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>':'';
+  const newBtn=showNew?'<button onclick="event.stopPropagation();abrirNuevaTarjeta()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>':'';
   return '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch">'+pillsHtml+newBtn+'</div>';
 }
 
@@ -1159,24 +1159,49 @@ function selectTC(tid){
 
 // Marcas disponibles para el "logo" simple mostrado en el carrusel de tarjetas del resumen.
 const TC_MARCAS=['Ninguna','Visa','Mastercard','Amex'];
+// Marca elegida mientras el formulario "Nueva tarjeta" está abierto — vive fuera del propio
+// <select> (que ya no existe: ver abrirPickerMarcaNewCard) para sobrevivir a la ida y vuelta del
+// picker de pantalla completa, mismo patrón que agFormFormaPago en Agenda.
+let tcNewCardMarca=null;
+let tcNewCardSnapshot=null;
+function abrirNuevaTarjeta(){
+  tcNewCardMarca=null;
+  tcNewCardSnapshot=null;
+  openNewCard();
+}
+// Mismo estándar visual que "Editar/Nuevo gasto" (encabezado X + título, filas de detalle con
+// ícono/picker de pantalla completa, footer Guardar/Cancelar) — ver stdForm* en format-utils.js.
 function openNewCard(){
-  const marcaOpts=TC_MARCAS.map(function(mk){return '<option value="'+mk+'">'+mk+'</option>';}).join('');
-  openModal('<div class="mtitle">Nueva tarjeta</div>'
+  const marcaActual=tcNewCardMarca||'Ninguna';
+  const headerHtml=stdFormHeaderHtml('Nueva tarjeta');
+  const detallesCardHtml=stdFormCardHtml(stdFormRowHtml('card','var(--acc-d)','var(--acc)','Marca',marcaActual,'abrirPickerMarcaNewCard()',false));
+  const footerHtml=stdFormFooterHtml('saveNewCard()','Crear');
+  openModal(headerHtml
     +'<div class="field"><label>Nombre de la tarjeta</label>'
-    +'<input id="newcard-nombre" placeholder="Ej: BBVA, Falabella, Visa..."></div>'
-    +'<div class="field"><label>Marca (opcional)</label><select id="newcard-marca">'+marcaOpts+'</select></div>'
+    +'<input id="newcard-nombre" value="'+esc((tcNewCardSnapshot&&tcNewCardSnapshot.nombre)||'')+'" placeholder="Ej: BBVA, Falabella, Visa..."></div>'
+    +detallesCardHtml
     +'<div class="field"><label>Últimos 4 dígitos (opcional)</label>'
-    +'<input id="newcard-ultimos4" maxlength="4" inputmode="numeric" placeholder="Ej: 9537"></div>'
-    +'<div class="macts">'
-    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="saveNewCard()">Crear</button>'
-    +'</div>');
+    +'<input id="newcard-ultimos4" maxlength="4" inputmode="numeric" value="'+esc((tcNewCardSnapshot&&tcNewCardSnapshot.ultimos4)||'')+'" placeholder="Ej: 9537"></div>'
+    +footerHtml);
+  tcNewCardSnapshot=null;
+}
+function abrirPickerMarcaNewCard(){
+  tcNewCardSnapshot={
+    nombre:document.getElementById('newcard-nombre')?document.getElementById('newcard-nombre').value:'',
+    ultimos4:document.getElementById('newcard-ultimos4')?document.getElementById('newcard-ultimos4').value:''
+  };
+  const current=tcNewCardMarca||'Ninguna';
+  const itemsHtml=TC_MARCAS.map(function(mk){return pickerItemRow("elegirMarcaNewCard('"+mk+"')",mk,mk===current);}).join('');
+  renderPickerModal('Marca',itemsHtml,null,'openNewCard()');
+}
+function elegirMarcaNewCard(mk){
+  tcNewCardMarca=mk;
+  openNewCard();
 }
 function saveNewCard(){
   const nombre=document.getElementById('newcard-nombre').value.trim();
   if(!nombre){showAlert('Escribe un nombre');return;}
-  const marcaSel=document.getElementById('newcard-marca');
-  const marca=marcaSel&&marcaSel.value!=='Ninguna'?marcaSel.value:null;
+  const marca=tcNewCardMarca&&tcNewCardMarca!=='Ninguna'?tcNewCardMarca:null;
   const ultimos4=(document.getElementById('newcard-ultimos4').value||'').trim().replace(/\D/g,'').slice(-4)||null;
   const m=getM();
   const tid='tc'+(Object.keys(m.tarjetas||{}).length+1)+'_'+Date.now();
@@ -1248,18 +1273,40 @@ function selectIngQ(which){
   curIngQ=which;
   document.getElementById('scroll').innerHTML=renderIngresos(getM());
 }
+// Mismo estándar visual que "Editar/Nuevo gasto" (ver openGasto en js/gasto-pickers.js):
+// encabezado con cerrar (X) + título centrado + eliminar (ícono), tarjeta "hero" con
+// nombre+valor destacados, y "Fecha" como fila de detalle con ícono — footer Guardar/Cancelar.
 function openIngresoModal(g,which){
   const isE=!!g;
   const eid=isE?g.id:'';
   const wh=which||curIngQ;
   const hoy=new Date().toISOString().slice(0,10);
-  openModal('<div class="mtitle">'+(isE?'Editar ingreso':'Nuevo ingreso')+'</div>'
-    +'<div class="field"><label>Nombre</label><input id="ing-n" value="'+(isE?esc(g.nombre):'')+'" placeholder="Freelance, Venta, Arriendo..."></div>'
-    +'<div class="field"><label>Valor</label><input id="ing-v" type="text" inputmode="numeric" value="'+moneyInputFmt(isE?g.valor:0)+'" oninput="maskMoneyInput(this)"></div>'
-    +'<div class="field"><label>Fecha</label><input id="ing-f" type="date" value="'+(isE?(g.fecha||hoy):hoy)+'"></div>'
-    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="saveIngreso(\''+eid+'\',\''+wh+'\')">Guardar</button></div>'
-    +(isE?'<button class="bdel" onclick="delIngreso(\''+eid+'\',\''+wh+'\')">Eliminar ingreso</button>':''));
+  const fechaValue=isE?(g.fecha||hoy):hoy;
+
+  const headerHtml=stdFormHeaderHtml(isE?'Editar ingreso':'Nuevo ingreso',null,isE?("delIngreso('"+eid+"','"+wh+"')"):null);
+
+  const heroHtml=stdFormHeroCardHtml(
+    '<div class="field" style="margin:0"><label>Nombre</label><input id="ing-n" value="'+(isE?esc(g.nombre):'')+'" placeholder="Freelance, Venta, Arriendo..."></div>'
+    +'<div style="padding:8px 4px 2px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center">'
+    +'<div style="display:flex;align-items:baseline;gap:6px;padding-bottom:6px;border-bottom:2px solid var(--grn)">'
+    +'<span style="font-size:22px;font-weight:600;color:var(--mut)">$</span>'
+    +'<input id="ing-v" type="text" inputmode="numeric" value="'+moneyInputFmt(isE?g.valor:0)+'" oninput="maskMoneyInput(this)" style="font-family:inherit;width:180px;background:transparent;border:none;outline:none;font-size:38px;font-weight:800;color:var(--txt);letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:center;padding:0">'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--mut)">COP · valor del ingreso</div>'
+    +'</div>'
+  );
+
+  const detallesCardHtml=stdFormCardHtml(
+    '<div style="padding:11px 14px;display:flex;align-items:center;gap:12px">'
+    +'<div style="width:32px;height:32px;border-radius:10px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon('cal',15)+'</div>'
+    +'<div style="flex:1;min-width:0;font-size:14.5px;font-weight:700;color:var(--txt)">Fecha</div>'
+    +'<input id="ing-f" type="date" value="'+fechaValue+'" style="background:none;border:none;color:var(--mut);font-size:13.5px;font-weight:600;text-align:right;outline:none;font-family:inherit">'
+    +'</div>'
+  );
+
+  const footerHtml=stdFormFooterHtml("saveIngreso('"+eid+"','"+wh+"')",'Guardar');
+
+  openModal(headerHtml+heroHtml+detallesCardHtml+footerHtml);
 }
 function saveIngreso(id,which){
   const m=getM();

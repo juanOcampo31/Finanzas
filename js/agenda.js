@@ -25,6 +25,12 @@ let agFormRegistrarGasto=true;
 let agFormRepetirActual='nunca';
 let agFormGastoExistenteId=null; // gasto YA CREADO al que se enlaza este pago, en vez de crear uno nuevo
 let agFormSnapshot=null;         // valores tecleados, para volver del picker de "gasto existente" sin perderlos
+// Forma de pago elegida en el picker de pantalla completa (ver agAbrirPickerFormaPago) — antes
+// era un <select> nativo que agActualizarBloqueGasto() reconstruía en cada tecla del monto/fecha,
+// perdiendo en silencio lo elegido (siempre volvía a la primera opción). Al vivir en una variable
+// aparte, sobrevive a esos re-renders igual que agFormRegistrarGasto/agFormRepetirActual. null =
+// todavía no se eligió ninguna (agGuardarNuevo cae a la primera del catálogo).
+let agFormFormaPago=null;
 // La quincena normalmente se deduce del día de la fecha (1-15 → Q1, 16-fin → Q2), pero eso
 // asume que la Q2 ya se pagó justo el día 16 — si un gasto cae, por ejemplo, el 24 pero la Q2
 // todavía no se ha pagado, sigue siendo plata de la Q1. null = usar la deducida por fecha;
@@ -449,14 +455,12 @@ function agAbrirNuevo(){
   agFormRepetirActual='nunca';
   agFormGastoExistenteId=null;
   agFormQuincenaManual=null;
+  agFormFormaPago=null;
   openModal(agFormHtml());
   setTimeout(function(){
     var el=document.getElementById('ag-concepto');
     if(el) el.focus();
   },50);
-}
-function agMetodoOptsHtml(){
-  return (catMetodos||[]).map(function(x){return '<option>'+esc(x.nombre)+'</option>';}).join('');
 }
 // Fecha con la que arranca el formulario de "Nuevo en la agenda": si el mes seleccionado en
 // Agenda (curM) es el mes real de hoy, usa la fecha real de hoy — si no (el usuario cambió de
@@ -580,10 +584,15 @@ function agBloqueRegistrarGastoHtml(){
         +'</div>');
   }
 
-  var formaPagoHtml=(on&&!gastoExistente)?('<div style="border-top:1px solid '+AG.bd4+';padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
-      +'<span style="font-size:12.5px;font-weight:600;color:'+AG.txt4+'">Forma de pago</span>'
-      +'<select id="ag-formapago" style="background:none;border:none;color:'+AG.txt2+';font-size:13px;font-weight:700;text-align:right;outline:none">'+agMetodoOptsHtml()+'</select>'
-      +'</div>'):'';
+  // "Forma de pago" ya no es un <select> nativo (no se puede tematizar en móvil y
+  // agActualizarBloqueGasto lo reconstruía en cada tecla, perdiendo en silencio lo elegido) —
+  // mismo estándar que en el formulario de gasto (ver stdFormRowHtml en js/format-utils.js):
+  // fila de una sola línea que abre un picker de pantalla completa (agAbrirPickerFormaPago).
+  var formaPagoActual=agFormFormaPago||((catMetodos[0]||{}).nombre||'');
+  // margin:0 -14px hace que la fila "sangre" hasta el borde del panel (que ya trae padding
+  // propio de 14px para el resto de sus hijos), igual que las filas de la tarjeta Detalles del
+  // formulario de gasto dentro de su propia tarjeta.
+  var formaPagoHtml=(on&&!gastoExistente)?('<div style="margin:0 -14px">'+stdFormRowHtml('card','var(--grn-d)','var(--grn)','Forma de pago',formaPagoActual,'agAbrirPickerFormaPago()')+'</div>'):'';
 
   return '<div id="ag-bloque-gasto" style="padding:14px;background:'+AG.bg3+';border:1px solid '+AG.accBg3+';border-radius:14px;display:flex;flex-direction:column;gap:12px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
@@ -633,6 +642,42 @@ function agRestaurarSnapshot(){
   var hEl=document.getElementById('ag-hora'); if(hEl) hEl.value=snap.hora||'';
   var mEl=document.getElementById('ag-monto'); if(mEl) mEl.value=snap.monto||'';
   agSetRepetir(agFormRepetirActual);
+}
+// Picker de pantalla completa para "Forma de pago" (mismo esqueleto genérico que usa el
+// formulario de gasto: pickerItemRow/renderPickerModal/pickerExtraBtn, ver gasto-pickers.js) —
+// reutiliza también agCapturarSnapshot/agRestaurarSnapshot para no perder lo tecleado al ir y
+// volver, igual que "Asociar a un gasto ya creado".
+function agAbrirPickerFormaPago(){
+  agFormSnapshot=agCapturarSnapshot();
+  var current=agFormFormaPago||((catMetodos[0]||{}).nombre||'');
+  var itemsHtml=(catMetodos||[]).map(function(m){
+    return pickerItemRow("agElegirFormaPago('"+m.id+"')",m.nombre,m.nombre===current);
+  }).join('');
+  renderPickerModal('Forma de pago',itemsHtml,pickerExtraBtn('agAbrirNuevaFormaPagoDesdePicker()','+ Nueva forma de pago'),'agRestaurarSnapshot()');
+}
+function agElegirFormaPago(id){
+  var m=(catMetodos||[]).find(function(x){return x.id===id;});
+  if(m) agFormFormaPago=m.nombre;
+  agRestaurarSnapshot();
+}
+function agAbrirNuevaFormaPagoDesdePicker(){
+  openModal('<div class="mtitle">Nueva forma de pago</div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Daviplata, Efectivo..."></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="agAbrirPickerFormaPago()">Cancelar</button>'
+    +'<button class="bpri" onclick="agGuardarNuevaFormaPagoDesdePicker()">Guardar</button>'
+    +'</div>');
+}
+function agGuardarNuevaFormaPagoDesdePicker(){
+  var nombre=document.getElementById('cat-nombre').value.trim();
+  if(!nombre){showAlert('Escribe un nombre');return;}
+  if(catMetodos.some(function(i){return i.nombre.toLowerCase()===nombre.toLowerCase();})){
+    showAlert('Ya existe esa forma de pago');return;
+  }
+  catMetodos.push({id:uid(),nombre:nombre});
+  save();
+  agFormFormaPago=nombre;
+  agRestaurarSnapshot();
 }
 function agAbrirPickerGastoExistente(){
   var fecha=document.getElementById('ag-fecha').value||new Date().toISOString().slice(0,10);
@@ -739,7 +784,7 @@ function agGuardarNuevo(){
       item.gastoId=gastoAsociado.id;
       item.formaPago=gastoAsociado.metodo||null;
     } else {
-      var formaPago=document.getElementById('ag-formapago')?document.getElementById('ag-formapago').value:((catMetodos[0]||{}).nombre||'');
+      var formaPago=agFormFormaPago||((catMetodos[0]||{}).nombre||'');
       // Sin chequear (estado null), no "sin pagar": ese estado es para un gasto YA EXISTENTE
       // que se aplaza a otra quincena, no para uno recién creado — nace igual que cualquier
       // gasto nuevo (círculo vacío, sin revisar todavía).

@@ -42,7 +42,8 @@ const ICONS = {
   percent:'<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
   barChart:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
   externalLink:'<path d="M7 17L17 7"/><path d="M8 7h9v9"/>',
-  snowflake:'<line x1="12" y1="2" x2="12" y2="22"/><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5.64" y1="18.36" x2="18.36" y2="5.64"/>'
+  snowflake:'<line x1="12" y1="2" x2="12" y2="22"/><line x1="5.64" y1="5.64" x2="18.36" y2="18.36"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5.64" y1="18.36" x2="18.36" y2="5.64"/>',
+  x:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
 };
 function icon(name, size){
   size=size||15;
@@ -53,6 +54,76 @@ function icon(name, size){
 // Ícono en línea previo a un texto (ej. dentro de un botón), alineado con la baseline del texto.
 function btnIcon(name, size){
   return '<span style="display:inline-flex;vertical-align:middle;position:relative;top:-1px;margin-right:6px">'+icon(name,size||14)+'</span>';
+}
+// ── Estándar visual compartido de los formularios "de un solo ítem" (Gasto, Ingreso,
+// Recordatorio, Tarjeta, Crédito, Nómina): encabezado con cerrar (X) a la izquierda + título
+// centrado + eliminar (ícono, opcional) a la derecha; filas de detalle en una sola línea
+// (ícono + label a la izquierda + valor a la derecha + flecha) que abren un picker de pantalla
+// completa en vez de un <select> nativo; y footer con "Guardar" ancho completo + "Cancelar" de
+// solo texto debajo. Nace en openGasto (js/gasto-pickers.js) y se generaliza acá para que el
+// resto de formularios lo reutilicen tal cual, en vez de reinventar su propio look.
+function stdFormHeaderHtml(titulo,onCancel,delOnclick){
+  const delBtn=delOnclick?('<button type="button" onclick="'+delOnclick+'" style="width:34px;height:34px;border-radius:10px;background:none;border:none;color:var(--red);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">'+icon('trash',17)+'</button>'):'<span style="width:34px;flex-shrink:0"></span>';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+    +'<button type="button" onclick="'+(onCancel||'closeModal()')+'" style="width:34px;height:34px;border-radius:10px;background:none;border:none;color:var(--mut);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">'+icon('x',18)+'</button>'
+    +'<span style="font-size:15px;font-weight:800;color:var(--txt)">'+esc(titulo)+'</span>'
+    +delBtn
+    +'</div>';
+}
+// Fila de una sola línea: ícono, label (izquierda), valor actual (derecha) y flecha — reemplaza
+// un <select> nativo (no se puede tematizar en móvil) por algo que abre un picker de pantalla
+// completa (ver pickerItemRow/renderPickerModal/pickerExtraBtn en gasto-pickers.js, ya
+// genéricos). `borderTop` es false solo para la primera fila de una tarjeta de detalles.
+function stdFormRowHtml(iconName,bgVar,fgVar,label,valor,onclickAttr,borderTop){
+  return '<div onclick="'+onclickAttr+'" style="padding:11px 14px;'+(borderTop===false?'':'border-top:1px solid var(--brd);')+'display:flex;align-items:center;gap:12px;cursor:pointer">'
+    +'<div style="width:32px;height:32px;border-radius:10px;background:'+bgVar+';color:'+fgVar+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon(iconName,15)+'</div>'
+    +'<div style="flex:1;min-width:0;font-size:14.5px;font-weight:700;color:var(--txt)">'+esc(label)+'</div>'
+    +'<div style="font-size:13.5px;font-weight:600;color:var(--mut);max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(valor)+'</div>'
+    +'<span style="color:var(--mut);flex-shrink:0;display:flex">'+icon('chevronRight',16)+'</span>'
+    +'</div>';
+}
+// Fila de acción simple (sin valor a la derecha, ej. "Eliminar grupo") — mismo ícono+label,
+// sin flecha ni valor.
+function stdFormActionRowHtml(iconName,bgVar,fgVar,label,onclickAttr,labelColor){
+  return '<div onclick="'+onclickAttr+'" style="padding:11px 14px;border-top:1px solid var(--brd);display:flex;align-items:center;gap:12px;cursor:pointer">'
+    +'<div style="width:32px;height:32px;border-radius:10px;background:'+bgVar+';color:'+fgVar+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icon(iconName,15)+'</div>'
+    +'<div style="flex:1;min-width:0;font-size:14.5px;font-weight:700;color:'+(labelColor||'var(--txt)')+'">'+esc(label)+'</div>'
+    +'</div>';
+}
+function stdFormCardHtml(rowsHtml){
+  return rowsHtml?('<div style="margin:0 0 10px;background:var(--surf);border:1px solid var(--brd);border-radius:16px;overflow:hidden">'+rowsHtml+'</div>'):'';
+}
+function stdFormFooterHtml(saveOnclick,saveLabel,cancelOnclick){
+  return '<div style="display:flex;flex-direction:column;gap:8px;margin-top:2px">'
+    +'<button class="bpri" style="width:100%;padding:13px 0;border-radius:14px;font-size:15px" onclick="'+saveOnclick+'">'+esc(saveLabel||'Guardar')+'</button>'
+    +'<button type="button" onclick="'+(cancelOnclick||'closeModal()')+'" style="width:100%;text-align:center;background:none;border:none;color:var(--mut);font-size:13px;font-weight:700;cursor:pointer;padding:2px">Cancelar</button>'
+    +'</div>';
+}
+// Tarjeta "hero" destacada (nombre + valor) para formularios de un solo ítem con esos dos
+// campos como protagonistas (Ingreso, Tarjeta) — mismo fondo degradado que la de Gasto.
+function stdFormHeroCardHtml(innerHtml){
+  return '<div style="margin:0 0 10px;padding:13px 14px 10px;background:linear-gradient(180deg,var(--surf) 0%,var(--surf2) 100%);border:1px solid var(--brd2);border-radius:16px;display:flex;flex-direction:column;gap:3px">'+innerHtml+'</div>';
+}
+// Formularios largos (Crédito...) con varios campos sueltos, además de alguna fila con picker
+// de pantalla completa: al abrir el picker hay que salir del formulario entero (openModal
+// reemplaza #mc), así que estos dos genéricos capturan y restauran TODOS los inputs/selects con
+// id que haya dentro del modal en ese momento, sin tener que enumerar a mano cada campo por
+// formulario (a diferencia de agCapturarSnapshot en Agenda, que sí enumera porque solo son 4).
+function snapshotModalFields(){
+  const snap={};
+  document.querySelectorAll('#mc [id]').forEach(function(el){
+    if(el.tagName!=='INPUT'&&el.tagName!=='SELECT'&&el.tagName!=='TEXTAREA') return;
+    snap[el.id]=(el.type==='checkbox')?el.checked:el.value;
+  });
+  return snap;
+}
+function restoreModalFields(snap){
+  if(!snap) return;
+  Object.keys(snap).forEach(function(id){
+    const el=document.getElementById(id);
+    if(!el) return;
+    if(el.type==='checkbox') el.checked=snap[id]; else el.value=snap[id];
+  });
 }
 // ── Máscara de moneda para inputs (sin símbolo $, solo puntos de miles) ────────
 // Los campos de dinero usan type="text" + inputmode="numeric" (un <input type="number">
@@ -103,12 +174,18 @@ function pintarEstadoGasto(valor,wh){
   const ON_PAGADO={background:'#062B33',borderColor:'#22D3EE',titulo:'#67E8F9'};
   const cardSP=document.getElementById('g-card-sinpagar'), tituloSP=document.getElementById('g-card-sinpagar-titulo');
   const cardPD=document.getElementById('g-card-pagado'), tituloPD=document.getElementById('g-card-pagado-titulo');
+  // Los íconos (✓/→) viven en spans propios, separados del texto — así pintarEstadoGasto puede
+  // seguir usando textContent en tituloPD (más simple que reconstruir el ícono cada vez) sin
+  // borrarlos, solo sincronizando su color con el de la tarjeta.
+  const iconSP=document.getElementById('g-card-sinpagar-icon'), iconPD=document.getElementById('g-card-pagado-icon');
   const estiloSP=valor==='sinpagar'?ON_SINPAGAR:BASE;
   const estiloPD=valor==='pagado'?ON_PAGADO:BASE;
   if(cardSP){ cardSP.style.background=estiloSP.background; cardSP.style.borderColor=estiloSP.borderColor; }
   if(tituloSP) tituloSP.style.color=estiloSP.titulo;
+  if(iconSP) iconSP.style.color=estiloSP.titulo;
   if(cardPD){ cardPD.style.background=estiloPD.background; cardPD.style.borderColor=estiloPD.borderColor; }
   if(tituloPD){ tituloPD.style.color=estiloPD.titulo; tituloPD.textContent=(valor==='pagado')?'Pagado':'Pagar'; }
+  if(iconPD) iconPD.style.color=estiloPD.titulo;
   togglePagadoRealLine(valor==='pagado');
 }
 // Para un gasto ligado a un crédito: mientras escribes en "Valor" no se te pisa el campo (ver

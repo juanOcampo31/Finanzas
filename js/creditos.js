@@ -516,6 +516,9 @@ function toggleCredProxPago(){
 // cuotas de una tarjeta (ej. "diferido a 12 meses" en el datáfono) — solo para mostrarlo
 // junto a esa tarjeta y no perder de vista que esa cuota ya está "comprometida" cada mes; no
 // afecta el cálculo del saldo de la tarjeta (que sigue siendo compras-abonos como siempre).
+// Fila+picker de pantalla completa (mismo estándar que "Asociar a crédito" en el formulario de
+// gasto) en vez de un <select> nativo — el <select> real queda oculto solo para que
+// saveNewCredito()/saveEditCredito() lo sigan leyendo tal cual.
 function tarjetaVinculadaFieldHtml(selectedId){
   const m=getM();
   const ids=listTCIds(m);
@@ -524,8 +527,63 @@ function tarjetaVinculadaFieldHtml(selectedId){
     var t=m.tarjetas[tid];
     return '<option value="'+tid+'"'+(selectedId===tid?' selected':'')+'>'+esc(t.nombre)+'</option>';
   }).join('');
-  return '<div class="field"><label>¿Es una compra diferida a cuotas de una tarjeta? (opcional)</label>'
-    +'<select id="cr-tc-vinc">'+opts+'</select></div>';
+  const actual=selectedId&&m.tarjetas[selectedId]?m.tarjetas[selectedId].nombre:'Ninguna';
+  return '<div style="margin:14px 0 4px"><label style="display:block;font-size:12px;color:var(--mut);margin-bottom:5px;font-weight:500">¿Es una compra diferida a cuotas de una tarjeta? (opcional)</label>'
+    +'<select id="cr-tc-vinc" style="display:none">'+opts+'</select>'
+    +stdFormCardHtml(stdFormRowHtml('bank','var(--pur-d)','var(--pur)','Vincular a tarjeta',actual,"crAbrirPickerTarjetaVinc('cr-tc-vinc')",false))
+    +'</div>';
+}
+// Igual patrón para "Frecuencia de pago" — usado tanto en "Nuevo crédito" (cr-frec) como en
+// "Editar crédito" (cr-edit-frec).
+function frecuenciaFieldHtml(selectId,frecuenciaActual){
+  const esMensual=frecuenciaActual==='mensual';
+  return '<div style="margin:12px 0 4px"><label style="display:block;font-size:12px;color:var(--mut);margin-bottom:5px;font-weight:500">Frecuencia de pago</label>'
+    +'<select id="'+selectId+'" style="display:none"><option value="quincenal"'+(esMensual?'':' selected')+'>Quincenal</option><option value="mensual"'+(esMensual?' selected':'')+'>Mensual</option></select>'
+    +stdFormCardHtml(stdFormRowHtml('cal','var(--acc-d)','var(--acc)','Frecuencia',esMensual?'Mensual':'Quincenal',"crAbrirPickerFrecuencia('"+selectId+"')",false))
+    +'</div>';
+}
+// Ambos pickers (Frecuencia, Tarjeta vinculada) reabren el formulario que los llamó —
+// crPickerReturnToFn se fija justo antes de construir ese formulario (ver openNewCredito/
+// editCredito) — y restauran TODO lo demás tecleado vía snapshotModalFields/restoreModalFields
+// (ver format-utils.js), ya que openModal reemplaza el formulario entero al mostrar el picker.
+let crPickerReturnToFn=null;
+let crPickerSnapshot=null;
+function crVolverDesdePicker(){
+  if(crPickerReturnToFn) crPickerReturnToFn();
+  restoreModalFields(crPickerSnapshot);
+  crPickerSnapshot=null;
+  updateCuotaSugerida();
+}
+function crAbrirPickerFrecuencia(selectId){
+  crPickerSnapshot=snapshotModalFields();
+  const current=document.getElementById(selectId).value;
+  const opts=[{v:'quincenal',l:'Quincenal'},{v:'mensual',l:'Mensual'}];
+  const itemsHtml=opts.map(function(o){
+    return pickerItemRow("crElegirFrecuencia('"+selectId+"','"+o.v+"')",o.l,o.v===current);
+  }).join('');
+  renderPickerModal('Frecuencia de pago',itemsHtml,null,'crVolverDesdePicker()');
+}
+function crElegirFrecuencia(selectId,val){
+  // Se actualiza el snapshot ANTES de reabrir el formulario (crVolverDesdePicker), porque
+  // openNewCredito/editCredito leen crPickerSnapshot para saber qué mostrar en la fila —
+  // si se hiciera después, la fila se vería un paso atrás hasta la próxima re-apertura.
+  if(crPickerSnapshot) crPickerSnapshot[selectId]=val;
+  crVolverDesdePicker();
+}
+function crAbrirPickerTarjetaVinc(selectId){
+  crPickerSnapshot=snapshotModalFields();
+  const m=getM();
+  const ids=listTCIds(m);
+  const current=document.getElementById(selectId).value;
+  const itemsHtml=pickerItemRow("crElegirTarjetaVinc('"+selectId+"','')",'Ninguna',current==='')
+    +ids.map(function(tid){
+      return pickerItemRow("crElegirTarjetaVinc('"+selectId+"','"+tid+"')",m.tarjetas[tid].nombre,current===tid);
+    }).join('');
+  renderPickerModal('Vincular a tarjeta',itemsHtml,null,'crVolverDesdePicker()');
+}
+function crElegirTarjetaVinc(selectId,tid){
+  if(crPickerSnapshot) crPickerSnapshot[selectId]=tid;
+  crVolverDesdePicker();
 }
 
 function openNewCredito(modo){
@@ -548,6 +606,10 @@ function openNewCredito(modo){
     return;
   }
 
+  crPickerReturnToFn=function(){ openNewCredito(modo); };
+  const frecActual=(crPickerSnapshot&&('cr-frec' in crPickerSnapshot))?crPickerSnapshot['cr-frec']:'quincenal';
+  const tcVincActual=(crPickerSnapshot&&('cr-tc-vinc' in crPickerSnapshot))?crPickerSnapshot['cr-tc-vinc']:'';
+
   const hoy=new Date().toISOString().slice(0,10);
   openModal('<div class="mtitle">Nuevo crédito</div>'
     +pillsHtml
@@ -561,15 +623,14 @@ function openNewCredito(modo){
     +'<div class="field" style="margin:0"><label>Tasa de interés %</label><input id="cr-tasa" type="number" step="0.01" placeholder="Ej: 2.0" oninput="updateCuotaSugerida()"></div>'
     +'<div class="field" style="margin:0"><label>Fecha inicio</label><input id="cr-fecha" type="date" value="'+hoy+'"></div>'
     +'</div>'
-    +'<div class="field" style="margin-top:12px"><label>Frecuencia de pago</label>'
-    +'<select id="cr-frec"><option value="quincenal">Quincenal</option><option value="mensual">Mensual</option></select></div>'
+    +frecuenciaFieldHtml('cr-frec',frecActual)
     +'<div class="field"><label>Valor de cuota manual (opcional)</label>'
     +'<input id="cr-cuota-manual" type="text" inputmode="numeric" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this)">'
     +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
     +'</div>'
     +'<div class="cbx-row"><input type="checkbox" id="cr-esmens"'+(creditoDesdeGastoCtx?' checked':'')+'>'
     +'<label for="cr-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad (colegio, transporte, suscripción...)</label></div>'
-    +tarjetaVinculadaFieldHtml(null)
+    +tarjetaVinculadaFieldHtml(tcVincActual||null)
     +'<div class="macts">'
     +'<button class="bcnl" onclick="creditoDesdeGastoCtx=null;closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCredito()">Crear</button>'
@@ -1003,6 +1064,9 @@ function editCredito(id){
   const warnPagos=pagadas>0
     ?'<div style="font-size:12px;color:var(--amb);background:var(--amb-d);border-radius:var(--r2);padding:8px 10px;margin-bottom:12px;line-height:1.5">Este crédito ya tiene <b>'+pagadas+' cuota(s) pagada(s)</b>. Si cambias el valor, la tasa, el plazo o la fecha de inicio, la tabla de amortización se recalcula desde cero — las cuotas marcadas como pagadas siguen en su mismo número, pero podrían no coincidir exactamente con lo que ya pagaste. Revisa el detalle después de guardar.</div>'
     :'';
+  crPickerReturnToFn=function(){ editCredito(id); };
+  const frecActual=(crPickerSnapshot&&('cr-edit-frec' in crPickerSnapshot))?crPickerSnapshot['cr-edit-frec']:(cr.frecuencia||'quincenal');
+  const tcVincActual=(crPickerSnapshot&&('cr-tc-vinc' in crPickerSnapshot))?crPickerSnapshot['cr-tc-vinc']:(cr.tcVinculada||'');
   openModal('<div class="mtitle">Editar crédito</div>'
     +warnPagos
     +'<div class="field"><label>Nombre</label><input id="cr-edit-nombre" value="'+esc(cr.nombre)+'"></div>'
@@ -1015,13 +1079,12 @@ function editCredito(id){
     +'<div class="field" style="margin:0"><label>Tasa de interés %</label><input id="cr-edit-tasa" type="number" step="0.01" value="'+(cr.tasa||0)+'"></div>'
     +'<div class="field" style="margin:0"><label>Fecha inicio</label><input id="cr-edit-fecha" type="date" value="'+cr.fechaInicio+'"></div>'
     +'</div>'
-    +'<div class="field" style="margin-top:12px"><label>Frecuencia de pago</label>'
-    +'<select id="cr-edit-frec"><option value="quincenal"'+(cr.frecuencia!=='mensual'?' selected':'')+'>Quincenal</option><option value="mensual"'+(cr.frecuencia==='mensual'?' selected':'')+'>Mensual</option></select></div>'
+    +frecuenciaFieldHtml('cr-edit-frec',frecActual)
     +'<div class="field"><label>Valor de cuota manual (opcional)</label>'
     +'<input id="cr-edit-cuota-manual" type="text" inputmode="numeric" value="'+(cr.valorCuotaManual?moneyInputFmt(cr.valorCuotaManual):'')+'" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this)"></div>'
     +'<div class="cbx-row"><input type="checkbox" id="cr-edit-esmens"'+(cr.esMensualidad?' checked':'')+'>'
     +'<label for="cr-edit-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad (colegio, transporte, suscripción...)</label></div>'
-    +tarjetaVinculadaFieldHtml(cr.tcVinculada||null)
+    +tarjetaVinculadaFieldHtml(tcVincActual||null)
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveEditCredito(\''+id+'\')">Guardar</button>'

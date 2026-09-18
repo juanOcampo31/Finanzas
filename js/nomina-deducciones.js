@@ -1,7 +1,10 @@
 // ── CRUD Deducciones ──────────────────────────────────────────────────────────
 
 // Selector opcional "crédito por deducción de nómina" (ej. libranzas tipo "PrestaFE"): al
-// elegir un crédito, sugiere (sin bloquear) el valor de su próxima cuota pendiente.
+// elegir un crédito, sugiere (sin bloquear) el valor de su próxima cuota pendiente. Fila+picker
+// de pantalla completa (mismo estándar que "Asociar a crédito" en el formulario de gasto) en vez
+// de un <select> nativo — el <select> real queda oculto solo para que saveDed()/
+// sugerirValorDedCredito() lo sigan leyendo tal cual.
 function dedCreditoFieldHtml(selectedId){
   const ids=Object.keys(creditos);
   if(!ids.length) return '';
@@ -9,8 +12,36 @@ function dedCreditoFieldHtml(selectedId){
     var cr=creditos[cid];
     return '<option value="'+cid+'"'+(selectedId===cid?' selected':'')+'>'+esc(cr.nombre)+'</option>';
   }).join('');
-  return '<div class="field"><label>¿Es cuota de un crédito por nómina? (opcional)</label>'
-    +'<select id="d-credito" onchange="sugerirValorDedCredito()">'+opts+'</select></div>';
+  const actual=selectedId&&creditos[selectedId]?creditos[selectedId].nombre:'Ninguno';
+  return '<div style="margin:14px 0 4px"><label style="display:block;font-size:12px;color:var(--mut);margin-bottom:5px;font-weight:500">¿Es cuota de un crédito por nómina? (opcional)</label>'
+    +'<select id="d-credito" style="display:none" onchange="sugerirValorDedCredito()">'+opts+'</select>'
+    +stdFormCardHtml(stdFormRowHtml('bank','var(--pur-d)','var(--pur)','Crédito',actual,'dedAbrirPickerCredito()',false))
+    +'</div>';
+}
+// dedPickerReturnToFn se fija justo antes de construir addDed/editDed (mismo patrón que
+// crPickerReturnToFn en creditos.js) — al volver del picker, snapshotModalFields/
+// restoreModalFields (format-utils.js) preservan todo lo demás tecleado.
+let dedPickerReturnToFn=null;
+let dedPickerSnapshot=null;
+function dedVolverDesdePicker(){
+  if(dedPickerReturnToFn) dedPickerReturnToFn();
+  restoreModalFields(dedPickerSnapshot);
+  dedPickerSnapshot=null;
+  sugerirValorDedCredito();
+}
+function dedAbrirPickerCredito(){
+  dedPickerSnapshot=snapshotModalFields();
+  const ids=Object.keys(creditos);
+  const current=document.getElementById('d-credito').value;
+  const itemsHtml=pickerItemRow("dedElegirCredito('')",'Ninguno',current==='')
+    +ids.map(function(cid){
+      return pickerItemRow("dedElegirCredito('"+cid+"')",creditos[cid].nombre,current===cid);
+    }).join('');
+  renderPickerModal('Crédito',itemsHtml,null,'dedVolverDesdePicker()');
+}
+function dedElegirCredito(cid){
+  if(dedPickerSnapshot) dedPickerSnapshot['d-credito']=cid;
+  dedVolverDesdePicker();
 }
 function sugerirValorDedCredito(){
   const sel=document.getElementById('d-credito');
@@ -45,12 +76,17 @@ function siguienteCuotaLibreCredito(creditoId, nom, which, excludeIdx){
   return amort.rows.length?amort.rows[amort.rows.length-1].numero:null;
 }
 function editDed(e,lbl,i){
-  e.stopPropagation();
+  if(e) e.stopPropagation();
   const n=getNom(getM()),deds=lbl.includes('Q1')?n.ded_q1:n.ded_q2,d=deds[i];
   if(d.esIngresos){ toast('Los ingresos se editan desde la pestaña Ingresos'); return; }
-  _dedTipo=d.tipo||'resta';
-  const isSuma=d.tipo==='suma';
+  // El guard `!dedPickerSnapshot` evita perder el tipo (Resta/Suma) ya elegido al volver del
+  // picker de Crédito: dedPickerReturnToFn vuelve a llamar a esta misma función, y sin el guard
+  // _dedTipo se reiniciaría al valor original del dato cada vez.
+  if(!dedPickerSnapshot) _dedTipo=d.tipo||'resta';
+  const isSuma=_dedTipo==='suma';
   const rCls=!isSuma?' sc':'', sCls=isSuma?' sa':'';
+  dedPickerReturnToFn=function(){ editDed(null,lbl,i); };
+  const creditoActual=(dedPickerSnapshot&&('d-credito' in dedPickerSnapshot))?dedPickerSnapshot['d-credito']:(d.creditoId||null);
   openModal('<div class="mtitle">Editar deducción</div>'
     +'<div class="field"><label>Nombre</label><input id="d-n" value="'+esc(d.nombre)+'"></div>'
     +'<div class="trow2">'
@@ -59,22 +95,25 @@ function editDed(e,lbl,i){
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001" value="'+(d.porcentaje||'')+'"></div>'
     +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" value="'+moneyInputFmt(d.valor_fijo)+'" oninput="maskMoneyInput(this)"></div>'
-    +dedCreditoFieldHtml(d.creditoId||null)
+    +dedCreditoFieldHtml(creditoActual)
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveDed(\''+lbl+'\','+i+')">Guardar</button></div>'
     +'<button class="bdel" onclick="delDed(\''+lbl+'\','+i+')">Eliminar deducción</button>');
 }
 function addDed(lbl){
-  _dedTipo='resta';
+  if(!dedPickerSnapshot) _dedTipo='resta';
+  dedPickerReturnToFn=function(){ addDed(lbl); };
+  const creditoActual=(dedPickerSnapshot&&('d-credito' in dedPickerSnapshot))?dedPickerSnapshot['d-credito']:null;
+  const isSuma=_dedTipo==='suma';
   openModal('<div class="mtitle">Nueva deducción / ingreso</div>'
     +'<div class="field"><label>Nombre</label><input id="d-n" placeholder="Prima, Salud, Bono..."></div>'
     +'<div class="trow2">'
-    +'<button class="topt sc" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
-    +'<button class="topt" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
+    +'<button class="topt'+(!isSuma?' sc':'')+'" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
+    +'<button class="topt'+(isSuma?' sa':'')+'" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
     +'</div>'
     +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001"></div>'
     +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" oninput="maskMoneyInput(this)"></div>'
-    +dedCreditoFieldHtml(null)
+    +dedCreditoFieldHtml(creditoActual)
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveDed(\''+lbl+'\',-1)">Agregar</button></div>');
 }
