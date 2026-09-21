@@ -48,7 +48,6 @@ function renderNom(m) {
   const n1=netoQ1(m), n2=netoQ2(m);
   const dev1=bas1+aux1+ing1, dev2=bas2+aux2+ing2;
   const mesDev=dev1+dev2, mesDed=ded1+ded2;
-  const mesExtras=nom.bonos_total+ing1+ing2;
   const diasQ1c=15, diasQ2c=diasQ2(m.año,miSafe);
   const {q1:fechaQ1,q2:fechaQ2}=getPago(m.año,miSafe);
 
@@ -72,6 +71,16 @@ function renderNom(m) {
   const pagoQ1=pagoInfoNom(fechaQ1), pagoQ2=pagoInfoNom(fechaQ2);
   const pagoHero=isQ1?pagoQ1:pagoQ2;
 
+  // La barra reemplaza los 3 números sueltos (Devengado/Deducciones/Extras) por una proporción
+  // visual de un vistazo — "Extras" (bonos+ingresos) se quitó del resumen del mes porque
+  // duplicaba info (los ingresos ya cuentan dentro de "Devengado", y los bonos ya se ven en su
+  // propia fila dentro de "Devengados" más abajo). El panel sigue colapsado/expandido con el
+  // mismo toggleNomResumen()/nomResumenOpen de siempre.
+  const totalBarraMes=mesDev+mesDed;
+  const pctDevBarra=totalBarraMes>0?(mesDev/totalBarraMes*100):0;
+  const pctDedBarra=totalBarraMes>0?(mesDed/totalBarraMes*100):0;
+  const pctDedTextoMes=mesDev>0?Math.round(mesDed/mesDev*100):0;
+
   const resumenHtml='<div class="nom-resumen">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleNomResumen()">'
     +'<div class="nom-resumen-title">Resumen de '+m.nombre.toLowerCase()+'</div>'
@@ -89,12 +98,10 @@ function renderNom(m) {
     +'<div>Q2 <span style="color:var(--txt)">'+cop(n2)+'</span></div>'
     +'</div>'
     +'</div>'
-    +'<div class="nom-resumen-stats">'
-    +'<div class="nom-resumen-stat"><div class="nom-resumen-stat-lbl" style="color:var(--grn)">Devengado</div><div class="nom-resumen-stat-val" style="color:var(--grn)">'+cop(mesDev)+'</div></div>'
-    +'<div class="glist-div"></div>'
-    +'<div class="nom-resumen-stat"><div class="nom-resumen-stat-lbl" style="color:var(--red)">Deducciones</div><div class="nom-resumen-stat-val" style="color:var(--red)">'+cop(mesDed)+' <span style="font-size:10px;font-weight:700;color:var(--mut)">'+(mesDev>0?Math.round(mesDed/mesDev*100):0)+'%</span></div></div>'
-    +'<div class="glist-div"></div>'
-    +'<div class="nom-resumen-stat"><div class="nom-resumen-stat-lbl">Extras</div><div class="nom-resumen-stat-val">'+cop(mesExtras)+'</div></div>'
+    +'<div class="nom-bar"><div class="nom-bar-dev" style="width:'+pctDevBarra+'%"></div><div class="nom-bar-ded" style="width:'+pctDedBarra+'%"></div></div>'
+    +'<div class="nom-legend">'
+    +'<span><span class="nom-legend-dot" style="background:var(--grn)"></span>Devengado <b style="color:var(--grn)">'+cop(mesDev)+'</b></span>'
+    +'<span><span class="nom-legend-dot" style="background:var(--red)"></span>Deducciones <b style="color:var(--red)">'+cop(mesDed)+'</b> · '+pctDedTextoMes+'%</span>'
     +'</div>'
     +'<div class="nom-resumen-edit" onclick="editBasico()">'+btnIcon('edit',12)+'Editar básico y bonos</div>'
     +'</div>'
@@ -104,26 +111,6 @@ function renderNom(m) {
   // pestaña tenía su propio diseño de pastillas (nomq-tab), ahora reutiliza el componente
   // completo para que se vean idénticas, solo con "NETO" en vez de "DISPONIBLE".
   const tabsHtml=buildQCardsHtml(m,curNomQ,'selectNomQ','NETO',n1,n2);
-
-  // "Neto a recibir" con el mismo formato compacto que la mini-tarjeta de crédito en Inicio (ver
-  // buildTcMiniHtml en render.js), pero sin el chip de la izquierda y sin la etiqueta "NETO"
-  // (el valor solo, a la derecha, ya se entiende por el título) — mismo alto de panel que antes.
-  const heroHtml='<div class="tc-mini" style="padding:7px 12px">'
-    +'<div class="tc-mini-row">'
-    +'<div class="tc-mini-mid">'
-    +'<div class="tc-mini-name">Neto a recibir</div>'
-    +'<div class="tc-mini-due" style="color:'+(diasPago<0?'var(--mut)':'var(--acc)')+'">Pago '+pagoHero.fecha+' <span style="color:'+(pagoHero.sub==='pagado'?'var(--red)':'var(--mut)')+'">'+pagoHero.sub+'</span></div>'
-    +'</div>'
-    +'<div class="tc-mini-right"><span class="tc-mini-val"'+(diasPago<0?' style="color:var(--mut)"':'')+'>'+cop(netoQ)+'</span></div>'
-    +'</div>'
-    +'<div class="glist-totals" style="padding:6px 0 0;margin-top:6px;border-top:1px solid var(--brd)">'
-    +'<div class="glist-tot"><div class="glist-tot-lbl" style="color:var(--grn)">DEVENGADO</div><div class="glist-tot-val" style="color:var(--grn)">'+cop(devQ)+'</div></div>'
-    +'<div class="glist-div"></div>'
-    +'<div class="glist-tot"><div class="glist-tot-lbl" style="color:var(--red)">DEDUCCIONES</div><div class="glist-tot-val" style="color:var(--red)">'+cop(dedQ)+'</div></div>'
-    +'<div class="glist-div"></div>'
-    +'<div class="glist-tot" style="flex:.7"><div class="glist-tot-lbl">DÍAS</div><div class="glist-tot-val">'+diasQ+'</div></div>'
-    +'</div>'
-    +'</div>';
 
   var devRows='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Básico quincenal <span class="nom-row-nota-inline">· '+diasQ+' días</span></div></div><div class="nom-row-val">'+cop(bq)+'</div></div>';
   if(auxq>0){
@@ -145,22 +132,30 @@ function renderNom(m) {
     const credBadge=(d.creditoId&&creditos[d.creditoId])?' · Cuota '+d.numCuota+'/'+calcAmortizacion(creditos[d.creditoId]).rows.length:'';
     return '<div class="nom-row" onclick="editDed(event,\''+lbl+'\','+i+')" style="cursor:pointer">'
       +'<div class="nom-row-info"><div class="nom-row-name">'+esc(d.nombre)+' <span class="nom-row-badge">'+base+credBadge+'</span></div></div>'
-      +'<div class="nom-row-val" style="color:var(--'+(esSuma?'grn':'red')+')">'+(esSuma?'+':'-')+cop(val)+'</div>'
+      +'<div class="nom-row-val">'+(esSuma?'+':'-')+cop(val)+'</div>'
       +'</div>';
   }).filter(Boolean).join('');
 
-  return '<div class="home-view">'+resumenHtml+tabsHtml+heroHtml
-    +'<div class="nom-lists">'
-    +'<div class="nom-panel">'
-    +'<div class="nom-sec-head dev"><span class="nom-sec-title">Devengados '+which.toUpperCase()+'</span><span class="nom-sec-val">'+cop(devQ)+'</span></div>'
+  // "Neto a recibir" + Devengados + Deducciones ahora viven en una sola tarjeta (antes eran 3:
+  // el mini-hero reutilizado de Tarjeta + un .nom-panel por sección) — separadas por una línea
+  // fina en vez de tener cada una su propio borde/margen. "Días" se quitó del hero (ya se ve en
+  // el rango de fechas de la tarjeta Q1/Q2 de arriba, no hacía falta repetirlo una 3ra vez).
+  const cardHtml='<div class="nom-panel">'
+    +'<div class="nom-card-hero">'
+    +'<div><div class="nom-card-hero-lbl">Neto a recibir · '+which.toUpperCase()+'</div>'
+    +'<div class="nom-card-hero-due" style="color:'+(diasPago<0?'var(--mut)':'var(--acc)')+'">Pago '+pagoHero.fecha+' <span style="color:'+(pagoHero.sub==='pagado'?'var(--red)':'var(--mut)')+'">'+pagoHero.sub+'</span></div>'
+    +'</div>'
+    +'<div class="nom-card-hero-val"'+(diasPago<0?' style="color:var(--mut)"':'')+'>'+cop(netoQ)+'</div>'
+    +'</div>'
+    +'<div class="nom-sec-head dev"><span class="nom-sec-title"><span class="nom-legend-dot" style="background:var(--grn)"></span>Devengados</span><span class="nom-sec-val">'+cop(devQ)+'</span></div>'
     +devRows
-    +'</div>'
-    +'<div class="nom-panel">'
-    +'<div class="nom-sec-head ded"><span class="nom-sec-title">Deducciones '+which.toUpperCase()+'</span><span class="nom-sec-val">-'+cop(dedQ)+'</span></div>'
+    +'<div class="nom-sec-head ded"><span class="nom-sec-title"><span class="nom-legend-dot" style="background:var(--red)"></span>Deducciones</span><span class="nom-sec-val">-'+cop(dedQ)+'</span></div>'
     +dedRows
-    +'</div>'
-    +'<div class="glist-add" onclick="addDed(\''+lbl+'\')">+ Agregar deducción o devengado</div>'
-    +'</div>'
+    +'<div class="glist-add nom-add-dashed" onclick="addDed(\''+lbl+'\')">+ Agregar deducción o devengado</div>'
+    +'</div>';
+
+  return '<div class="home-view">'+resumenHtml+tabsHtml
+    +'<div class="nom-lists">'+cardHtml+'</div>'
     +'</div>';
 }
 function selectNomQ(q){

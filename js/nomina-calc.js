@@ -36,7 +36,7 @@ function basicoQ2(m) {
 // ── Auxilio de transporte ────────────────────────────────────────────────────
 // A diferencia de los bonos (solo informativos), el auxilio de transporte SÍ es dinero real
 // que el empleado recibe (cuenta para el neto/devengado) y SÍ afecta la base de prima y
-// cesantías (ver calcPrimaMes en creditos.js y sumaCesantias en catalogos.js) — pero, a
+// cesantías (ver calcPrimaMes y sumaCesantias en catalogos.js) — pero, a
 // diferencia del básico, NO es base de las deducciones porcentuales de salud/pensión: por
 // eso se suma DESPUÉS de calcNeto() (que solo recibe el básico como base), nunca dentro de él.
 // Se divide 50/50 entre quincenas (mismo criterio que los bonos, no el de días reales del
@@ -151,5 +151,46 @@ function syncIngresosDed(m, which){
   } else if(idx>=0){
     list.splice(idx,1);
   }
+}
+
+// Fase 2 de la migración a una arquitectura más modular: calcPrimaMes vivía antes en
+// creditos.js por accidente histórico (no tiene nada que ver con créditos) — se mueve acá, con
+// el resto del cálculo de nómina.
+function calcPrimaMes(m){
+  // Si el mes actual es Junio o Diciembre, calcula la prima del semestre correspondiente
+  const mi=MESES.indexOf(m.nombre);
+  if(mi!==5 && mi!==11) return 0; // solo Junio(5) o Diciembre(11)
+  const año=m.año;
+  const mesesDelAño={};
+  const auxDelAño={};
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    if(mes.año===año){
+      var idx=MESES.indexOf(mes.nombre);
+      if(idx>=0){
+        mesesDelAño[idx]=mes.nomina?mes.nomina.basico_total||0:0;
+        auxDelAño[idx]=mes.nomina?mes.nomina.aux_transporte_total||0:0;
+      }
+    }
+  });
+  var ultimoBasico=null, ultimoAux=null;
+  var basicoConSugerido={}, auxConSugerido={};
+  for(var i=0;i<=11;i++){
+    if(mesesDelAño[i]!==undefined){
+      basicoConSugerido[i]=mesesDelAño[i]; ultimoBasico=mesesDelAño[i];
+      auxConSugerido[i]=auxDelAño[i]; ultimoAux=auxDelAño[i];
+    } else if(ultimoBasico!==null){
+      basicoConSugerido[i]=ultimoBasico; auxConSugerido[i]=ultimoAux;
+    } else {
+      basicoConSugerido[i]=0; auxConSugerido[i]=0;
+    }
+  }
+  var inicio = mi===5 ? 0 : 6;
+  var fin = mi===5 ? 5 : 11;
+  // El auxilio de transporte SÍ hace base de prima (a diferencia de los bonos, que son solo
+  // informativos y nunca entraron en este cálculo) — ver auxTransporteQ1/Q2 más arriba.
+  var prima=0;
+  for(var i=inicio;i<=fin;i++){ prima += ((basicoConSugerido[i]+auxConSugerido[i])*30)/360; }
+  return Math.round(prima);
 }
 

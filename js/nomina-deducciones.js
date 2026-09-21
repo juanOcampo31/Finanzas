@@ -13,7 +13,7 @@ function dedCreditoFieldHtml(selectedId){
     return '<option value="'+cid+'"'+(selectedId===cid?' selected':'')+'>'+esc(cr.nombre)+'</option>';
   }).join('');
   const actual=selectedId&&creditos[selectedId]?creditos[selectedId].nombre:'Ninguno';
-  return '<div style="margin:14px 0 4px"><label style="display:block;font-size:12px;color:var(--mut);margin-bottom:5px;font-weight:500">¿Es cuota de un crédito por nómina? (opcional)</label>'
+  return '<div style="margin:8px 0 4px"><label style="display:block;font-size:12px;color:var(--mut);margin-bottom:5px;font-weight:500">¿Es cuota de un crédito por nómina? (opcional)</label>'
     +'<select id="d-credito" style="display:none" onchange="sugerirValorDedCredito()">'+opts+'</select>'
     +stdFormCardHtml(stdFormRowHtml('bank','var(--pur-d)','var(--pur)','Crédito',actual,'dedAbrirPickerCredito()',false))
     +'</div>';
@@ -87,35 +87,36 @@ function editDed(e,lbl,i){
   const rCls=!isSuma?' sc':'', sCls=isSuma?' sa':'';
   dedPickerReturnToFn=function(){ editDed(null,lbl,i); };
   const creditoActual=(dedPickerSnapshot&&('d-credito' in dedPickerSnapshot))?dedPickerSnapshot['d-credito']:(d.creditoId||null);
-  openModal('<div class="mtitle">Editar deducción</div>'
-    +'<div class="field"><label>Nombre</label><input id="d-n" value="'+esc(d.nombre)+'"></div>'
-    +'<div class="trow2">'
-    +'<button class="topt'+rCls+'" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
-    +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
-    +'</div>'
-    +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001" value="'+(d.porcentaje||'')+'"></div>'
-    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" value="'+moneyInputFmt(d.valor_fijo)+'" oninput="maskMoneyInput(this)"></div>'
+  const headerHtml=stdFormHeaderHtml('Editar deducción',null,"delDed('"+lbl+"',"+i+")");
+  openModal(headerHtml
+    +stdFormHeroCardHtml(
+      '<div class="trow2" style="margin-bottom:8px">'
+      +'<button class="topt'+rCls+'" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
+      +'<button class="topt'+sCls+'" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
+      +'</div>'
+      +stdFormNombreValorHtml('d-n',d.nombre,'','d-v',d.valor_fijo,'COP · valor fijo',isSuma?'var(--grn)':'var(--red)')
+    )
+    +'<div class="field" style="margin-bottom:8px"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001" value="'+(d.porcentaje||'')+'"></div>'
     +dedCreditoFieldHtml(creditoActual)
-    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="saveDed(\''+lbl+'\','+i+')">Guardar</button></div>'
-    +'<button class="bdel" onclick="delDed(\''+lbl+'\','+i+')">Eliminar deducción</button>');
+    +stdFormFooterHtml("saveDed('"+lbl+"',"+i+")",'Guardar'));
 }
 function addDed(lbl){
   if(!dedPickerSnapshot) _dedTipo='resta';
   dedPickerReturnToFn=function(){ addDed(lbl); };
   const creditoActual=(dedPickerSnapshot&&('d-credito' in dedPickerSnapshot))?dedPickerSnapshot['d-credito']:null;
   const isSuma=_dedTipo==='suma';
-  openModal('<div class="mtitle">Nueva deducción / ingreso</div>'
-    +'<div class="field"><label>Nombre</label><input id="d-n" placeholder="Prima, Salud, Bono..."></div>'
-    +'<div class="trow2">'
-    +'<button class="topt'+(!isSuma?' sc':'')+'" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
-    +'<button class="topt'+(isSuma?' sa':'')+'" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
-    +'</div>'
-    +'<div class="field"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001"></div>'
-    +'<div class="field"><label>Valor fijo</label><input id="d-v" type="text" inputmode="numeric" oninput="maskMoneyInput(this)"></div>'
+  const headerHtml=stdFormHeaderHtml('Nueva deducción / ingreso');
+  openModal(headerHtml
+    +stdFormHeroCardHtml(
+      '<div class="trow2" style="margin-bottom:8px">'
+      +'<button class="topt'+(!isSuma?' sc':'')+'" id="d-resta" onclick="setDedTipo(\'resta\')">'+btnIcon('minus',13)+'Resta</button>'
+      +'<button class="topt'+(isSuma?' sa':'')+'" id="d-suma" onclick="setDedTipo(\'suma\')">'+btnIcon('plus',13)+'Suma</button>'
+      +'</div>'
+      +stdFormNombreValorHtml('d-n','','Prima, Salud, Bono...','d-v',0,'COP · valor fijo',isSuma?'var(--grn)':'var(--red)')
+    )
+    +'<div class="field" style="margin-bottom:8px"><label>Porcentaje (ej: 0.04 = 4%)</label><input id="d-p" type="number" step="0.001"></div>'
     +dedCreditoFieldHtml(creditoActual)
-    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="saveDed(\''+lbl+'\',-1)">Agregar</button></div>');
+    +stdFormFooterHtml("saveDed('"+lbl+"',-1)",'Agregar'));
 }
 let _dedTipo = 'resta';
 function setDedTipo(t) {

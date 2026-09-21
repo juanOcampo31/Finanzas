@@ -218,7 +218,7 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
 
   // Prima/cesantías ESTIMADO (relleno con básico sugerido en meses sin crear). El auxilio de
   // transporte SÍ hace base de prima/cesantías (a diferencia de los bonos, solo informativos):
-  // ver auxTransporteQ1/Q2 en nomina-calc.js y el mismo criterio en calcPrimaMes (creditos.js).
+  // ver auxTransporteQ1/Q2 en nomina-calc.js y el mismo criterio en calcPrimaMes.
   var primaS1=0, s1TieneSugeridos=false;
   for(var i=0;i<=5;i++){ primaS1+=((basicoConSugerido[i]+auxConSugerido[i])*30)/360; if(esSugerido[i]) s1TieneSugeridos=true; }
   var primaS2=0, s2TieneSugeridos=false;

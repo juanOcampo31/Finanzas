@@ -245,6 +245,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .nom-resumen-edit{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:7px;padding-top:6px;border-top:1px solid var(--brd);font-size:11px;font-weight:600;color:var(--mut);cursor:pointer}
 .nom-resumen-edit:active{color:var(--acc)}
 
+/* Barra devengado/deducciones del Resumen del mes — reemplaza los 3 números sueltos (Devengado/
+   Deducciones/Extras) por una proporción visual de un vistazo, más "de un vistazo" que leer 3
+   cifras. Extras dejó de tener su propio bloque: ya está incluido en "Devengado" (bonos+ingresos
+   ya sumaban ahí) y antes se repetía sin aportar nada nuevo. */
+.nom-bar{height:6px;border-radius:4px;background:var(--bg-2);overflow:hidden;display:flex;margin-top:10px}
+.nom-bar-dev{background:var(--grn)}
+.nom-bar-ded{background:var(--red)}
+.nom-legend{display:flex;justify-content:space-between;margin-top:6px;font-size:10.5px;font-weight:700;color:var(--mut)}
+.nom-legend b{font-weight:800}
+.nom-legend-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
 
 .nom-row{display:flex;align-items:center;gap:10px;padding:6px 14px;border-top:1px solid rgba(148,163,184,.09)}
 .nom-row-info{flex:1;min-width:0}
@@ -255,13 +265,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .nom-row-val{font-size:13.5px;font-weight:800}
 .nom-lists{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:8px;padding-bottom:84px}
 .nom-panel{flex-shrink:0;background:var(--surf);border:1px solid var(--brd2);border-radius:14px;overflow:hidden}
-.nom-sec-head{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;border-left:3px solid transparent}
-.nom-sec-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
-.nom-sec-val{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
-.nom-sec-head.dev{background:rgba(52,211,153,.10);border-left-color:var(--grn)}
+/* "Neto a recibir" + Devengados + Deducciones ahora viven en un solo .nom-panel (antes eran 3
+   tarjetas separadas: un .tc-mini reutilizado + 2 .nom-panel) — .nom-card-hero es la fila de
+   arriba, .nom-sec cada sección interna, separadas por una línea fina en vez de un borde propio. */
+.nom-card-hero{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}
+.nom-card-hero-lbl{font-size:12px;font-weight:600;color:var(--mut)}
+.nom-card-hero-due{font-size:10.5px;font-weight:700;color:var(--mut);margin-top:2px}
+.nom-card-hero-val{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.nom-sec-head{display:flex;justify-content:space-between;align-items:center;padding:8px 14px 6px;border-top:1px solid var(--brd)}
+.nom-sec-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);display:flex;align-items:center}
+.nom-sec-val{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
 .nom-sec-head.dev .nom-sec-title,.nom-sec-head.dev .nom-sec-val{color:var(--grn)}
-.nom-sec-head.ded{background:rgba(251,113,133,.10);border-left-color:var(--red)}
 .nom-sec-head.ded .nom-sec-title,.nom-sec-head.ded .nom-sec-val{color:var(--red)}
+.nom-add-dashed{border-top:1px dashed var(--brd2);margin-top:2px}
 
 .gchk.hoy{border-color:rgba(251,113,133,.75)}
 .grow.row-hoy{background:rgba(251,113,133,.06)}

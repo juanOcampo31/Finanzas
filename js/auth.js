@@ -683,19 +683,10 @@ function migrateMonth(m) {
   return m;
 }
 
-let creditos={}; // {id: {nombre, valorPrestamo, pctAval, cuotas, tasa, fechaInicio, frecuencia}}
-let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
-let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
-let perfilTelefono=''; // número de celular para recuperación (ver Seguridad); viaja cifrado junto al resto de los datos
-let perfilNombre='';   // nombre del perfil (solo informativo); viaja cifrado junto al resto de los datos, igual que perfilTelefono
-// Regla de cálculo de la quincena 2 (ver diasQ2 en nomina-calc.js): por defecto se paga según
-// los días reales del mes (13 a 16, según el mes) — pero muchas empresas siempre pagan Q2 como
-// si fueran 15 días fijos, sin importar el mes. Editable en Perfil; viaja cifrado como los demás
-// datos del perfil, así que aplica igual en todos los dispositivos sincronizados.
-let perfilQ2DiasFijos=false;
-let db=null; // se puebla en loadAppData(), después de desbloquear con el PIN — nunca antes
-let sessionDataKey=null; // CryptoKey AES-256 en memoria; nunca se persiste. Cifra/descifra fin26_enc.
-let saveChain=Promise.resolve(); // serializa los guardados para no pisar escrituras si save() se llama varias veces seguidas
+// db/creditos/catTipos/catMetodos/perfilTelefono/perfilNombre/perfilQ2DiasFijos/sessionDataKey/
+// saveChain se movieron a js/state.js (cargado antes que este archivo) — siguen siendo globals
+// comunes, solo que ahora declaradas en un único lugar en vez de acá mezcladas con el código de
+// autenticación/cifrado.
 
 // Lee y parsea una clave legacy de localStorage, distinguiendo "no había nada guardado"
 // (normal para un usuario nuevo, o una clave que ya se migró) de "había datos pero estaban
@@ -822,32 +813,11 @@ async function loadAppData(){
   localStorage.removeItem('fin26_cat_tipos');
 }
 
-let curM   = parseInt(localStorage.getItem('fin26m') || '0');
-let gFiltro = {'q1':'todos','q2':'todos'}; // filtro por método en Q1/Q2
-let gSort      = {'q1':'orden','q2':'orden'};  // orden activo en Q1/Q2
-let gFilterOpen= {'q1':false,'q2':false};   // filtros/orden expandido
-let headerUserMenuOpen=false;   // panel del menú de usuario (bloque de identidad), en el header
-let headerMonthPanelOpen=false; // panel del selector de mes (pastilla derecha), en el header
-let igHelpOpen=false;           // panel de ayuda ("?") de Información general — colapsado por defecto
-let gGroupOpen  = {};  // group open state: {groupId: bool}
-let tcAbonoOpen = {};  // detalle de abonos de una compra de tarjeta expandido: {movimientoId: bool}
-let curTC = null; // id de la tarjeta seleccionada actualmente
-let tcInfoOpen  = false;                        // info tarjeta expandida
-let curIngQ = 'q1'; // quincena seleccionada actualmente en la pestaña Ingresos
-let curNomQ = 'q1'; // quincena seleccionada actualmente en la pestaña Nómina
-let summaryOpen = true;                          // resumen del mes (básico/neto/gastos/tarjeta) — expandido por defecto
-let nomResumenOpen = false;                       // "Resumen de <mes>" en la pestaña Nómina — colapsado por defecto
-// Desgloses expandibles de cada bloque del Resumen del mes — todos colapsados por defecto.
-// Cada pill además navega a su pestaña correspondiente al seleccionarse (ver selectStat()).
-let statBreakdownOpen = {basico:false, ingresos:false, gastos:false, tarjeta:false, dispQ1:false, dispQ2:false};
-const STAT_BREAKDOWN_DOM_IDS = {basico:'basicoBreakdown', ingresos:'netoBreakdown', gastos:'gastosBreakdown', tarjeta:'tcBreakdown', dispQ1:'dispQ1Breakdown', dispQ2:'dispQ2Breakdown'};
-let lastCreatedId = null;                         // id del último gasto creado, para animación de entrada
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-let curTab = 0;
-let homeQ = 'q1'; // quincena seleccionada dentro de la vista Inicio
-let homeQAutoDone = false; // ya se aplicó el default automático de homeQ según la fecha de hoy
-let curNomQAutoDone = false; // igual que homeQAutoDone, pero para curNomQ (ver homeQParaMes, render.js)
-let tcTipo = 'Compra';
+// curM/gFiltro/gSort/gFilterOpen/headerUserMenuOpen/headerMonthPanelOpen/igHelpOpen/gGroupOpen/
+// tcAbonoOpen/curTC/tcInfoOpen/curIngQ/curNomQ/summaryOpen/nomResumenOpen/statBreakdownOpen/
+// STAT_BREAKDOWN_DOM_IDS/lastCreatedId/MESES/curTab/homeQ/homeQAutoDone/curNomQAutoDone/tcTipo
+// también se movieron a js/state.js — ver ese archivo para la lista completa de estado
+// compartido de la app.
 
 function save(){
   saveChain = saveChain.then(async function(){

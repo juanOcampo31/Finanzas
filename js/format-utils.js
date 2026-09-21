@@ -104,6 +104,30 @@ function stdFormFooterHtml(saveOnclick,saveLabel,cancelOnclick){
 function stdFormHeroCardHtml(innerHtml){
   return '<div style="margin:0 0 10px;padding:13px 14px 10px;background:linear-gradient(180deg,var(--surf) 0%,var(--surf2) 100%);border:1px solid var(--brd2);border-radius:16px;display:flex;flex-direction:column;gap:3px">'+innerHtml+'</div>';
 }
+// Campo Nombre + campo Valor (número grande centrado con línea de acento debajo) tal como en el
+// formulario de gasto (ver valorBlockHtml en openGasto, js/gasto-pickers.js) — para envolver en
+// stdFormHeroCardHtml. `accentVar` es el color de la línea/acento (por defecto var(--acc), igual
+// que en Gasto); `subtitulo` es el texto chico debajo del valor (ej. "COP · valor del ingreso").
+function stdFormNombreValorHtml(nombreId,nombreVal,nombrePlaceholder,valorId,valorVal,subtitulo,accentVar,extraOninput,nombreLabel){
+  accentVar=accentVar||'var(--acc)';
+  return '<div class="field" style="margin:0"><label>'+esc(nombreLabel||'Nombre')+'</label><input id="'+nombreId+'" value="'+esc(nombreVal||'')+'" placeholder="'+esc(nombrePlaceholder||'')+'"></div>'
+    +'<div style="padding:8px 4px 2px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center">'
+    +'<div style="display:flex;align-items:baseline;gap:6px;padding-bottom:6px;border-bottom:2px solid '+accentVar+'">'
+    +'<span style="font-size:22px;font-weight:600;color:var(--mut)">$</span>'
+    +'<input id="'+valorId+'" type="text" inputmode="numeric" value="'+moneyInputFmt(valorVal)+'" oninput="maskMoneyInput(this);'+(extraOninput||'')+'" style="font-family:inherit;width:180px;background:transparent;border:none;outline:none;font-size:38px;font-weight:800;color:var(--txt);letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:center;padding:0">'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--mut)">'+esc(subtitulo||'')+'</div>'
+    +'</div>';
+}
+// Campo fecha (u hora, con type='time') con el mismo formato que Agenda (ver camposHtml en
+// agFormHtml, js/agenda.js): label chico en mayúsculas arriba + input en su propia caja
+// redondeada — reemplaza el <input type="date"> plano de .field para que todas las modales usen
+// la misma caja, en vez de que cada una tenga su propio estilo de fecha.
+function stdFormDateFieldHtml(id,label,value,onchange,type){
+  return '<div><label style="display:block;font-size:11px;font-weight:700;color:var(--mut);letter-spacing:.04em;margin-bottom:5px;text-transform:uppercase">'+esc(label)+'</label>'
+    +'<input id="'+id+'" type="'+(type||'date')+'" value="'+(value||'')+'"'+(onchange?(' onchange="'+onchange+'"'):'')+' style="width:100%;padding:11px 12px;background:var(--bg);border:1px solid var(--brd2);border-radius:11px;font-size:15px;font-weight:700;color:var(--txt);font-family:inherit;box-sizing:border-box">'
+    +'</div>';
+}
 // Formularios largos (Crédito...) con varios campos sueltos, además de alguna fila con picker
 // de pantalla completa: al abrir el picker hay que salir del formulario entero (openModal
 // reemplaza #mc), así que estos dos genéricos capturan y restauran TODOS los inputs/selects con
@@ -382,5 +406,50 @@ function buildMonthCal(q1dt, q2dt){
     +'<span style="display:inline-flex;align-items:center;gap:3px"><span style="width:6px;height:6px;border-radius:50%;background:var(--red);display:inline-block"></span>Festivo</span>'
     +'</div>';
   return html;
+}
+
+// ── Utilidades genéricas de texto/moneda (esc, escJS, cop, nombreGasto) ─────────
+// Fase 2 de la migración a una arquitectura más modular: estas 4 vivían al final de
+// creditos.js por accidente histórico — son de uso general en TODA la app (no tienen nada que
+// ver con créditos), así que se mueven acá, junto con el resto de utilidades de formato.
+
+// Escapa texto ingresado por el usuario antes de insertarlo como HTML (nombres de
+// gastos, tarjetas, créditos, etc.) para evitar que caracteres como < > " rompan el
+// marcado o inyecten HTML/JS accidentalmente.
+function esc(s){
+  if(s==null) return '';
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+// Escapa texto de usuario para insertarlo dentro de un argumento de string simple
+// ('...') dentro de un atributo onclick="..." (comillas dobles). No basta con esc():
+// el navegador decodifica entidades HTML del atributo ANTES de compilarlo como JS,
+// así que una comilla simple codificada como &#39; vuelve a ser ' y rompe el string.
+// Por eso la comilla simple se escapa como \' (secuencia de escape JS, no entidad),
+// mientras que la comilla doble sí se codifica como entidad para proteger el atributo.
+function escJS(s){
+  if(s==null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+}
+
+function cop(v) {
+  if (v == null || isNaN(v)) return '$0';
+  return '$' + Math.round(Math.abs(v)).toLocaleString('es-CO');
+}
+
+// Resuelve el nombre a mostrar de un gasto: si está vinculado a una plantilla del
+// catálogo (catTipoId), siempre usa el nombre ACTUAL de esa plantilla — así ambos
+// quedan sincronizados sin depender de coincidencias de texto. Si la plantilla fue
+// eliminada, o el gasto es de libre ingreso (sin catTipoId), usa su propio nombre.
+function nombreGasto(g){
+  if(g && g.catTipoId){
+    var t=catTipos.find(function(i){return i.id===g.catTipoId;});
+    if(t) return t.nombre;
+  }
+  return g?g.nombre:'';
 }
 

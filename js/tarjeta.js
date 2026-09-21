@@ -1,27 +1,43 @@
 // ── CRUD Tarjeta ──────────────────────────────────────────────────────────────
+// Mismo estándar visual que "Editar/Nuevo gasto" (ver stdForm* en format-utils.js): encabezado
+// X + título + eliminar (ícono), tarjeta hero con Nombre+Valor, "Fecha" con el formato de
+// Agenda, y footer Guardar/Cancelar — antes este modal tenía su propio look (.mtitle/.macts).
 function openTCModal(tc){
   const isE=tc!==null;
   const t=tc||{descripcion:'',tipo:'Compra',fecha:new Date().toISOString().slice(0,10),valor:0,saldo:null};
   tcTipo=t.tipo;
   const eid=isE?t.id:'';
   const cCls=t.tipo==='Compra'?' sc':'', aCls=t.tipo==='Abono'?' sa':'';
-  const valStr=moneyInputFmt(Math.abs(t.valor||0));
   // A diferencia de los demás campos, aquí el 0 es un saldo resultante válido y distinto de
   // "vacío" (sin definir), así que no se usa moneyInputFmt (que trata 0 como vacío).
   const saldoStr=t.saldo!=null?Math.round(t.saldo).toLocaleString('es-CO'):'';
-  const delBtn=isE?'<button class="bdel" onclick="delTC(\''+eid+'\')">Eliminar movimiento</button>':'';
-  openModal('<div class="mtitle">'+(isE?'Editar movimiento':'Nuevo movimiento')+'</div>'
-    +'<div class="trow2">'
+
+  const headerHtml=stdFormHeaderHtml(isE?'Editar movimiento':'Nuevo movimiento',null,isE?("delTC('"+eid+"')"):null);
+
+  const tipoHtml='<div class="trow2" style="margin-bottom:6px">'
     +'<button class="topt'+cCls+'" id="oc" onclick="setTC(\'Compra\')">'+btnIcon('arrowUp',13)+'Compra</button>'
     +'<button class="topt'+aCls+'" id="oa" onclick="setTC(\'Abono\')">'+btnIcon('arrowDown',13)+'Abono</button>'
+    +'</div>';
+
+  const heroHtml=stdFormHeroCardHtml(
+    tipoHtml
+    +stdFormNombreValorHtml('tc-d',t.descripcion,'Gasolina, UNE...','tc-v',Math.abs(t.valor||0),'COP · valor del movimiento','var(--acc)',null,'Descripción')
+  );
+
+  // Fecha y Saldo resultante comparten una sola tarjeta (en vez de dos bloques separados) para
+  // no gastar dos márgenes/bordes en dos campos chicos — mismo criterio que el resto de las
+  // modales ya compactadas (Gasto, Deducción).
+  const detallesCardHtml=stdFormCardHtml(
+    '<div style="padding:8px 14px 6px">'+stdFormDateFieldHtml('tc-f','Fecha',t.fecha)+'</div>'
+    +'<div style="padding:6px 14px 9px;border-top:1px solid var(--brd)">'
+    +'<label style="display:block;font-size:11px;font-weight:700;color:var(--mut);margin-bottom:5px;text-transform:uppercase">Saldo resultante (opcional)</label>'
+    +'<input id="tc-s" type="text" inputmode="numeric" value="'+saldoStr+'" oninput="maskMoneyInput(this)" placeholder="Ej: 1.250.000" style="width:100%;background:none;border:none;color:var(--txt);font-size:15px;font-weight:700;outline:none;font-family:inherit;padding:0;box-sizing:border-box">'
     +'</div>'
-    +'<div class="field"><label>Descripción</label><input id="tc-d" value="'+esc(t.descripcion)+'" placeholder="Gasolina, UNE..."></div>'
-    +'<div class="field"><label>Valor</label><input id="tc-v" type="text" inputmode="numeric" value="'+valStr+'" oninput="maskMoneyInput(this)"></div>'
-    +'<div class="field"><label>Fecha</label><input id="tc-f" type="date" value="'+t.fecha+'"></div>'
-    +'<div class="field"><label>Saldo resultante (opcional)</label><input id="tc-s" type="text" inputmode="numeric" value="'+saldoStr+'" oninput="maskMoneyInput(this)"></div>'
-    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
-    +'<button class="bpri" onclick="saveTC(\''+eid+'\')">Guardar</button></div>'
-    +delBtn);
+  );
+
+  const footerHtml=stdFormFooterHtml("saveTC('"+eid+"')",'Guardar');
+
+  openModal(headerHtml+heroHtml+detallesCardHtml+footerHtml);
 }
 function setTC(tipo){
   tcTipo=tipo;
