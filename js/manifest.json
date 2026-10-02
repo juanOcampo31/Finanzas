@@ -14,6 +14,7 @@
   "js/render-tarjeta.js",
   "js/render-ingresos.js",
   "js/nomina.js",
+  "js/reportes.js",
   "js/ui-core.js",
   "js/gasto-pickers.js",
   "js/gasto-form.js",

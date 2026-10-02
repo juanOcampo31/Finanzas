@@ -164,12 +164,21 @@ function renderGastos(gastos,which) {
     var nopagBadge=st?'<span class="nopag-badge">Sin pagar</span>':'';
     var subMeta=sp?'pagado · '+esc(s.metodo||''):(esc(s.metodo||'')+(badges.hoyFlag?' · <span style="color:var(--red);font-weight:700">hoy</span>':''));
     var chkTxt=sp?icon('check',11):st?icon('arrowRight',11):'';
+    // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js), misma ubicación que
+    // en la fila normal: segunda línea chica debajo del monto, no un badge junto al nombre.
+    var subRealLine='';
+    if(!sp&&s.abonos&&s.abonos.length){
+      var sumAbonosSub=s.abonos.reduce(function(a,ab){return a+(ab.monto||0);},0);
+      if(sumAbonosSub>0&&sumAbonosSub<Math.abs(s.presupuesto||0)){
+        subRealLine='<div class="gmth" style="color:var(--grn)">Pag: '+cop(sumAbonosSub)+'</div>';
+      }
+    }
     return '<div class="g-sub-row'+(st?' row-aplazado':'')+'">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+chkTxt+'</div>'
       +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
       +'<div class="gname '+nameCls+'">'+esc(nombreGasto(s))+badges.cuotaBadge+badges.vencidoBadge+badges.mensBadge+nopagBadge+'</div>'
       +'<div class="gmeta">'+subMeta+sdh+badges.compBadge+'</div></div>'
-      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+(s.presupuesto<0?'+':'')+cop(s.presupuesto)+'</div></div>'
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+(s.presupuesto<0?'+':'')+cop(s.presupuesto)+'</div>'+subRealLine+'</div>'
       +'</div>'
   }
 
@@ -234,7 +243,17 @@ function renderGastos(gastos,which) {
     var nopag=tras?'<span class="nopag-badge">Sin pagar</span>':'';
     var chkTxt=p?icon('check',11):tras?icon('arrowRight',11):'';
     var metaBase=p?'pagado · '+esc(g.metodo||''):(esc(g.metodo||'')+(hoyFlag?' · <span style="color:var(--red);font-weight:700">hoy</span>':''));
-    var realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):esc(g.metodo||'');
+    // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va en la misma
+    // posición que "Pag: $X" en un grupo (segunda línea chica, debajo del monto, a la
+    // derecha) — no como badge junto al nombre, para no competir con cuotaBadge/vencidoBadge ahí.
+    var realLine;
+    if(!p&&g.abonos&&g.abonos.length){
+      var sumAbonosRow=g.abonos.reduce(function(a,ab){return a+(ab.monto||0);},0);
+      if(sumAbonosRow>0&&sumAbonosRow<Math.abs(g.presupuesto||0)){
+        realLine='<span style="color:var(--grn)">Pag: '+cop(sumAbonosRow)+'</span>';
+      }
+    }
+    if(!realLine) realLine=g.pagado_real!=null&&g.pagado_real!==g.presupuesto?'Real: '+cop(g.pagado_real):esc(g.metodo||'');
     var rowCls='grow g-drag-item '+gCls+(hoyFlag&&!p&&!tras?' row-hoy':'');
     return '<div class="'+rowCls+'" data-gid="'+g.id+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')" onpointerdown="startDragGasto(event,\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
@@ -291,6 +310,11 @@ function renderGastos(gastos,which) {
     +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
     +'Filtrar '+icon(isOpen?'chevronUp':'chevronDown',10)
     +'</button>';
+  // Enlace directo al balance tipo "cuenta T" de esta quincena (ver js/reportes.js) — mismo
+  // estilo de píldora que "Filtrar", para no competir visualmente con el encabezado.
+  var balanceBtnHtml='<button onclick="openReportes(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px;flex-shrink:0">'
+    +icon('barChart',10)+'Balance'
+    +'</button>';
   var noteFilterRow=sinPagarCount>0
     ?'<div class="glist-note-row has-note"><span class="glist-note-txt">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</span></div>'
     :'';
@@ -298,7 +322,7 @@ function renderGastos(gastos,which) {
   return '<div class="glist-card">'
     +'<div class="glist-head">'
     +'<span class="glist-title"><span style="color:var(--acc)">Gastos Q'+qLabel+'</span> · '+totalIndividual+'</span>'
-    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+filterBtnHtml+'</span>'
+    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+balanceBtnHtml+filterBtnHtml+'</span>'
     +'</div>'
     +'<div class="glist-totals">'
     +'<div class="glist-tot"><div class="glist-tot-lbl">GASTOS Q'+qLabel+'</div><div class="glist-tot-val" style="color:var(--txt)">'+cop(total)+'</div></div>'

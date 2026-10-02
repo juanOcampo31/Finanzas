@@ -9,6 +9,7 @@ function openMasMenu(){
   openModal('<div class="mtitle">Más</div>'
     +'<div style="display:flex;flex-direction:column">'
     +fila('Ingresos',1)+fila('Tarjeta',2)+fila('Créditos',4)
+    +'<div onclick="closeModal();openReportes()" style="padding:14px 4px;font-size:15px;font-weight:600;color:var(--txt);border-bottom:1px solid var(--brd);cursor:pointer">Reportes</div>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
 }

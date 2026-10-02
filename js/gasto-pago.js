@@ -489,3 +489,81 @@ function confirmarPago(id,which){
   }
 }
 
+// ── Pagos parciales de un gasto (abonos acumulables) ────────────────────────────────────────
+// Mismo patrón que los abonos a capital de un crédito (ver openAbonoModal en
+// creditos-abonos.js): varios pagos sueltos que se van sumando hasta completar el valor del
+// gasto, en vez de tener que marcarlo pagado de una sola vez por el total. Al alcanzar el 100%
+// se marca "Pagado" solo, reusando marcarGastoPagado (con sus mismos efectos: movimiento de
+// tarjeta si el gasto está en un grupo vinculado, cuota de crédito, sincronía con Agenda).
+function abrirAbonosGasto(id,which){
+  const m=getM();
+  const list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(function(x){return x.id===id;});
+  if(!g) return;
+  const abonos=g.abonos||[];
+  const totalAbonado=abonos.reduce(function(a,ab){return a+(ab.monto||0);},0);
+  const valorGasto=Math.abs(g.presupuesto||0);
+  const restante=Math.max(0,valorGasto-totalAbonado);
+  const abonosOrdenados=abonos.slice().sort(function(a,b){return (a.fecha||'')<(b.fecha||'')?1:-1;});
+  const rowsHtml=abonosOrdenados.length?abonosOrdenados.map(function(ab){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-bottom:1px solid var(--brd)">'
+      +'<span style="font-size:13px;color:var(--txt)">'+fmtD(ab.fecha)+'</span>'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<span style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(ab.monto)+'</span>'
+      +'<button onclick="confirmarEliminarAbonoGasto(\''+id+'\',\''+which+'\',\''+ab.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;display:flex;align-items:center">'+icon('trash',14)+'</button>'
+      +'</div></div>';
+  }).join(''):'<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Sin pagos parciales todavía.</div>';
+
+  openModal('<div class="mtitle">Pagos parciales</div>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:10px;line-height:1.5">'+esc(nombreGasto(g))+' · Pagado <b style="color:var(--txt)">'+cop(totalAbonado)+'</b> de '+cop(valorGasto)+(restante>0?(' · Falta '+cop(restante)):'')+'</p>'
+    +'<div style="max-height:300px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:14px">'+rowsHtml+'</div>'
+    +(restante>0?'<button class="bpri" style="width:100%;margin-bottom:10px" onclick="openNuevoAbonoGasto(\''+id+'\',\''+which+'\')">＋ Agregar pago parcial</button>':'')
+    +'<button class="bcnl" style="width:100%" onclick="editGasto(\''+id+'\',\''+which+'\')">Volver</button>');
+}
+function openNuevoAbonoGasto(id,which){
+  openModal('<div class="mtitle">Nuevo pago parcial</div>'
+    +'<div class="field"><label>Monto</label><input id="pg-abono-val" type="text" inputmode="numeric" placeholder="Ej: 50.000" oninput="maskMoneyInput(this)"></div>'
+    +'<div class="field"><label>Fecha</label><input id="pg-abono-fecha" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="abrirAbonosGasto(\''+id+'\',\''+which+'\')">Cancelar</button>'
+    +'<button class="bpri" onclick="confirmarAbonoGasto(\''+id+'\',\''+which+'\')">Guardar</button>'
+    +'</div>');
+}
+function confirmarAbonoGasto(id,which){
+  const m=getM();
+  const list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(function(x){return x.id===id;});
+  if(!g) return;
+  const monto=moneyVal('pg-abono-val');
+  const fecha=document.getElementById('pg-abono-fecha').value||new Date().toISOString().slice(0,10);
+  if(!monto||monto<=0){ showAlert('El monto del pago debe ser mayor a 0'); return; }
+  if(!g.abonos) g.abonos=[];
+  g.abonos.push({id:uid(),monto:monto,fecha:fecha});
+  const totalAbonado=g.abonos.reduce(function(a,ab){return a+(ab.monto||0);},0);
+  const valorGasto=Math.abs(g.presupuesto||0);
+  if(totalAbonado>=valorGasto && gastoEstado(g)!=='pagado'){
+    marcarGastoPagado(g,m);
+    save();render();closeModal();
+    toast('Pago registrado. El gasto quedó pagado por completo.');
+    return;
+  }
+  save();render();
+  abrirAbonosGasto(id,which);
+  toast('Pago parcial registrado');
+}
+function confirmarEliminarAbonoGasto(id,which,abonoId){
+  showConfirm('¿Eliminar este pago parcial?',function(){
+    eliminarAbonoGasto(id,which,abonoId);
+  });
+}
+function eliminarAbonoGasto(id,which,abonoId){
+  const m=getM();
+  const list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(function(x){return x.id===id;});
+  if(!g||!g.abonos) return;
+  g.abonos=g.abonos.filter(function(ab){return ab.id!==abonoId;});
+  save();render();
+  abrirAbonosGasto(id,which);
+  toast('Pago parcial eliminado');
+}
+

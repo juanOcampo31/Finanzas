@@ -69,6 +69,20 @@ function openGasto(g,which,parentId,skipFocus){
     }
   }
 
+  // "Pagos parciales" (abonos acumulables, mismo patrón que los abonos a capital de un
+  // crédito): solo aplica a un gasto YA guardado y que no sea un grupo (el valor de un grupo es
+  // derivado, no algo contra lo que abonar). Abrir esta fila lleva a abrirAbonosGasto
+  // (gasto-pago.js), que lista lo abonado y permite agregar un pago nuevo; al completar el
+  // 100% del valor, el gasto se marca "Pagado" solo (misma lógica que ya tenía un gasto
+  // ligado a un crédito cuando se paga con un abono mayor al de la cuota).
+  var abonosFieldHtml='';
+  if(isE && !e.esGrupo){
+    var abonosGasto=e.abonos||[];
+    var sumAbonosGasto=abonosGasto.reduce(function(a,ab){return a+(ab.monto||0);},0);
+    var abonosLabelActual=sumAbonosGasto>0?(cop(sumAbonosGasto)+' de '+cop(Math.abs(e.presupuesto||0))):'Sin pagos parciales';
+    abonosFieldHtml=stdFormRowHtml('dollar','var(--grn-d)','var(--grn)','Pagos parciales',abonosLabelActual,"abrirAbonosGasto('"+eid+"','"+wh+"')");
+  }
+
   // "Asociar a crédito" abre un picker de pantalla completa (abrirPickerCredito), igual que
   // "Forma de pago" — con la lista de créditos y, dentro del mismo picker, "+ Crear crédito
   // nuevo (cuotas fijas)" (antes era un enlace aparte en Más opciones, solo visible cuando no
@@ -240,7 +254,7 @@ function openGasto(g,which,parentId,skipFocus){
   // Forma de pago / Asociar a grupo / Asociar a crédito / convertir-editar-eliminar grupo —
   // todo agrupado en una sola tarjeta con ícono por fila (antes "Más opciones" era una segunda
   // tarjeta plegada aparte, con su propio encabezado ocupando espacio extra).
-  const detallesCardHtml=stdFormCardHtml(formaPagoRowHtml+moverGrupoField+creditoField+grpBtn);
+  const detallesCardHtml=stdFormCardHtml(formaPagoRowHtml+abonosFieldHtml+moverGrupoField+creditoField+grpBtn);
 
   const footerHtml=stdFormFooterHtml("saveG('"+eid+"','"+wh+"','"+pid+"')",'Guardar');
 

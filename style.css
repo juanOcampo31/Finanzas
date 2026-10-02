@@ -314,3 +314,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .lock-link{width:100%;margin-top:14px;padding:6px;font-size:12px;font-weight:600;color:var(--mut);background:none;border:none;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .lock-link:active{color:var(--acc)}
 .lock-version{margin-top:16px;font-size:10px;font-weight:600;color:var(--mut);opacity:.55;letter-spacing:.03em}
+
+/* ── Reportes: balance de una quincena, tabla de 3 columnas (ver js/reportes.js) ──────────── */
+.rep-tcard{background:var(--surf);border:1px solid var(--brd2);border-radius:14px;overflow:hidden}
+.rep-row3{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--brd)}
+.rep-row3-desc{flex:1;min-width:0;font-size:11.5px;color:var(--txt);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rep-row3-ing,.rep-row3-gas{width:74px;flex-shrink:0;text-align:right;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.rep-row3-head{border-bottom:2px solid var(--brd2)}
+.rep-row3-head .rep-row3-desc{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+.rep-row3-head .rep-row3-ing,.rep-row3-head .rep-row3-gas{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.rep-row3-total{border-bottom:none;border-top:2px solid var(--brd2);background:var(--surf2)}
+.rep-row3-total .rep-row3-desc{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--mut)}
+.rep-row3-total .rep-row3-ing{color:var(--grn)}
+.rep-row3-total .rep-row3-gas{color:var(--red)}
+.rep-saldo{margin-top:10px;padding:14px;border-radius:14px;text-align:center}
+.rep-saldo-lbl{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.rep-saldo-val{font-size:25px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
