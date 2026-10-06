@@ -83,6 +83,16 @@ function openGasto(g,which,parentId,skipFocus){
     abonosFieldHtml=stdFormRowHtml('dollar','var(--grn-d)','var(--grn)','Pagos parciales',abonosLabelActual,"abrirAbonosGasto('"+eid+"','"+wh+"')");
   }
 
+  // "Escanear factura" (ver js/factura-scan.js): lee el QR de una factura con la cámara y
+  // precarga Valor/Nombre en este mismo formulario — no aplica a un grupo (no hay una sola
+  // factura que represente a todos sus subgastos). El texto crudo del QR (facturaQR) viaja en
+  // un input oculto, igual que pagado_real/comprobante, porque no es un campo visible como tal.
+  var facturaFieldHtml='';
+  if(!e.esGrupo){
+    var facturaLabelActual=e.facturaQR?'Factura asociada ✓':'Ninguna';
+    facturaFieldHtml=stdFormRowHtml('camera','var(--acc-d)','var(--acc)','Escanear QR',facturaLabelActual,"abrirEscanearFactura('"+eid+"','"+wh+"','"+pid+"')");
+  }
+
   // "Asociar a crédito" abre un picker de pantalla completa (abrirPickerCredito), igual que
   // "Forma de pago" — con la lista de créditos y, dentro del mismo picker, "+ Crear crédito
   // nuevo (cuotas fijas)" (antes era un enlace aparte en Más opciones, solo visible cuando no
@@ -241,7 +251,8 @@ function openGasto(g,which,parentId,skipFocus){
   // Este input oculto solo sirve de valor por defecto al abrir el formulario (y para que los
   // pickers de Forma de pago/Grupo lo preserven vía capturarEstadoFormGasto); saveG() calcula
   // el valor real a guardar directamente a partir de lo escrito en "Valor", no de este campo.
-  const realHiddenInput='<input type="hidden" id="g-r" value="'+moneyInputFmt(e.pagado_real)+'">';
+  const realHiddenInput='<input type="hidden" id="g-r" value="'+moneyInputFmt(e.pagado_real)+'">'
+    +'<input type="hidden" id="g-facturaqr" value="'+esc(e.facturaQR||'')+'">';
 
   // Encabezado: cerrar (X) a la izquierda, título centrado, eliminar (ícono) a la derecha — el
   // botón rojo grande de "Eliminar gasto" ya no ocupa espacio en el cuerpo del formulario.
@@ -254,7 +265,7 @@ function openGasto(g,which,parentId,skipFocus){
   // Forma de pago / Asociar a grupo / Asociar a crédito / convertir-editar-eliminar grupo —
   // todo agrupado en una sola tarjeta con ícono por fila (antes "Más opciones" era una segunda
   // tarjeta plegada aparte, con su propio encabezado ocupando espacio extra).
-  const detallesCardHtml=stdFormCardHtml(formaPagoRowHtml+abonosFieldHtml+moverGrupoField+creditoField+grpBtn);
+  const detallesCardHtml=stdFormCardHtml(formaPagoRowHtml+abonosFieldHtml+facturaFieldHtml+moverGrupoField+creditoField+grpBtn);
 
   const footerHtml=stdFormFooterHtml("saveG('"+eid+"','"+wh+"','"+pid+"')",'Guardar');
 
@@ -398,6 +409,7 @@ function saveG(id,which,parentId){
       setGastoEstado(gasto,paid?'pagado':(sinpagar?'sinpagar':null));
       gasto.fecha_pago=document.getElementById('g-fp')?.value||gasto.fecha_pago||null;
       gasto.comprobante=document.getElementById('g-cmp')?.value.trim()||gasto.comprobante||null;
+      gasto.facturaQR=document.getElementById('g-facturaqr')?.value||gasto.facturaQR||null;
       const grupoDestinoEl=document.getElementById('g-grupo-destino');
       if(grupoDestinoEl) gasto.parentId=grupoDestinoEl.value||null;
       // Enlace con la Agenda (ver §6 del pedido / js/agenda.js): si cambia el monto acá y el
@@ -416,6 +428,8 @@ function saveG(id,which,parentId){
       if(parentG&&parentG.metodo) finalMetodo=parentG.metodo;
     }
     gasto={id:uid(),nombre,presupuesto:presup,metodo:finalMetodo,pagado_real:real,estado:paid?'pagado':(sinpagar?'sinpagar':null),pagado_flag:paid,sinpagar,parentId:parentId||null,cuotas_total:0,cuota_actual:0};
+    var facturaQRNueva=document.getElementById('g-facturaqr')?.value||null;
+    if(facturaQRNueva) gasto.facturaQR=facturaQRNueva;
     if(catTipoIdSel){ gasto.catTipoId=catTipoIdSel; }
     if(creditoIdSel){
       gasto.creditoId=creditoIdSel;

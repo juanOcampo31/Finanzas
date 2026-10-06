@@ -20,6 +20,7 @@
   "js/gasto-form.js",
   "js/gasto-drag.js",
   "js/gasto-pago.js",
+  "js/factura-scan.js",
   "js/tarjeta.js",
   "js/nomina-deducciones.js",
   "js/catalogos.js",

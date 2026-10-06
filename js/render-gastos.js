@@ -128,6 +128,9 @@ function renderGastos(gastos,which) {
       mensBadge='<span style="font-size:10px;font-weight:600;background:var(--pur-d);color:var(--pur);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+mLabel+'</span>';
     }
     compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px;display:inline-flex;align-items:center;gap:3px;vertical-align:middle">'+icon('paperclip',11)+esc(g.comprobante)+'</span>':'';
+    // Factura escaneada por QR (ver abrirEscanearFactura en js/factura-scan.js) — solo el
+    // ícono, sin texto (el contenido crudo del QR no es legible para mostrarlo acá).
+    if(g.facturaQR) compBadge+='<span title="Factura escaneada" style="color:var(--acc);margin-left:4px;display:inline-flex;align-items:center;vertical-align:middle">'+icon('qrCode',11)+'</span>';
     if(g.cuotas_total>0&&g.cuota_actual>0){
       var cuotaColor=g.pagado_flag?'var(--grn)':'var(--amb)';
       var cuotaLbl=g.cuota_actual+'/'+g.cuotas_total;

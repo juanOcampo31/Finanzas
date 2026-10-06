@@ -53,6 +53,9 @@
     <div class="wcontent" id="wc"></div>
   </div>
 </div>
+<div class="qrbg" id="qrbg">
+  <div class="qrc" id="qrc"></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <div class="lock-overlay" id="lockOverlay">
@@ -69,7 +72,7 @@
     <!-- Texto de respaldo: debe coincidir con CACHE_VERSION en sw.js. app.js lo actualiza
          en cuanto el service worker responde el postMessage GET_VERSION; esto es solo lo
          que se ve mientras esa respuesta no ha llegado (o si falla). -->
-    <div class="lock-version" id="lockVersion">V 2.90 &bull; Powered by Felipe Ocampo</div>
+    <div class="lock-version" id="lockVersion">V 2.91 &bull; Powered by Felipe Ocampo</div>
   </div>
 </div>
 
@@ -98,6 +101,11 @@
 <script src="js/gasto-form.js"></script>
 <script src="js/gasto-drag.js"></script>
 <script src="js/gasto-pago.js"></script>
+<!-- jsQR: solo decodifica el QR de una factura desde la cámara (no OCR de texto libre, no
+     guarda la foto) — única dependencia externa de todo el proyecto, cargada bajo demanda
+     (ver js/factura-scan.js). ~30KB, sin WASM. -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="js/factura-scan.js"></script>
 <script src="js/tarjeta.js"></script>
 <script src="js/nomina-deducciones.js"></script>
 <script src="js/catalogos.js"></script>

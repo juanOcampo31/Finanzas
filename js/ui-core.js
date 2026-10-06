@@ -79,6 +79,7 @@ function capturarEstadoFormGasto(baseG,isE){
   if(nEl){ if(!isE) data.nombre=nEl.value; data.catTipoId=nEl.dataset.catTipoId||null; }
   if(document.getElementById('g-p')) data.presupuesto=moneyVal('g-p');
   if(document.getElementById('g-r')) data.pagado_real=moneyVal('g-r')||null;
+  const fqEl=document.getElementById('g-facturaqr'); if(fqEl) data.facturaQR=fqEl.value||null;
   const mEl=document.getElementById('g-m'); if(mEl) data.metodo=mEl.value;
   const estadoEl=document.getElementById('g-estado');
   if(estadoEl) setGastoEstado(data,estadoEl.value||null);
