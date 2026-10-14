@@ -575,6 +575,7 @@ function confirmImportCreditoPlan(){
 
 let creditoOcultarPagadas=true;
 let _pendingEditCredito=null; // {id, apply()} — cambios de saveEditCredito pendientes de confirmar cuando hay abonos registrados
+let _pendingEditCreditoCuotaManual=null; // {id, continuar(limpiarCuotaManual)} — ver aviso de "cuota manual fija" en saveEditCredito
 // true cuando se entró al detalle del crédito desde el modal "Créditos" (openCreditosMenu,
 // atajo del dashboard); false cuando se entró desde la pestaña Créditos/tarjeta (vista de
 // fondo, no modal). El botón "Volver" del detalle lo usa para decidir si debe reabrir ese
@@ -804,18 +805,20 @@ function editCredito(id){
   const fechaActualEdit=(crPickerSnapshot&&('cr-edit-fecha' in crPickerSnapshot))?crPickerSnapshot['cr-edit-fecha']:cr.fechaInicio;
   openModal('<div class="mtitle">Editar crédito</div>'
     +warnPagos
-    +stdFormHeroCardHtml(stdFormNombreValorHtml('cr-edit-nombre',cr.nombre,'','cr-edit-valor',cr.valorPrestamo,'COP · valor del préstamo','var(--pur)'))
+    +stdFormHeroCardHtml(stdFormNombreValorHtml('cr-edit-nombre',cr.nombre,'','cr-edit-valor',cr.valorPrestamo,'COP · valor del préstamo','var(--pur)','updateCuotaSugeridaEdit()'))
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-    +'<div class="field" style="margin:0"><label>% AVAL</label><input id="cr-edit-aval" type="number" step="0.01" value="'+(cr.pctAval||0)+'"></div>'
-    +'<div class="field" style="margin:0"><label>Cuotas</label><input id="cr-edit-cuotas" type="number" value="'+cr.cuotas+'"></div>'
+    +'<div class="field" style="margin:0"><label>% AVAL</label><input id="cr-edit-aval" type="number" step="0.01" value="'+(cr.pctAval||0)+'" oninput="updateCuotaSugeridaEdit()"></div>'
+    +'<div class="field" style="margin:0"><label>Cuotas</label><input id="cr-edit-cuotas" type="number" value="'+cr.cuotas+'" oninput="updateCuotaSugeridaEdit()"></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;align-items:end">'
-    +'<div class="field" style="margin:0"><label>Tasa de interés %</label><input id="cr-edit-tasa" type="number" step="0.01" value="'+(cr.tasa||0)+'"></div>'
+    +'<div class="field" style="margin:0"><label>Tasa de interés %</label><input id="cr-edit-tasa" type="number" step="0.01" value="'+(cr.tasa||0)+'" oninput="updateCuotaSugeridaEdit()"></div>'
     +stdFormDateFieldHtml('cr-edit-fecha','Fecha inicio',fechaActualEdit)
     +'</div>'
     +frecuenciaFieldHtml('cr-edit-frec',frecActual)
     +'<div class="field" style="margin-top:8px"><label>Valor de cuota manual (opcional)</label>'
-    +'<input id="cr-edit-cuota-manual" type="text" inputmode="numeric" value="'+(cr.valorCuotaManual?moneyInputFmt(cr.valorCuotaManual):'')+'" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this)"></div>'
+    +'<input id="cr-edit-cuota-manual" type="text" inputmode="numeric" value="'+(cr.valorCuotaManual?moneyInputFmt(cr.valorCuotaManual):'')+'" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this)">'
+    +'<div id="cr-edit-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
+    +'</div>'
     +'<div class="cbx-row" style="margin-top:2px"><input type="checkbox" id="cr-edit-esmens"'+(cr.esMensualidad?' checked':'')+'>'
     +'<label for="cr-edit-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad (colegio, transporte, suscripción...)</label></div>'
     +tarjetaVinculadaFieldHtml(tcVincActual||null)
@@ -823,6 +826,33 @@ function editCredito(id){
     +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveEditCredito(\''+id+'\')">Guardar</button>'
     +'</div>');
+  // A diferencia del formulario de crédito NUEVO (que arranca vacío y solo muestra la cuota
+  // sugerida cuando el usuario empieza a escribir), acá los campos ya traen los valores
+  // actuales del crédito — se calcula de una vez para que el placeholder no aparezca vacío.
+  updateCuotaSugeridaEdit();
+}
+// Espejo de updateCuotaSugerida() (creación) para el formulario de edición — mismos campos,
+// con el prefijo "cr-edit-" en vez de "cr-".
+function updateCuotaSugeridaEdit(){
+  const valor=moneyVal('cr-edit-valor');
+  const pctAval=parseFloat(document.getElementById('cr-edit-aval')?.value)||0;
+  const cuotas=parseInt(document.getElementById('cr-edit-cuotas')?.value)||0;
+  const tasaPct=parseFloat(document.getElementById('cr-edit-tasa')?.value)||0;
+  const txtEl=document.getElementById('cr-edit-cuota-sugerida-txt');
+  const inputManual=document.getElementById('cr-edit-cuota-manual');
+  if(!txtEl) return;
+  if(valor>0 && cuotas>0){
+    const aval=Math.round(valor*(pctAval/100));
+    const total=valor+aval;
+    const tasa=tasaPct/100;
+    const pmt=calcCuotaPMT(total,tasa,cuotas);
+    const pmtRedondeado=Math.round(pmt);
+    txtEl.innerHTML='AVAL: '+cop(aval)+' · Total: '+cop(total)+'<br>Cuota sugerida: '+cop(pmtRedondeado);
+    if(inputManual) inputManual.placeholder=cop(pmtRedondeado)+' (sugerida)';
+  } else {
+    txtEl.textContent='';
+    if(inputManual) inputManual.placeholder='Se sugiere automáticamente';
+  }
 }
 function saveEditCredito(id){
   const cr=creditos[id]; if(!cr) return;
@@ -862,15 +892,37 @@ function saveEditCredito(id){
   // nuevo (donde basta con borrar creditos[id]), acá cr YA es un objeto en uso; sin revertir,
   // un error a mitad de camino dejaba el crédito con campos nuevos pero sin invalidar/guardar,
   // en un estado a medias que solo se notaba al ver números raros más adelante.
-  function aplicarCambiosEdicion(){
+  function aplicarCambiosEdicion(opts){
+    opts=opts||{};
     const snapshot={nombre:cr.nombre,valorPrestamo:cr.valorPrestamo,pctAval:cr.pctAval,cuotas:cr.cuotas,
       tasa:cr.tasa,fechaInicio:cr.fechaInicio,frecuencia:cr.frecuencia,valorCuotaManual:cr.valorCuotaManual,
       esMensualidad:cr.esMensualidad,tcVinculada:cr.tcVinculada};
     try{
       cr.nombre=nombre; cr.valorPrestamo=valorPrestamo; cr.pctAval=pctAval;
       cr.cuotas=cuotas; cr.tasa=tasa; cr.fechaInicio=fechaInicio; cr.frecuencia=frecuencia;
-      cr.valorCuotaManual=cuotaManual; cr.esMensualidad=esMensualidad; cr.tcVinculada=tcVinculada;
+      // opts.limpiarCuotaManual=true: el usuario eligió "recalcular automático" en el aviso de
+      // cuota manual fija (ver más abajo) — se ignora el valor que haya quedado en el campo y se
+      // deja que calcAmortizacionSinCache vuelva a calcularla con la fórmula PMT normal.
+      cr.valorCuotaManual=opts.limpiarCuotaManual?null:cuotaManual;
+      cr.esMensualidad=esMensualidad; cr.tcVinculada=tcVinculada;
       invalidarAmortCache(id); // los campos que definen la tabla de amortización cambiaron
+
+      // calcAmortizacion ya recalcula las cuotas FUTURAS con los nuevos datos y deja las YA
+      // PAGADAS tal cual (usa el monto realmente pagado, no el teórico — ver
+      // calcAmortizacionSinCache), pero eso solo afecta lo que se MUESTRA en el detalle del
+      // crédito: los gastos que ya existían para esas cuotas futuras se quedaban con el valor
+      // viejo. Se sincronizan acá, cuota por cuota, dejando intacta la que ya esté pagada.
+      var amortNueva=calcAmortizacion(cr);
+      Object.keys(db).forEach(function(k){
+        var mesC=db[k];
+        [mesC.q1_gastos||[], mesC.q2_gastos||[]].forEach(function(list){
+          (list||[]).forEach(function(g){
+            if(g.creditoId!==id || !g.numCuota || gastoEstado(g)==='pagado') return;
+            var row=amortNueva.rows[g.numCuota-1];
+            if(row) g.presupuesto=row.valorCuota;
+          });
+        });
+      });
 
       // Igual que antes al renombrar: actualizar el nombre en los gastos ya generados que lo referencian
       if(nombreViejo!==nombre){
@@ -897,17 +949,46 @@ function saveEditCredito(id){
   // Los abonos a capital (cr.abonos) están anclados a la estructura de cuotas anterior — si el
   // usuario cambia valor/tasa/plazo/fecha, esos índices dejan de tener sentido. Se avisa y se
   // limpia el historial de abonos antes de aplicar los cambios (los pagos ya marcados no se pierden).
-  if(cr.abonos && cr.abonos.length){
-    _pendingEditCredito={id:id, apply:aplicarCambiosEdicion};
-    openModal('<div class="mtitle">¿Editar crédito?</div>'
-      +'<p style="font-size:13px;color:var(--mut);margin-bottom:16px">Este crédito tiene <b>'+cr.abonos.length+' abono(s) a capital</b> registrados. Editar los datos del crédito elimina el historial de esos abonos (el saldo de las cuotas ya pagadas no se pierde, pero el registro del abono sí). ¿Continuar?</p>'
-      +'<div class="macts">'
-      +'<button class="bcnl" onclick="editCredito(\''+id+'\')">Cancelar</button>'
-      +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmarEditCreditoConAbonos(\''+id+'\')">Continuar</button>'
-      +'</div>');
+  function procederConValidacionAbonos(limpiarCuotaManual){
+    if(cr.abonos && cr.abonos.length){
+      _pendingEditCredito={id:id, apply:function(){ aplicarCambiosEdicion({limpiarCuotaManual:limpiarCuotaManual}); }};
+      openModal('<div class="mtitle">¿Editar crédito?</div>'
+        +'<p style="font-size:13px;color:var(--mut);margin-bottom:16px">Este crédito tiene <b>'+cr.abonos.length+' abono(s) a capital</b> registrados. Editar los datos del crédito elimina el historial de esos abonos (el saldo de las cuotas ya pagadas no se pierde, pero el registro del abono sí). ¿Continuar?</p>'
+        +'<div class="macts">'
+        +'<button class="bcnl" onclick="editCredito(\''+id+'\')">Cancelar</button>'
+        +'<button class="bpri" style="background:var(--red);color:#fff" onclick="confirmarEditCreditoConAbonos(\''+id+'\')">Continuar</button>'
+        +'</div>');
+      return;
+    }
+    aplicarCambiosEdicion({limpiarCuotaManual:limpiarCuotaManual});
+  }
+
+  // Si el crédito tenía una CUOTA MANUAL fija y el usuario no la tocó (sigue igual en el
+  // formulario) pero sí cambió valor/tasa/plazo/fecha, esa cuota fija se quedaría desalineada
+  // con los nuevos datos — la fórmula PMT la ignora por completo mientras exista (ver
+  // calcAmortizacionSinCache), así que ninguna cuota futura reflejaría el cambio salvo la última
+  // (que siempre se ajusta sola para cerrar el saldo). Se avisa y se deja elegir en vez de
+  // decidir en silencio por el usuario.
+  const datosFormaCambiaron=valorPrestamo!==cr.valorPrestamo||tasa!==cr.tasa||cuotas!==cr.cuotas||frecuencia!==cr.frecuencia||fechaInicio!==cr.fechaInicio;
+  const cuotaManualSinTocar=cr.valorCuotaManual&&cuotaManual===cr.valorCuotaManual;
+  if(datosFormaCambiaron&&cuotaManualSinTocar){
+    _pendingEditCreditoCuotaManual={id:id, continuar:procederConValidacionAbonos};
+    openModal('<div class="mtitle">Cuota manual fija</div>'
+      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">Este crédito tiene una <b>cuota manual fija de '+cop(cr.valorCuotaManual)+'</b>. Cambiaste el valor, la tasa, el plazo o la fecha del crédito — ¿mantienes esa cuota fija (las demás no cambiarán) o dejas que la app la recalcule automáticamente con los nuevos datos?</p>'
+      +'<div style="display:flex;flex-direction:column;gap:10px">'
+      +'<button class="bcnl" onclick="procederEdicionCuotaManual(\''+id+'\',false)">Recalcular automáticamente</button>'
+      +'<button class="bcnl" onclick="procederEdicionCuotaManual(\''+id+'\',true)">Mantener la cuota fija</button>'
+      +'</div>'
+      +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="editCredito(\''+id+'\')">Cancelar</button></div>');
     return;
   }
-  aplicarCambiosEdicion();
+  procederConValidacionAbonos(false);
+}
+function procederEdicionCuotaManual(id,mantener){
+  if(!_pendingEditCreditoCuotaManual||_pendingEditCreditoCuotaManual.id!==id) return;
+  const continuar=_pendingEditCreditoCuotaManual.continuar;
+  _pendingEditCreditoCuotaManual=null;
+  continuar(!mantener);
 }
 
 function confirmarEditCreditoConAbonos(id){

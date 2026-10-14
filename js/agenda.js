@@ -308,8 +308,13 @@ function agFilaHtml(e){
       +'</div>';
   }
 
-  var clickable=(e.origen==='manual');
-  var onclickRow=clickable?(' onclick="agAbrirDetalle(\''+e.id+'\')"'):'';
+  // Antes solo las manuales eran clickeables: las "derivadas" (gastos sin pagar vencidos) no
+  // tenían ninguna acción posible en la Agenda y se quedaban mostrando "vencido" para siempre,
+  // sin forma de resolverlas sin salir a la pestaña Gastos (ver agAbrirDetalleGastoVencido).
+  var clickable=(e.origen==='manual'||e.origen==='derivado');
+  var onclickRow=!clickable?'':(e.origen==='derivado'
+    ?(' onclick="agAbrirDetalleGastoVencido(\''+e.gastoId+'\',\''+e.which+'\')"')
+    :(' onclick="agAbrirDetalle(\''+e.id+'\')"'));
 
   return '<div'+onclickRow+' style="padding:8px 12px 8px 0;background:'+bg+';border:1px solid '+bd+';border-radius:13px;display:flex;align-items:center;gap:11px;overflow:hidden;margin-bottom:6px;min-height:40px'+(clickable?';cursor:pointer':'')+'">'
     +'<div style="width:3px;align-self:stretch;border-radius:0 2px 2px 0;background:'+barra+';flex-shrink:0"></div>'
@@ -336,11 +341,49 @@ function agAbrirDetalle(id){
   var m=getM();
   var it=agendaArr(m).find(function(x){return x.id===id;});
   if(!it) return;
+  // Un recordatorio de pago enlazado a un gasto, mientras ese gasto siga sin pagar, puede
+  // resolverse de una vez acá mismo (ver agMarcarRecordatorioPagado) — antes la única forma
+  // de "completarlo" era ir a editar el gasto en la pestaña Gastos.
+  var gasto=it.gastoId?agBuscarGasto(m,it.gastoId,it.which):null;
+  var pendienteDePago=it.tipo==='pago'&&gasto&&gastoEstado(gasto)!=='pagado';
   openModal('<div class="mtitle">'+(it.tipo==='tarea'?'Tarea':'Recordatorio')+'</div>'
     +'<p style="font-size:14px;color:var(--txt);font-weight:600;margin-bottom:6px">'+esc(it.concepto)+'</p>'
     +'<p style="font-size:12px;color:var(--mut);margin-bottom:16px">'+fmtD(it.fecha)+(it.hora?(' · '+it.hora):'')+(it.monto?(' · '+cop(it.monto)):'')+(it.gastoId?' · enlazado a un gasto':'')+'</p>'
+    +(pendienteDePago?'<button class="bpri" style="width:100%;margin-bottom:10px" onclick="agMarcarRecordatorioPagado(\''+id+'\')">Marcar como pagado</button>':'')
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cerrar</button>'
     +'<button class="bpri" style="background:var(--red);color:#fff" onclick="agConfirmarBorrar(\''+id+'\')">Eliminar</button></div>');
+}
+// Pagar el gasto enlazado tilda el recordatorio solo (gastoPagado se recalcula en vivo, ver
+// agEntradaManualEnriquecida) y, si era recurrente, genera de una vez el siguiente periodo
+// (marcarGastoPagado -> agSincronizarDesdeGasto).
+function agMarcarRecordatorioPagado(id){
+  var m=getM();
+  var it=agendaArr(m).find(function(x){return x.id===id;});
+  if(!it||!it.gastoId){ closeModal(); return; }
+  var gasto=agBuscarGasto(m,it.gastoId,it.which);
+  if(!gasto){ closeModal(); return; }
+  marcarGastoPagado(gasto,m);
+  save();closeModal();render();toast('Gasto marcado como pagado ✓');
+}
+// Detalle de una entrada "derivada" (gasto de nivel superior marcado "sin pagar" que venció,
+// ver agEntradasDerivadas) — no vive en m.agenda, así que no tiene un "id" propio: se
+// identifica por el gasto + quincena que representa.
+function agAbrirDetalleGastoVencido(gastoId,which){
+  var m=getM();
+  var gasto=agBuscarGasto(m,gastoId,which);
+  if(!gasto) return;
+  openModal('<div class="mtitle">Gasto sin pagar</div>'
+    +'<p style="font-size:14px;color:var(--txt);font-weight:600;margin-bottom:6px">'+esc(nombreGasto(gasto))+'</p>'
+    +'<p style="font-size:12px;color:var(--mut);margin-bottom:16px">'+cop(Math.abs(gasto.presupuesto||0))+' · vencido</p>'
+    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cerrar</button>'
+    +'<button class="bpri" onclick="agMarcarGastoVencidoPagado(\''+gastoId+'\',\''+which+'\')">Marcar como pagado</button></div>');
+}
+function agMarcarGastoVencidoPagado(gastoId,which){
+  var m=getM();
+  var gasto=agBuscarGasto(m,gastoId,which);
+  if(!gasto){ closeModal(); return; }
+  marcarGastoPagado(gasto,m);
+  save();closeModal();render();toast('Gasto marcado como pagado ✓');
 }
 function agConfirmarBorrar(id){
   var m=getM();
