@@ -52,7 +52,19 @@ Set-Content -Path $swPath -Value $swContent -Encoding UTF8 -NoNewline
 
 $indexContent = Get-Content -Raw -Encoding UTF8 $indexPath
 $indexContent = $indexContent -replace 'V [\d.]+ &bull; Powered by Felipe Ocampo', "V $Version &bull; Powered by Felipe Ocampo"
+# manifest.json y el ícono de iOS (apple-touch-icon) no pasan por el service worker cuando el
+# propio sistema operativo revisa si hay un ícono nuevo (Android/iOS los piden directo por red) —
+# sin un ?v= que cambie en cada release, GitHub Pages/el navegador podría seguirlos sirviendo
+# cacheados aunque el PNG ya se haya reemplazado, bloqueando esa revisión desde el día uno.
+$indexContent = $indexContent -replace 'href="manifest\.json(\?v=[\d.]+)?"', "href=`"manifest.json?v=$Version`""
+$indexContent = $indexContent -replace 'href="apple-touch-icon\.png(\?v=[\d.]+)?"', "href=`"apple-touch-icon.png?v=$Version`""
 Set-Content -Path $indexPath -Value $indexContent -Encoding UTF8 -NoNewline
 
-Write-Host "Version actualizada: $currentVersion -> $Version (sw.js + index.html)" -ForegroundColor Green
+$manifestPath = Join-Path $root 'manifest.json'
+$manifestContent = Get-Content -Raw -Encoding UTF8 $manifestPath
+$manifestContent = $manifestContent -replace '"icon-192\.png(\?v=[\d.]+)?"', "`"icon-192.png?v=$Version`""
+$manifestContent = $manifestContent -replace '"icon-512\.png(\?v=[\d.]+)?"', "`"icon-512.png?v=$Version`""
+Set-Content -Path $manifestPath -Value $manifestContent -Encoding UTF8 -NoNewline
+
+Write-Host "Version actualizada: $currentVersion -> $Version (sw.js + index.html + manifest.json)" -ForegroundColor Green
 Write-Host "Ahora haz commit y push de los cambios." -ForegroundColor Yellow
