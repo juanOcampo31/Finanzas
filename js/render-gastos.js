@@ -136,10 +136,18 @@ function renderGastos(gastos,which) {
       var cuotaLbl=g.cuota_actual+'/'+g.cuotas_total;
       if(g.creditoId && creditos[g.creditoId]){
         var crRef=creditos[g.creditoId];
-        var rowRef=calcAmortizacion(crRef).rows[g.numCuota-1];
+        var amortRef=calcAmortizacion(crRef);
+        var rowRef=amortRef.rows[g.numCuota-1];
         if(rowRef){
           var mesesAbrev=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
           cuotaLbl+=' · '+mesesAbrev[new Date(rowRef.fecha+'T12:00:00').getMonth()];
+          // Saldo del crédito: si esta cuota ya se pagó, el saldo DESPUÉS de aplicarla
+          // (rowRef.saldo); si todavía no, el saldo ANTES de esta cuota (el de la cuota
+          // anterior, o el total del crédito si es la primera) — pagarla es lo que lo baja,
+          // así que sin pagar todavía sigue siendo ese. Mismo estilo discreto que el comprobante.
+          var saldoPrevio=g.numCuota>1?(amortRef.rows[g.numCuota-2]?amortRef.rows[g.numCuota-2].saldo:amortRef.total):amortRef.total;
+          var saldoMostrado=g.pagado_flag?rowRef.saldo:saldoPrevio;
+          compBadge+='<span style="font-size:10px;color:var(--mut);margin-left:4px;display:inline-flex;align-items:center;gap:3px;vertical-align:middle">Saldo: '+cop(saldoMostrado)+'</span>';
           if(!g.pagado_flag && !g.sinpagar){
             var diasCuota=diasHasta(rowRef.fecha+'T12:00:00');
             if(diasCuota<0){
