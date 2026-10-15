@@ -84,9 +84,21 @@ function sincronizarCreditoDesdeGasto(gasto,estadoAntes){
 function marcarGastoPagado(g,m,opts){
   opts=opts||{};
   setGastoEstado(g,'pagado');
+  // Si este gasto (o grupo) se había "movido" a Q2 (ver copiarGastoQ2 en gasto-form.js) y se
+  // paga directamente acá en su Q original, la copia de Q2 queda duplicando algo ya resuelto —
+  // se borra sola.
+  if(typeof limpiarCopiaMovidaSiReactiva==='function') limpiarCopiaMovidaSiReactiva(g,m);
   if(g.parentId){
     const allGastos=[...(m.q1_gastos||[]),...(m.q2_gastos||[])];
     const parent=allGastos.find(x=>x.id===g.parentId);
+    // Si el grupo estaba marcado "sin pagar" en bloque y uno de sus subgastos se paga
+    // directamente (ej. desde su propio checkbox en la lista, sin pasar por saveG), el grupo
+    // deja de representar un bloque uniformemente pendiente — se reactiva solo (mismo ajuste
+    // en saveG, gasto-form.js, para cuando el cambio viene de editar el subgasto).
+    if(parent&&parent.sinpagar){
+      setGastoEstado(parent,null);
+      if(typeof limpiarCopiaMovidaSiReactiva==='function') limpiarCopiaMovidaSiReactiva(parent,m);
+    }
     if(parent&&parent.tcCardId){
       if(opts.sinMovimientoTC){
         // Este gasto queda marcado como pagado (para el checklist del grupo) pero SIN su

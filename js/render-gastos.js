@@ -216,16 +216,22 @@ function renderGastos(gastos,which) {
       var addBtn='<div class="g-sub-add" onclick="openGasto(null,\''+which+'\',\''+g.id+'\')">＋ Agregar al grupo</div>';
 
       var deudaRow='';
-      var grpChk=allPaid?'paid':'';
-      var grpTxt=allPaid?icon('check',11):'';
+      // El GRUPO mismo (no sus subgastos) puede marcarse "sin pagar" (ver estadoSectionHtml en
+      // gasto-form.js) — antes esto solo lo excluía de los totales (ver calcTotalGrupoAware) sin
+      // ningún cambio visual en la fila, a diferencia de un gasto suelto "sin pagar" (fondo
+      // ámbar, checkbox con flecha, badge "Sin pagar" junto al nombre). Mismo tratamiento acá.
+      var trasGrupo=!!g.sinpagar;
+      var grpChk=trasGrupo?'nopag':(allPaid?'paid':'');
+      var grpTxt=trasGrupo?icon('arrowRight',11):(allPaid?icon('check',11):'');
+      var grpNopagBadge=trasGrupo?'<span class="nopag-badge">Sin pagar</span>':'';
       // Mostrar lo pagado si hay subgastos pagados
       var pendienteHtml=subsPagados>0
         ?'<div style="font-size:10px;color:var(--grn);margin-top:1px">Pag: '+cop(subsPagados)+'</div>'
         :'';
-      return '<div class="g-group g-drag-item" data-gid="'+g.id+'" onpointerdown="startDragGasto(event,\''+g.id+'\',\''+which+'\')">'
+      return '<div class="g-group g-drag-item'+(trasGrupo?' grow-nopag':'')+'" data-gid="'+g.id+'" onpointerdown="startDragGasto(event,\''+g.id+'\',\''+which+'\')">'
         +'<div class="g-group-head" onclick="toggleGG(\''+g.id+'\',\'gg-'+gi+'\',\'gc-'+gi+'\')">'
         +'<div class="gchk '+grpChk+'" onclick="toggleGrupoPagado(event,\''+g.id+'\',\''+which+'\')">'+grpTxt+'</div>'
-        +'<div class="ginfo"><div class="gname">'+esc(nombreGasto(g))+countBadge+(g.tcLinked?'<span style="display:inline-flex;vertical-align:middle;color:var(--acc);margin-left:5px">'+icon('refresh',11)+'</span>':'')+' </div><div class="gmeta">'+esc(g.metodo||'')+'</div></div>'
+        +'<div class="ginfo"><div class="gname'+(trasGrupo?' np':'')+'">'+esc(nombreGasto(g))+countBadge+(g.tcLinked?'<span style="display:inline-flex;vertical-align:middle;color:var(--acc);margin-left:5px">'+icon('refresh',11)+'</span>':'')+grpNopagBadge+' </div><div class="gmeta">'+esc(g.metodo||'')+'</div></div>'
         +'<div style="text-align:right;display:flex;align-items:center;gap:6px">'
         +'<div><div class="gamt '+(g.tcLinked&&totalGrupo<0?'a':'')+'">'+(g.tcLinked&&totalGrupo<0?'-':'')+cop(Math.abs(totalGrupo))+'</div>'+pendienteHtml+'</div>'
         +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);padding:4px 6px;cursor:pointer;flex-shrink:0;display:flex;align-items:center">'+icon('edit',15)+'</button>'

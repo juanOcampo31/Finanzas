@@ -176,10 +176,17 @@ function openGasto(g,which,parentId,skipFocus){
   // tabla de amortización; para cualquier otro, el presupuesto de ese gasto en esta quincena).
   // El enlace "Ver detalle del crédito" va junto al nombre del gasto (ver nameFieldHtml), no
   // acá — acá solo queda el subtítulo "Cuota N de M".
+  // Para un grupo, "Valor" es el total presupuestado (la suma de sus subgastos, ver
+  // calcTotalGrupoAware) — no es algo que se edite acá (eso vive en "Editar grupo", el monto
+  // base manual o el saldo de tarjeta vinculada), así que ni el número grande ni su subtítulo
+  // aplican en este formulario. Se deja #g-p como input oculto (mismo valor de siempre) para
+  // que saveG() lo siga leyendo tal cual sin tocar el total real del grupo.
   const valorSubtitulo=creditoLigado
     ?('Cuota '+cuotaNumActual+' de '+cuotaTotalActual)
     :'COP · valor de la cuota';
-  const valorBlockHtml='<div style="padding:0 4px 2px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center">'
+  const valorBlockHtml=e.esGrupo
+    ?('<input id="g-p" type="hidden" value="'+moneyInputFmt(valorMostrado)+'">')
+    :('<div style="padding:0 4px 2px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center">'
     +'<div style="display:flex;align-items:baseline;gap:6px;padding-bottom:6px;border-bottom:2px solid var(--acc)">'
     +'<span style="font-size:22px;font-weight:600;color:var(--mut)">$</span>'
     +'<input id="g-p" type="text" inputmode="numeric" value="'+moneyInputFmt(valorMostrado)+'" oninput="maskMoneyInput(this);'
@@ -192,7 +199,7 @@ function openGasto(g,which,parentId,skipFocus){
     +(creditoLigado?'<span id="g-pago-extra-span" style="display:none;color:var(--acc);font-weight:600"></span>':'')
     +(pagadoRealDistinto?(' · <span id="g-pagado-real-line" style="color:var(--acc);font-weight:600">Pagaste '+cop(e.pagado_real)+'</span>'):'')
     +'</div>'
-    +'</div>';
+    +'</div>');
 
   // Forma de pago: fila que abre un picker de pantalla completa (abrirPickerFormaPago) con la
   // lista de formas de pago, en vez de un <select> nativo — más legible y es donde ahora vive
@@ -407,6 +414,39 @@ function saveG(id,which,parentId){
       }
       gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.presupuesto=presupFinal;gasto.pagado_real=real;gasto.metodo=metodo;
       setGastoEstado(gasto,paid?'pagado':(sinpagar?'sinpagar':null));
+      // Marcar el GRUPO mismo como "sin pagar" lo excluye de los totales (ver
+      // calcTotalGrupoAware), pero dejaba sus subgastos tal cual — si alguno seguía "activo"
+      // el grupo mostraba "Sin pagar" sin que nada adentro reflejara lo mismo. Se cascada a los
+      // subgastos que todavía no estén pagados (los ya pagados no se tocan: no hay nada
+      // pendiente que mover). Y al revés: si el grupo se REACTIVA (deja de estar "sin pagar"),
+      // los subgastos que el cascade anterior había dejado "sin pagar" deben volver al mismo
+      // estado del grupo — si no, quedaban colgados en "sin pagar" aunque el grupo ya no lo
+      // estuviera. Los subgastos pagados o editados a mano con otro estado no se tocan en
+      // ningún caso.
+      if(gasto.esGrupo){
+        var estadoGrupoNuevo=gastoEstado(gasto);
+        if(estadoGrupoNuevo==='sinpagar'){
+          list.filter(function(x){return x.parentId===gasto.id && !x.pagado_flag;})
+            .forEach(function(s){ setGastoEstado(s,'sinpagar'); });
+        } else {
+          list.filter(function(x){return x.parentId===gasto.id && x.sinpagar;})
+            .forEach(function(s){ setGastoEstado(s,estadoGrupoNuevo); });
+        }
+      }
+      // Lo inverso: si ESTE gasto es un subgasto que deja de estar "sin pagar" (se reactiva o se
+      // paga), el grupo padre ya no puede seguir marcado como bloque "sin pagar" — se reactiva
+      // solo, igual que su checkbox de "pagado" ya se recalculaba solo al (des)pagar un
+      // subgasto individual (ver buildGastoRowHtml/allPaid en render-gastos.js).
+      if(gasto.parentId && gastoEstado(gasto)!=='sinpagar'){
+        var grupoPadre=list.find(function(x){return x.id===gasto.parentId;});
+        if(grupoPadre && grupoPadre.sinpagar){
+          setGastoEstado(grupoPadre,null);
+          limpiarCopiaMovidaSiReactiva(grupoPadre,m);
+        }
+      }
+      // Si ESTE MISMO gasto (o grupo) es el que se había "movido" a Q2, pagarlo o reactivarlo
+      // acá en Q1 borra esa copia (ver copiarGastoQ2/limpiarCopiaMovidaSiReactiva).
+      limpiarCopiaMovidaSiReactiva(gasto,m);
       gasto.fecha_pago=document.getElementById('g-fp')?.value||gasto.fecha_pago||null;
       gasto.comprobante=document.getElementById('g-cmp')?.value.trim()||gasto.comprobante||null;
       gasto.facturaQR=document.getElementById('g-facturaqr')?.value||gasto.facturaQR||null;
@@ -476,10 +516,12 @@ function convertirEnGrupoDesdeCreacion(wh,pid){
 }
 
 function ofrecerCopiarQ2(g) {
+  const etiqueta=g.esGrupo?'El grupo':'El gasto';
+  const detalleGrupo=g.esGrupo?' (con todos sus gastos asociados)':'';
   openModal('<div class="mtitle">¿Mover a Q2?</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:16px">'
-    +'El gasto <b style="color:var(--txt)">'+esc(nombreGasto(g))+'</b> se marcó como sin pagar.<br>'
-    +'¿Deseas crearlo también en la quincena 2 para recordar que quedó pendiente?</p>'
+    +etiqueta+' <b style="color:var(--txt)">'+esc(nombreGasto(g))+'</b> se marcó como sin pagar.<br>'
+    +'¿Deseas crearlo'+detalleGrupo+' también en la quincena 2 para recordar que quedó pendiente?</p>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal();toast(\'Gasto guardado\')">No, solo Q1</button>'
     +'<button class="bpri" onclick="copiarGastoQ2(\''+g.id+'\')">Sí, agregar a Q2</button>'
@@ -503,7 +545,47 @@ function copiarGastoQ2(id) {
   }
   if(g.mensualidad) copia.mensualidad=g.mensualidad;
   m.q2_gastos.push(copia);
-  save(); closeModal(); render(); toast('Copiado a Q2');
+  // Back-reference al original: si más adelante ESTE gasto (el de Q1) se paga o se reactiva
+  // (deja de estar "sin pagar"), la copia de Q2 ya no tiene razón de ser — ver
+  // limpiarCopiaMovidaSiReactiva(), que usa este id para borrarla sola.
+  g.copiaMovidaId=copia.id;
+  // Un GRUPO marcado "sin pagar" se queda en Q1 tal cual (igual que un gasto suelto), pero la
+  // copia en Q2 debe llevarse también sus subgastos — si no, quedaría un grupo vacío en Q2 sin
+  // nada de lo que realmente se debe pagar, obligando a recrear cada subgasto a mano.
+  if(g.esGrupo){
+    copia.esGrupo=true;
+    if(g.tcCardId) copia.tcCardId=g.tcCardId;
+    const subs=(m.q1_gastos||[]).filter(function(s){return s.parentId===g.id;});
+    subs.forEach(function(s){
+      // "Abono TC" lo vuelve a generar solo syncTCGrupo (más abajo) a partir del saldo real de
+      // la tarjeta en Q2 — copiarlo tal cual duplicaría ese abono con el valor viejo de Q1.
+      if(s.nombre==='Abono TC') return;
+      // Un subgasto que ya estaba PAGADO queda resuelto en Q1 — solo lo pendiente (lo que marcó
+      // el grupo como "sin pagar" al guardarse, ver saveG) debe arrastrarse a Q2.
+      if(s.pagado_flag) return;
+      const subCopia={id:uid(),nombre:s.nombre,catTipoId:s.catTipoId||null,presupuesto:s.presupuesto,metodo:s.metodo,pagado_real:null,estado:null,pagado_flag:false,sinpagar:false,parentId:copia.id};
+      if(s.creditoId){
+        subCopia.creditoId=s.creditoId;
+        subCopia.numCuota=s.numCuota;
+        subCopia.cuotas_total=s.cuotas_total;
+        subCopia.cuota_actual=s.cuota_actual;
+      }
+      m.q2_gastos.push(subCopia);
+    });
+    if(copia.tcCardId && typeof syncTCGrupo==='function') syncTCGrupo(m);
+  }
+  save(); closeModal(); render(); toast(g.esGrupo?'Grupo copiado a Q2':'Copiado a Q2');
+}
+// Si un gasto (o grupo) que se había "movido" a Q2 (ver copiarGastoQ2/g.copiaMovidaId) se paga o
+// se reactiva en el Q ORIGINAL, esa copia en Q2 queda duplicando algo que ya se resolvió donde
+// nació — se elimina sola, junto con sus propios subgastos si era un grupo. Se llama desde
+// cualquier punto que cambie el estado de un gasto fuera de "sin pagar" (saveG, marcarGastoPagado,
+// y la reactivación en cadena de un grupo cuando uno de sus subgastos se reactiva).
+function limpiarCopiaMovidaSiReactiva(g,m){
+  if(!g||!g.copiaMovidaId||gastoEstado(g)==='sinpagar') return;
+  const copiaId=g.copiaMovidaId;
+  m.q2_gastos=(m.q2_gastos||[]).filter(function(x){return x.id!==copiaId && x.parentId!==copiaId;});
+  g.copiaMovidaId=null;
 }
 function delGrupo(id,which){
   showConfirm('¿Eliminar el grupo y todos sus subgastos?',function(){
