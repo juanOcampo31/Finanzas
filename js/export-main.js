@@ -247,6 +247,7 @@ function confirmImport(){
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
+  gOrdenOpen={q1:false,q2:false};
   save();closeModal();render();
   toast('Datos importados correctamente ✓');
   window._importedDb=null;

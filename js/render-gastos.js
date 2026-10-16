@@ -2,13 +2,28 @@
 // Fase 2 de la migración a una arquitectura más modular: separado de render.js (que ahora solo
 // tiene la navegación de meses, el header y el render() principal) — todo lo relacionado con la
 // lista de gastos de una quincena (filtros, orden, grupos) vive acá.
+// "Filtro" (por método) y "Ordenar" son dos pills separados, cada uno con su propio popup
+// anclado (mismo patrón que el orden de Créditos, ver creditos-ui.js) — antes eran un solo botón
+// "Filtrar" que abría un panel con ambos juegos de opciones mezclados en una sola tarjeta. Abrir
+// uno cierra el otro (no tiene sentido ver los dos popups de la misma quincena a la vez).
 function toggleGFilter(which){
   gFilterOpen[which]=!gFilterOpen[which];
+  gOrdenOpen[which]=false;
   render();
 }
-
+function toggleGOrden(which){
+  gOrdenOpen[which]=!gOrdenOpen[which];
+  gFilterOpen[which]=false;
+  render();
+}
+function seleccionarGFiltro(which,f){
+  gFiltro[which]=f;
+  gFilterOpen[which]=false;
+  render();
+}
 function setGSort(which,s){
   gSort[which]=s;
+  gOrdenOpen[which]=false;
   render();
 }
 
@@ -43,15 +58,10 @@ function sortGastos(gastos,which,subMap){
   return arr;
 }
 
-function setGFiltro(which,f){
-  gFiltro[which]=f;
-  render();
-}
-
 // Monto total de un método de pago dentro de una quincena (o el total general si m==='todos')
-// — usado tanto por la pastilla de filtro siempre visible como por el panel expandible. Incluye
-// los subgastos de los grupos (antes solo sumaba gastos sueltos de nivel superior, así que el
-// monto de la pastilla no reflejaba nada de lo que hubiera dentro de un grupo).
+// — se muestra junto a cada opción del popup de Filtro. Incluye los subgastos de los grupos
+// (antes solo sumaba gastos sueltos de nivel superior, así que el monto no reflejaba nada de lo
+// que hubiera dentro de un grupo).
 function montoMetodoFiltro(m,topGastosAll,total,subMap){
   if(m==='todos') return total;
   var directo=topGastosAll.filter(function(g){return !g.esGrupo&&g.metodo===m&&!g.sinpagar;}).reduce(function(a,g){return a+Math.abs(g.presupuesto||0);},0);
@@ -59,11 +69,6 @@ function montoMetodoFiltro(m,topGastosAll,total,subMap){
     return a+(subMap&&subMap[g.id]?subMap[g.id]:[]).filter(function(s){return s.metodo===m&&!s.sinpagar;}).reduce(function(b,s){return b+Math.abs(s.presupuesto||0);},0);
   },0);
   return directo+deSubgastos;
-}
-function pillMetodoBtn(m,which,activeFiltro,mTotal,extraStyle){
-  var active=m===activeFiltro;
-  var label=m==='todos'?'Todos':esc(m);
-  return '<button class="g-pill-'+which+'" data-f="'+esc(m)+'" onclick="setGFiltro(\''+which+'\',\''+escJS(m)+'\')" style="flex-shrink:0;padding:'+extraStyle+';border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#0F172A':'var(--mut)')+';">'+label+(mTotal>0?' <span style="opacity:.7">'+cop(mTotal)+'</span>':'')+'</button>';
 }
 function renderGastos(gastos,which) {
   if(!gastos.length) return '<div class="empty"><div class="eic" style="display:flex;justify-content:center;color:var(--mut)">'+icon('clipboard',36)+'</div><p>Sin gastos. Toca + para agregar.</p></div>';
@@ -287,48 +292,34 @@ function renderGastos(gastos,which) {
   var dispTxt=(disp<0?'-':'')+cop(disp);
   var qLabel=which==='q1'?'1':'2';
 
-  // Filter pills by método — la pastilla siempre visible y la del panel expandido mostraban
-  // exactamente el mismo cálculo de mTotal y casi el mismo botón, copiado dos veces (solo el
-  // padding y el borde scroll-snap cambiaban); ahora ambas usan montoMetodoFiltro/pillMetodoBtn.
-  var pillsHtml='<div style="position:relative"><div style="display:flex;gap:6px;overflow-x:auto;padding:8px 14px 6px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory">'
-    +metodos.map(function(m){
-      return pillMetodoBtn(m,which,activeFiltro,montoMetodoFiltro(m,topGastosAll,total,subMap),'4px 10px;scroll-snap-align:start');
-    }).join('')+'</div></div>';
-
-  // Collapsible filter + sort panel
-  var isOpen=gFilterOpen[which]||false;
+  // "Filtro" (por método) y "Ordenar" son dos popups anclados independientes (ver
+  // stdPillPopupHtml en format-utils.js) — reemplazan el viejo botón único "Filtrar" que abría
+  // un panel con ambos juegos de opciones mezclados.
+  var filtroOpen=gFilterOpen[which]||false;
+  var ordenOpen=gOrdenOpen[which]||false;
   var activeSort=gSort[which]||'orden';
-  var hasBadge=(activeFiltro!=='todos'||activeSort!=='orden');
 
-  var panelHtml='';
-  if(isOpen){
-    var sortOpts=[{k:'orden',lbl:'Orden'},{k:'nombre',lbl:'Nombre'},
-      {k:'monto-desc',lbl:'Mayor $'},{k:'monto-asc',lbl:'Menor $'},{k:'metodo',lbl:'F. Pago'}];
-    var filterPills=metodos.map(function(m){
-      return pillMetodoBtn(m,which,activeFiltro,montoMetodoFiltro(m,topGastosAll,total,subMap),'3px 9px');
-    }).join('');
-    var sortPills=sortOpts.map(function(opt){
-      var isA=opt.k===activeSort;
-      return '<button onclick="setGSort(\''+which+'\',\''+opt.k+'\')" style="flex-shrink:0;padding:3px 9px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;background:'+(isA?'var(--acc)':'var(--surf2)')+';color:'+(isA?'#0F172A':'var(--mut)')+';">'+opt.lbl+'</button>';
-    }).join('');
-    // flex-wrap (no overflow-x con scroll oculto): así se ven TODAS las opciones de una vez,
-    // sin depender de un gesto lateral que no era descubrible (no había ninguna pista visual
-    // de que se podía deslizar, así que las opciones que no cabían quedaban invisibles).
-    panelHtml='<div style="margin:0 14px 10px;padding:10px 12px;background:var(--bg-2);border:1px solid var(--brd2);border-radius:14px">'
-      +'<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Filtrar</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:5px">'+filterPills+'</div></div>'
-      +'<div><div style="font-size:10px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Ordenar</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:5px">'+sortPills+'</div></div>'
-      +'</div>';
-  }
-  var sortPillsHtml=panelHtml;
+  var filtroOptsHtml=metodos.map(function(m){
+    var lbl=(m==='todos'?'Todos':m)+' · '+cop(montoMetodoFiltro(m,topGastosAll,total,subMap));
+    return stdPillPopupOptHtml(lbl,m===activeFiltro,"seleccionarGFiltro('"+which+"','"+escJS(m)+"')",false);
+  }).join('');
+  var filtroBtnHtml=stdPillPopupHtml(
+    activeFiltro==='todos'?'Filtro':('Filtro: '+activeFiltro),
+    filtroOpen,"toggleGFilter('"+which+"')",filtroOptsHtml
+  );
 
-  var filterBtnHtml='<button onclick="toggleGFilter(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px;flex-shrink:0">'
-    +(hasBadge?'<span style="width:5px;height:5px;border-radius:50%;background:var(--acc);display:inline-block"></span>':'')
-    +'Filtrar '+icon(isOpen?'chevronUp':'chevronDown',10)
-    +'</button>';
+  var sortOpts=[{k:'orden',lbl:'Orden'},{k:'nombre',lbl:'Nombre'},
+    {k:'monto-desc',lbl:'Mayor $'},{k:'monto-asc',lbl:'Menor $'},{k:'metodo',lbl:'F. Pago'}];
+  var ordenOptsHtml=sortOpts.map(function(opt){
+    return stdPillPopupOptHtml(opt.lbl,opt.k===activeSort,"setGSort('"+which+"','"+opt.k+"')",false);
+  }).join('');
+  var ordenBtnHtml=stdPillPopupHtml(
+    'Ordenar: '+sortOpts.find(function(o){return o.k===activeSort;}).lbl,
+    ordenOpen,"toggleGOrden('"+which+"')",ordenOptsHtml
+  );
+
   // Enlace directo al balance tipo "cuenta T" de esta quincena (ver js/reportes.js) — mismo
-  // estilo de píldora que "Filtrar", para no competir visualmente con el encabezado.
+  // estilo de píldora que las de arriba, para no competir visualmente con el encabezado.
   var balanceBtnHtml='<button onclick="openReportes(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px;flex-shrink:0">'
     +icon('barChart',10)+'Balance'
     +'</button>';
@@ -336,10 +327,13 @@ function renderGastos(gastos,which) {
     ?'<div class="glist-note-row has-note"><span class="glist-note-txt">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</span></div>'
     :'';
 
-  return '<div class="glist-card">'
+  // overflow:visible (en vez del overflow:hidden normal de .glist-card): si no, los popups de
+  // Filtro/Ordenar quedarían cortados por las esquinas redondeadas de la tarjeta — ver la regla
+  // ".glist-card .grow:last-child" en style.css, que compensa el recorte perdido en la última fila.
+  return '<div class="glist-card" style="overflow:visible">'
     +'<div class="glist-head">'
     +'<span class="glist-title"><span style="color:var(--acc)">Gastos Q'+qLabel+'</span> · '+totalIndividual+'</span>'
-    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+balanceBtnHtml+filterBtnHtml+'</span>'
+    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+balanceBtnHtml+filtroBtnHtml+ordenBtnHtml+'</span>'
     +'</div>'
     +'<div class="glist-totals">'
     +'<div class="glist-tot"><div class="glist-tot-lbl">GASTOS Q'+qLabel+'</div><div class="glist-tot-val" style="color:var(--txt)">'+cop(total)+'</div></div>'
@@ -350,7 +344,6 @@ function renderGastos(gastos,which) {
     +'</div>'
     +'<div class="pw"><div class="pb '+bc+'" style="width:'+pct+'%"></div></div>'
     +noteFilterRow
-    +sortPillsHtml
     +'<div style="height:1px;background:var(--brd);margin:0 0 4px"></div>'
     +'<div id="glist-rows-'+which+'">'+rows+'</div>'
     +'</div>';

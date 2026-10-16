@@ -346,6 +346,7 @@ function confirmCreateMonth(){
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
+  gOrdenOpen={q1:false,q2:false};
   window._draftMonth=null;
   window._draftKey=null;
   closeModal();render();toast(nm.nombre+' creado');

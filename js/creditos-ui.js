@@ -38,7 +38,20 @@ function renderCreditos(m){
     return {id:id,cr:cr,amort:amort,pagadas:pagadas,saldoActual:saldoActual,proximaIdx:proximaIdx,activo:activo,pct:pct,cuotasFaltantes:cuotasFaltantes,cuotasDelMes:cuotasDelMes,color:ringColors[i%ringColors.length]};
   });
 
-  var infosOrdenados=infos.slice().sort(function(a,b){
+  // La lista que se MUESTRA respeta los dos pills (credFiltro/credListaOrden) — el resto de
+  // este cálculo (saldoTotal, activosCount, próximo pago...) sigue usando `infos` completo, sin
+  // filtrar, porque esos totales del hero no dependen de qué se vea en la lista.
+  var infosVisibles=infos.filter(function(x){
+    var estadoOk=x.activo?credFiltro.activos:credFiltro.pagados;
+    var tipoOk=x.cr.esMensualidad?credFiltro.mensualidades:credFiltro.creditos;
+    return estadoOk&&tipoOk;
+  });
+  var infosOrdenados=infosVisibles.slice().sort(function(a,b){
+    if(credListaOrden==='nombre') return a.cr.nombre.localeCompare(b.cr.nombre);
+    if(credListaOrden==='saldo-desc') return b.saldoActual-a.saldoActual;
+    if(credListaOrden==='saldo-asc') return a.saldoActual-b.saldoActual;
+    if(credListaOrden==='pct-desc') return b.pct-a.pct;
+    if(credListaOrden==='pct-asc') return a.pct-b.pct;
     if(a.activo!==b.activo) return a.activo?-1:1;
     if(!a.activo) return 0;
     return a.cuotasFaltantes-b.cuotasFaltantes;
@@ -124,11 +137,29 @@ function renderCreditos(m){
       +'</div>'
       +'</div>'
       +'</div>';
-  }).join('');
+  }).join('') || '<div style="padding:18px 14px;text-align:center;font-size:12px;color:var(--mut)">Ningún crédito coincide con el filtro actual.</div>';
 
+  // Mismo popup anclado para los dos (ver stdPillPopupHtml/stdPillPopupOptHtml, format-utils.js,
+  // compartido con "Filtro"/"Ordenar" de Gastos): Filtro son 4 checkboxes independientes (qué
+  // créditos se muestran), Ordenar es selección única (en qué orden).
+  var filtroOptsHtml=CRED_FILTRO_OPTS.map(function(o){
+    return stdPillPopupOptHtml(o.label,credFiltro[o.key],"toggleCredFiltroOpt('"+o.key+"')",true);
+  }).join('');
+  var filtroPillHtml=stdPillPopupHtml('Filtro',credFiltroDropdownOpen,'toggleCredFiltroDropdown()',filtroOptsHtml);
+
+  var ordenOptsHtml=CRED_ORDEN_OPTS.map(function(o){
+    return stdPillPopupOptHtml(o.label,o.key===credListaOrden,"seleccionarCredOrden('"+o.key+"')",false);
+  }).join('');
+  var ordenPillHtml=stdPillPopupHtml('Ordenar: '+credOrdenLabel(credListaOrden),credOrdenDropdownOpen,'toggleCredOrdenDropdown()',ordenOptsHtml);
+
+  // overflow:visible (en vez del overflow:hidden normal de .glist-card, que acá no hace falta:
+  // cada tarjeta de crédito ya trae su propio border-radius + margen, no depende del recorte del
+  // padre): si no, el popup de orden quedaría cortado por las esquinas redondeadas de la tarjeta.
   return '<div class="home-view">'+heroHtml
-    +'<div class="glist-card">'
-    +'<div class="glist-head"><span class="glist-title">Mis créditos</span><span class="glist-sub">toca para ver la amortización</span></div>'
+    +'<div class="glist-card" style="overflow:visible">'
+    +'<div class="glist-head"><span class="glist-title">Mis créditos</span>'
+    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px">'+filtroPillHtml+ordenPillHtml+'</span>'
+    +'</div>'
     +'<div class="cred-list">'+listHtml+'</div>'
     +'</div>'
     +'</div>';
@@ -574,6 +605,40 @@ function confirmImportCreditoPlan(){
 }
 
 let creditoOcultarPagadas=true;
+// Pills de la lista "Mis créditos" (ver renderCreditos): a diferencia de creditoOcultarPagadas
+// (que oculta CUOTAS ya pagadas dentro del detalle de UN crédito), estos controlan la lista
+// completa — qué créditos se muestran (Filtro) y en qué orden (Ordenar). Ambos usan el mismo
+// popup anclado (stdPillPopupHtml/stdPillPopupOptHtml, format-utils.js), compartido con
+// Gastos (ver render-gastos.js) — abrir uno cierra el otro.
+let credFiltro={activos:true,pagados:true,mensualidades:true,creditos:true}; // checkboxes independientes
+let credListaOrden='activo';       // 'activo' (de siempre) | 'nombre' | 'saldo-desc' | 'saldo-asc' | 'pct-desc' | 'pct-asc'
+let credFiltroDropdownOpen=false;
+let credOrdenDropdownOpen=false;
+const CRED_FILTRO_OPTS=[
+  {key:'activos',label:'Mostrar activos'},
+  {key:'pagados',label:'Mostrar pagados'},
+  {key:'mensualidades',label:'Mensualidades'},
+  {key:'creditos',label:'Créditos'}
+];
+const CRED_ORDEN_OPTS=[
+  {key:'activo',label:'Activos primero'},
+  {key:'nombre',label:'Nombre A-Z'},
+  {key:'saldo-desc',label:'Mayor saldo'},
+  {key:'saldo-asc',label:'Menor saldo'},
+  {key:'pct-desc',label:'Mayor % pagado'},
+  {key:'pct-asc',label:'Menor % pagado'}
+];
+function credOrdenLabel(key){
+  var opt=CRED_ORDEN_OPTS.find(function(o){return o.key===key;});
+  return opt?opt.label:CRED_ORDEN_OPTS[0].label;
+}
+function toggleCredFiltroDropdown(){ credFiltroDropdownOpen=!credFiltroDropdownOpen; credOrdenDropdownOpen=false; render(); }
+function toggleCredOrdenDropdown(){ credOrdenDropdownOpen=!credOrdenDropdownOpen; credFiltroDropdownOpen=false; render(); }
+// A diferencia de Ordenar (selección única, se cierra solo al elegir), Filtro es de checkboxes
+// independientes — tocar una opción la prende/apaga sin cerrar el popup, para poder marcar
+// varias seguidas (ej. "Mostrar pagados" + "Mensualidades") sin reabrirlo cada vez.
+function toggleCredFiltroOpt(key){ credFiltro[key]=!credFiltro[key]; render(); }
+function seleccionarCredOrden(key){ credListaOrden=key; credOrdenDropdownOpen=false; render(); }
 let _pendingEditCredito=null; // {id, apply()} — cambios de saveEditCredito pendientes de confirmar cuando hay abonos registrados
 let _pendingEditCreditoCuotaManual=null; // {id, continuar(limpiarCuotaManual)} — ver aviso de "cuota manual fija" en saveEditCredito
 // true cuando se entró al detalle del crédito desde el modal "Créditos" (openCreditosMenu,

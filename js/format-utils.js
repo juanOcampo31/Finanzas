@@ -57,6 +57,42 @@ function icon(name, size){
 function btnIcon(name, size){
   return '<span style="display:inline-flex;vertical-align:middle;position:relative;top:-1px;margin-right:6px">'+icon(name,size||14)+'</span>';
 }
+// ── Píldora con popup anclado (Filtro/Ordenar) ──────────────────────────────────
+// Patrón compartido entre "Filtro"/"Ordenar" de Gastos (render-gastos.js) y Créditos
+// (creditos-ui.js): una píldora chica que, al tocarla, despliega una lista de opciones justo
+// debajo (no un panel que empuje el resto del contenido como el viejo "Filtrar" de Gastos). Un
+// fondo transparente a pantalla completa cierra el popup si se toca fuera de él. El contenedor
+// que use esto necesita `overflow:visible` (en vez del overflow:hidden normal de .glist-card),
+// o el popup queda cortado por las esquinas redondeadas — ver la regla CSS de
+// ".glist-card .grow:last-child" en style.css para compensar ese recorte en la última fila.
+function stdPillPopupHtml(label,isOpen,toggleOnclick,optionsHtml){
+  var dropdown=isOpen
+    ?('<div onclick="'+toggleOnclick+'" style="position:fixed;inset:0;z-index:40"></div>'
+      +'<div style="position:absolute;top:28px;right:0;z-index:41;background:var(--surf2);border:1px solid var(--brd2);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);min-width:180px;max-height:60vh;overflow-y:auto">'
+      +optionsHtml
+      +'</div>')
+    :'';
+  return '<div style="position:relative">'
+    +'<button onclick="event.stopPropagation();'+toggleOnclick+'" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px;flex-shrink:0;white-space:nowrap">'
+    +esc(label)+icon(isOpen?'chevronUp':'chevronDown',10)
+    +'</button>'
+    +dropdown
+    +'</div>';
+}
+// Una fila del popup — modo "radio" (seleccionar UNA opción, con check) o "checkbox" (varias
+// independientes, con casilla cuadrada) según `checkbox`.
+function stdPillPopupOptHtml(label,active,onclickAttr,checkbox){
+  var color=active?'var(--acc)':'var(--txt)';
+  var mark;
+  if(checkbox){
+    mark=active
+      ?'<span style="width:14px;height:14px;border-radius:4px;background:var(--acc);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#0F172A">'+icon('check',10)+'</span>'
+      :'<span style="width:14px;height:14px;border-radius:4px;border:1.5px solid var(--brd2);flex-shrink:0"></span>';
+  } else {
+    mark=active?icon('check',12):'<span style="width:12px;display:inline-block;flex-shrink:0"></span>';
+  }
+  return '<div onclick="'+onclickAttr+'" style="padding:10px 14px;font-size:12px;white-space:nowrap;cursor:pointer;color:'+color+';font-weight:'+(active?'700':'500')+';display:flex;align-items:center;gap:8px">'+mark+esc(label)+'</div>';
+}
 // ── Estándar visual compartido de los formularios "de un solo ítem" (Gasto, Ingreso,
 // Recordatorio, Tarjeta, Crédito, Nómina): encabezado con cerrar (X) a la izquierda + título
 // centrado + eliminar (ícono, opcional) a la derecha; filas de detalle en una sola línea

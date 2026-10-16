@@ -355,10 +355,10 @@ function render() {
     tcBreakdownEl.style.display='none';
   }
 
-  // La barra inferior solo muestra 4 botones (Inicio/Nómina/Agenda/Más) — Ingresos, Tarjeta y
-  // Créditos viven detrás de "Más" (ver openMasMenu, ui-core.js), así que ya no hay una
-  // correspondencia 1:1 entre posición del botón y curTab: cada botón declara en data-tabs
-  // qué valores de curTab lo dejan "activo" (el de "Más" lista varios, separados por coma).
+  // La barra inferior es deslizable (ver .tabs en style.css) y cada sección tiene su propio
+  // botón — Reportes es la excepción: abre un modal (openReportes), no tiene un curTab propio,
+  // así que su data-tabs="-1" nunca calza con ningún valor real de curTab (0-5) y nunca queda
+  // "activo". Los demás botones declaran en data-tabs qué valor de curTab los deja activos.
   document.querySelectorAll('.tab').forEach(function(t){
     var tabs=(t.dataset.tabs||'').split(',').map(Number);
     t.classList.toggle('active',tabs.indexOf(curTab)>=0);

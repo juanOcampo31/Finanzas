@@ -524,6 +524,7 @@ function goToMonth(k){
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
+  gOrdenOpen={q1:false,q2:false};
   curTC=null;
   agDiaSel=null; // el día seleccionado en Agenda era de OTRO mes, ya no aplica al cambiar de mes
   closeModal();render();
@@ -573,6 +574,7 @@ function deleteMonth(key){
   gFiltro={q1:'todos',q2:'todos'};
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
+  gOrdenOpen={q1:false,q2:false};
   save();closeModal();render();toast('Mes eliminado');
 }
 

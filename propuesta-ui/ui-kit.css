@@ -1,0 +1,224 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   UI KIT — Finanzas Personales
+   Una sola fuente de verdad visual. Toda pantalla se arma con estas clases (vía los
+   helpers de js/ui-kit.js); ninguna función de render debería escribir style="".
+   Cambiar un token o una clase aquí cambia TODAS las pantallas que lo usan.
+   Cargar DESPUÉS de style.css mientras dure la migración.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. TOKENS ─────────────────────────────────────────────────────────────── */
+:root{
+  /* Superficies (de más profunda a más elevada) */
+  --bg-2:#0B1322;          /* fondo de tabs / fondo de página Inicio            */
+  --bg:#0F172A;            /* fondo base de página e inputs                      */
+  --surf:#1E293B;          /* card, sheet                                        */
+  --surf2:#253347;         /* card elevada, hover/active de fila                 */
+  --surf3:#2E3E56;         /* panel dentro de sheet (antes rgba(0,0,0,.15) etc.) */
+  --brd:rgba(148,163,184,.12);
+  --brd2:rgba(148,163,184,.22);
+
+  /* Texto */
+  --txt:#F1F5F9;
+  --mut:#94A3B8;           /* secundario                                          */
+  --mut-2:#6B7C96;         /* terciario (reemplaza #6B7C96 / #4B5B75 / #64748B)   */
+
+  /* Acento + semánticos (fg / fondo suave) */
+  --acc:#22D3EE;  --acc-d:rgba(34,211,238,.12);  --on-acc:#052B33; /* texto sobre acento: unifica #0F172A/#06202B/#04222b/#052B33 */
+  --grn:#34D399;  --grn-d:rgba(52,211,153,.12);
+  --red:#F87171;  --red-d:rgba(248,113,113,.12); --on-red:#2A0A0A;
+  --amb:#FBBF24;  --amb-d:rgba(251,191,36,.12);
+  --pur:#A78BFA;  --pur-d:rgba(167,139,250,.12);
+
+  /* Radios: 4 pasos y nada más (hoy conviven 16 valores) */
+  --r-xs:6px;    /* badge, chip pequeño                                          */
+  --r-sm:10px;   /* input, botón, icon button, chip                              */
+  --r-md:14px;   /* card, panel                                                  */
+  --r-lg:20px;   /* sheet, hero                                                  */
+  --r-pill:999px;
+  --r:var(--r-md); --r2:var(--r-sm); /* alias para no romper style.css actual   */
+
+  /* Espaciado (múltiplos de 4) */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px;
+
+  /* Tipografía: 7 tamaños, mínimo 11px (hoy hay 20 tamaños, desde 6px) */
+  --fs-xs:11px;   /* labels en mayúscula, meta, badges                           */
+  --fs-sm:12.5px; /* meta secundaria, chips                                      */
+  --fs-md:14px;   /* cuerpo, filas de lista                                      */
+  --fs-lg:16px;   /* título de sheet / de card                                   */
+  --fs-xl:20px;   /* título de pestaña, monto de tile                            */
+  --fs-2xl:28px;  /* monto hero                                                  */
+  --fs-3xl:38px;  /* input de monto en formularios                               */
+
+  --tap:44px;     /* área táctil mínima                                          */
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+
+/* ── 2. TIPOGRAFÍA UTILITARIA ──────────────────────────────────────────────── */
+.t-eyebrow{font-size:var(--fs-xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.t-meta{font-size:var(--fs-sm);font-weight:600;color:var(--mut)}
+.t-num{font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.t-pos{color:var(--grn)} .t-neg{color:var(--red)} .t-warn{color:var(--amb)} .t-acc{color:var(--acc)} .t-mut{color:var(--mut)}
+
+/* ── 3. PLANTILLA DE PESTAÑA (ui.page) ─────────────────────────────────────── */
+.ui-page{display:flex;flex-direction:column;gap:var(--s3);padding-bottom:96px}
+.ui-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);padding:var(--s1) 2px 0}
+.ui-page-title{font-size:var(--fs-xl);font-weight:800;letter-spacing:-.02em}
+.ui-page-sub{font-size:var(--fs-sm);font-weight:600;color:var(--mut);margin-top:2px}
+
+/* ── 4. CARD + SECCIÓN (ui.card / ui.section) ──────────────────────────────── */
+.ui-card{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r-md);overflow:hidden}
+.ui-card--raised{background:var(--surf2);border-color:var(--brd2)}
+.ui-card-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);padding:var(--s3) var(--s4) var(--s2)}
+.ui-card-title{font-size:var(--fs-md);font-weight:800}
+.ui-card-body{padding:0 var(--s4) var(--s4)}
+.ui-sec-head{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4) var(--s2);border-top:1px solid var(--brd)}
+.ui-sec-head:first-child{border-top:none}
+.ui-sec-title{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.ui-sec-val{font-size:var(--fs-md);font-weight:800}
+.ui-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:currentColor}
+.ui-card-add{display:flex;align-items:center;justify-content:center;gap:6px;min-height:var(--tap);border-top:1px dashed var(--brd2);color:var(--acc);font-size:var(--fs-sm);font-weight:800;cursor:pointer}
+.ui-card-add:active{background:var(--surf2)}
+
+/* ── 5. HERO DE MONTO (ui.hero) ────────────────────────────────────────────── */
+.ui-hero{padding:var(--s4)}
+.ui-hero-top{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2)}
+.ui-hero-val{font-size:var(--fs-2xl);font-weight:800;letter-spacing:-.03em;line-height:1.1;margin-top:var(--s1);font-variant-numeric:tabular-nums}
+.ui-hero-val .cur{font-size:.55em;font-weight:700;color:var(--mut);margin-right:2px}
+.ui-hero-sub{font-size:var(--fs-sm);font-weight:600;color:var(--mut);margin-top:2px}
+
+/* ── 6. STAT TILES (ui.stats / ui.tile) ────────────────────────────────────── */
+.ui-stats{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:var(--s2)}
+.ui-stats--inline{gap:0;border-top:1px solid var(--brd);padding:var(--s3) var(--s4)}
+.ui-stats--inline .ui-tile{background:none;border:none;padding:0 var(--s2)}
+.ui-stats--inline .ui-tile+.ui-tile{border-left:1px solid var(--brd)}
+.ui-tile{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r-md);padding:var(--s3);min-width:0;text-align:left}
+.ui-tile.is-selectable{cursor:pointer;transition:border-color .15s,background .15s}
+.ui-tile.is-on{border-color:var(--acc);background:linear-gradient(180deg,var(--acc-d),transparent 70%)}
+.ui-tile-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ui-tile-val{font-size:var(--fs-lg);font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ui-tile-val--lg{font-size:var(--fs-xl)}
+.ui-tile-sub{font-size:var(--fs-xs);font-weight:600;color:var(--mut);margin-top:var(--s1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── 7. FILA DE LISTA (ui.row) — reemplaza .grow .nom-row .tcrow .cal-event
+        stdFormRowHtml, filas de menú, pickers, catálogos, cuotas ─────────────── */
+.ui-row{display:flex;align-items:center;gap:var(--s3);min-height:52px;padding:var(--s2) var(--s4);border-top:1px solid var(--brd);cursor:pointer;-webkit-user-select:none;user-select:none}
+.ui-row:first-child{border-top:none}
+.ui-row:active,.ui-row.is-pressed{background:var(--surf2)}
+.ui-row--static{cursor:default}.ui-row--static:active{background:none}
+.ui-row--dense{min-height:var(--tap);padding-block:6px}
+.ui-row--nested{padding-left:52px;background:rgba(0,0,0,.12)}
+.ui-row-lead{flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.ui-row-main{flex:1;min-width:0}
+.ui-row-title{display:flex;align-items:center;gap:6px;font-size:var(--fs-md);font-weight:700;color:var(--txt);min-width:0}
+.ui-row-title>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ui-row-meta{font-size:var(--fs-sm);font-weight:600;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ui-row-end{flex-shrink:0;text-align:right}
+.ui-row-amt{font-size:var(--fs-md);font-weight:800;font-variant-numeric:tabular-nums}
+.ui-row-amt-sub{font-size:var(--fs-xs);font-weight:600;color:var(--mut);margin-top:2px}
+.ui-row-chev{color:var(--mut-2);display:flex;flex-shrink:0}
+.ui-row.is-done .ui-row-title{color:var(--mut)}
+.ui-row.is-today{background:var(--red-d)}
+.ui-row.is-warn{background:var(--amb-d)}
+
+/* Leading: icono en caja y check */
+.ui-ico{width:36px;height:36px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;background:var(--acc-d);color:var(--acc)}
+.ui-ico--grn{background:var(--grn-d);color:var(--grn)} .ui-ico--red{background:var(--red-d);color:var(--red)}
+.ui-ico--amb{background:var(--amb-d);color:var(--amb)} .ui-ico--pur{background:var(--pur-d);color:var(--pur)}
+.ui-ico--neutral{background:var(--surf3);color:var(--mut)}
+.ui-check{width:var(--tap);height:var(--tap);margin:-10px -8px -10px -12px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer}
+.ui-check i{width:24px;height:24px;border-radius:50%;border:2px solid var(--brd2);display:flex;align-items:center;justify-content:center;color:var(--on-acc);transition:transform .15s,background-color .15s,border-color .15s}
+.ui-check.is-on i{background:var(--grn);border-color:var(--grn)}
+.ui-check.is-warn i{border-color:var(--amb);color:var(--amb)}
+.ui-check:active i{transform:scale(.88)}
+
+/* ── 8. BADGE / CHIP / SEGMENTED ───────────────────────────────────────────── */
+.ui-badge{display:inline-flex;align-items:center;gap:3px;font-size:var(--fs-xs);font-weight:800;line-height:1;padding:4px 7px;border-radius:var(--r-xs);background:var(--surf3);color:var(--mut);white-space:nowrap;flex-shrink:0}
+.ui-badge--acc{background:var(--acc-d);color:var(--acc)} .ui-badge--grn{background:var(--grn-d);color:var(--grn)}
+.ui-badge--red{background:var(--red-d);color:var(--red)} .ui-badge--amb{background:var(--amb-d);color:var(--amb)}
+.ui-badge--pur{background:var(--pur-d);color:var(--pur)}
+
+.ui-chips{display:flex;gap:var(--s2);overflow-x:auto;scrollbar-width:none;padding-block:2px}
+.ui-chips::-webkit-scrollbar{display:none}
+.ui-chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--brd2);background:none;color:var(--mut);font-size:var(--fs-sm);font-weight:700;white-space:nowrap;cursor:pointer;flex-shrink:0}
+.ui-chip.is-on{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.ui-chip:active{transform:scale(.96)}
+
+/* Segmented NEUTRO: el seleccionado usa acento. Nunca rojo/verde (eso es semántica de dinero) */
+.ui-seg{display:grid;grid-auto-columns:1fr;grid-auto-flow:column;gap:4px;padding:4px;background:var(--bg);border:1px solid var(--brd);border-radius:var(--r-sm)}
+.ui-seg button{min-height:36px;border:none;border-radius:7px;background:none;color:var(--mut);font-size:var(--fs-sm);font-weight:800;cursor:pointer}
+.ui-seg button.is-on{background:var(--surf2);color:var(--txt);box-shadow:inset 0 0 0 1px var(--brd2)}
+/* Variante semántica SOLO para Compra/Abono, Resta/Suma */
+.ui-seg--money button.is-on[data-tone=neg]{background:var(--red-d);color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}
+.ui-seg--money button.is-on[data-tone=pos]{background:var(--grn-d);color:var(--grn);box-shadow:inset 0 0 0 1px var(--grn)}
+
+/* Switch (reemplaza los 3 switches inline y los checkbox nativos) */
+.ui-switch{position:relative;width:44px;height:26px;flex-shrink:0;border-radius:var(--r-pill);background:var(--surf3);border:none;cursor:pointer;transition:background .15s}
+.ui-switch::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--txt);transition:transform .18s var(--ease)}
+.ui-switch.is-on{background:var(--acc)}
+.ui-switch.is-on::after{transform:translateX(18px);background:var(--on-acc)}
+
+/* ── 9. BOTONES ─────────────────────────────────────────────────────────────── */
+.ui-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);min-height:var(--tap);padding:0 var(--s4);border-radius:var(--r-sm);border:1px solid transparent;font-size:var(--fs-md);font-weight:800;cursor:pointer;transition:transform .12s,opacity .12s}
+.ui-btn:active{transform:scale(.97)}
+.ui-btn:disabled{opacity:.4;pointer-events:none}
+.ui-btn--block{width:100%}
+.ui-btn--primary{background:var(--acc);color:var(--on-acc)}
+.ui-btn--secondary{background:var(--surf2);border-color:var(--brd2);color:var(--txt)}
+.ui-btn--ghost{background:none;color:var(--mut)}
+.ui-btn--danger{background:var(--red);color:var(--on-red)}
+.ui-btn--danger-soft{background:var(--red-d);border-color:rgba(248,113,113,.35);color:var(--red)}
+.ui-btn--sm{min-height:36px;padding:0 var(--s3);font-size:var(--fs-sm)}
+.ui-iconbtn{width:var(--tap);height:var(--tap);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-sm);border:none;background:none;color:var(--mut);cursor:pointer}
+.ui-iconbtn:active{background:var(--surf2)}
+.ui-iconbtn--danger{color:var(--red)}
+.ui-link{display:inline-flex;align-items:center;gap:4px;min-height:36px;background:none;border:none;color:var(--acc);font-size:var(--fs-sm);font-weight:800;cursor:pointer;padding:0}
+
+/* ── 10. SHEET (modal inferior) — plantilla única para formularios, confirmaciones,
+         pickers y listas de acciones ─────────────────────────────────────────── */
+.ui-sheet{display:flex;flex-direction:column;gap:var(--s3)}
+.ui-sheet-head{display:grid;grid-template-columns:var(--tap) 1fr var(--tap);align-items:center;margin:-6px -8px 0}
+.ui-sheet-title{text-align:center;font-size:var(--fs-lg);font-weight:800;text-wrap:balance}
+.ui-sheet-title--left{text-align:left;grid-column:1 / 3;padding-left:8px}
+.ui-sheet-lead{font-size:var(--fs-md);color:var(--mut);line-height:1.5;text-align:center;text-wrap:pretty}
+.ui-sheet-foot{display:flex;flex-direction:column;gap:var(--s1);margin-top:var(--s1)}
+.ui-sheet-foot--split{display:grid;grid-template-columns:1fr 2fr;gap:var(--s2)}
+
+/* Campo único (reemplaza .field + stdFormDateFieldHtml + inputs de Agenda/Info general) */
+.ui-field{display:flex;flex-direction:column;gap:6px}
+.ui-field>label{font-size:var(--fs-xs);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
+.ui-input{width:100%;min-height:var(--tap);padding:0 var(--s3);background:var(--bg);border:1px solid var(--brd2);border-radius:var(--r-sm);color:var(--txt);font-size:15px;font-weight:700;outline:none;font-family:inherit}
+.ui-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-d)}
+.ui-field-hint{font-size:var(--fs-xs);color:var(--mut)}
+.ui-grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+
+/* Input de monto grande */
+.ui-amount{display:flex;flex-direction:column;align-items:center;gap:var(--s1);padding:var(--s2) 0 var(--s1)}
+.ui-amount-box{display:flex;align-items:baseline;gap:6px;padding-bottom:6px;border-bottom:2px solid var(--amount-acc,var(--acc))}
+.ui-amount-box span{font-size:22px;font-weight:600;color:var(--mut)}
+.ui-amount-box input{width:200px;background:none;border:none;outline:none;text-align:center;color:var(--txt);font-family:inherit;font-size:var(--fs-3xl);font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;padding:0}
+
+/* Callout info/warn/danger (reemplaza avisos inline ámbar/rojo) */
+.ui-callout{display:flex;gap:var(--s2);align-items:flex-start;padding:var(--s3);border-radius:var(--r-sm);font-size:var(--fs-sm);font-weight:600;line-height:1.45;background:var(--acc-d);color:var(--txt)}
+.ui-callout svg{flex-shrink:0;margin-top:1px;color:var(--acc)}
+.ui-callout--warn{background:var(--amb-d)} .ui-callout--warn svg{color:var(--amb)}
+.ui-callout--danger{background:var(--red-d)} .ui-callout--danger svg{color:var(--red)}
+
+/* Panel inset (desglose de abonos, diff de backup, detalle dentro de sheet) */
+.ui-inset{background:var(--surf3);border-radius:var(--r-sm);padding:var(--s2) var(--s3)}
+.ui-kv{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);min-height:32px;font-size:var(--fs-sm)}
+.ui-kv>span:first-child{color:var(--mut);font-weight:600}
+.ui-kv>span:last-child{font-weight:800;font-variant-numeric:tabular-nums}
+
+/* ── 11. PROGRESO, ANILLO, EMPTY ───────────────────────────────────────────── */
+.ui-progress{height:6px;border-radius:var(--r-pill);background:var(--bg);overflow:hidden;display:flex}
+.ui-progress>i{display:block;height:100%;background:var(--acc);transition:width .3s var(--ease)}
+.ui-progress>i.grn{background:var(--grn)} .ui-progress>i.red{background:var(--red)} .ui-progress>i.amb{background:var(--amb)}
+.ui-ring{--p:0;--c:var(--acc);width:60px;height:60px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--surf3) 0)}
+.ui-ring>div{width:48px;height:48px;border-radius:50%;background:var(--surf);display:grid;place-items:center;text-align:center;font-size:var(--fs-sm);font-weight:800;line-height:1.1}
+.ui-ring small{display:block;font-size:var(--fs-xs);color:var(--mut);font-weight:700}
+.ui-empty{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s6) var(--s4);text-align:center;color:var(--mut)}
+.ui-empty .ui-ico{width:48px;height:48px;border-radius:var(--r-md)}
+.ui-empty-title{font-size:var(--fs-md);font-weight:800;color:var(--txt)}
+.ui-empty-text{font-size:var(--fs-sm);line-height:1.5;max-width:30ch}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
