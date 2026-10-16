@@ -177,24 +177,28 @@ function renderGastos(gastos,which) {
     var chkCls=sp?'paid':st?'nopag':(badges.hoyFlag?'hoy':'');
     var nameCls=sp?'pd':st?'np':'';
     var amtCls=sp?'pa':'';
-    var nopagBadge=st?'<span class="nopag-badge">Sin pagar</span>':'';
-    var subMeta=sp?'pagado · '+esc(s.metodo||''):(esc(s.metodo||'')+(badges.hoyFlag?' · <span style="color:var(--red);font-weight:700">hoy</span>':''));
+    // La forma de pago ya no va acá debajo del nombre (queda solo debajo del valor, ver
+    // subRealLine) — este renglón ahora es para "Pagado"/"Sin pagar"/"Vencido"/"Vence hoy". "Sin
+    // pagar" y "Vencido" son mutuamente excluyentes (ver buildGastoBadges), uno reemplaza al otro.
+    var subMeta=sp?'Pagado':st?'<span class="nopag-badge">Sin pagar</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span style="color:var(--red);font-weight:700">Vence hoy</span>':''));
     var chkTxt=sp?icon('check',11):st?icon('arrowRight',11):'';
-    // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js), misma ubicación que
-    // en la fila normal: segunda línea chica debajo del monto, no un badge junto al nombre.
+    // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va debajo del monto;
+    // si no hay pago parcial, cae a "Real: $X" (pagó distinto a lo presupuestado) y si tampoco,
+    // a la forma de pago — mismo criterio que la fila normal (ver realLine).
     var subRealLine='';
     if(!sp&&s.abonos&&s.abonos.length){
       var sumAbonosSub=s.abonos.reduce(function(a,ab){return a+(ab.monto||0);},0);
       if(sumAbonosSub>0&&sumAbonosSub<Math.abs(s.presupuesto||0)){
-        subRealLine='<div class="gmth" style="color:var(--grn)">Pag: '+cop(sumAbonosSub)+'</div>';
+        subRealLine='<span style="color:var(--grn)">Pag: '+cop(sumAbonosSub)+'</span>';
       }
     }
+    if(!subRealLine) subRealLine=s.pagado_real!=null&&s.pagado_real!==s.presupuesto?'Real: '+cop(s.pagado_real):esc(s.metodo||'');
     return '<div class="g-sub-row'+(st?' row-aplazado':'')+'">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+s.id+'\',\''+wh+'\')">'+chkTxt+'</div>'
       +'<div class="ginfo" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer">'
-      +'<div class="gname '+nameCls+'">'+esc(nombreGasto(s))+badges.cuotaBadge+badges.vencidoBadge+badges.mensBadge+nopagBadge+'</div>'
+      +'<div class="gname '+nameCls+'">'+esc(nombreGasto(s))+badges.cuotaBadge+badges.mensBadge+'</div>'
       +'<div class="gmeta">'+subMeta+sdh+badges.compBadge+'</div></div>'
-      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+(s.presupuesto<0?'+':'')+cop(s.presupuesto)+'</div>'+subRealLine+'</div>'
+      +'<div style="text-align:right"><div class="gamt '+amtCls+'" onclick="editGasto(\''+s.id+'\',\''+wh+'\')" style="cursor:pointer'+(s.presupuesto<0?';color:var(--grn)':'')+'">'+(s.presupuesto<0?'+':'')+cop(s.presupuesto)+'</div><div class="gmth">'+subRealLine+'</div></div>'
       +'</div>'
   }
 
@@ -262,9 +266,14 @@ function renderGastos(gastos,which) {
     var chkCls=p?'paid':tras?'nopag':(hoyFlag?'hoy':'');
     var namCls=p?'pd':tras?'np':'';
     var amtCls=p?'pa':'';
-    var nopag=tras?'<span class="nopag-badge">Sin pagar</span>':'';
     var chkTxt=p?icon('check',11):tras?icon('arrowRight',11):'';
-    var metaBase=p?'pagado · '+esc(g.metodo||''):(esc(g.metodo||'')+(hoyFlag?' · <span style="color:var(--red);font-weight:700">hoy</span>':''));
+    // La forma de pago ya no va acá debajo del nombre (queda solo debajo del valor, ver
+    // realLine) — este renglón ahora es para "Pagado"/"Sin pagar"/"Vencido"/"Vence hoy", así esos
+    // badges dejan de competir por espacio junto al nombre (cuotaBadge/mensBadge) y quedan mejor
+    // ubicados, con más aire. "Sin pagar" y "Vencido" son mutuamente excluyentes (ver
+    // buildGastoBadges: vencidoBadge nunca se calcula si sinpagar ya es true), así que uno
+    // reemplaza al otro en vez de competir por el mismo renglón.
+    var metaBase=p?'Pagado':tras?'<span class="nopag-badge">Sin pagar</span>':(vencidoBadge||(hoyFlag?'<span style="color:var(--red);font-weight:700">Vence hoy</span>':''));
     // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va en la misma
     // posición que "Pag: $X" en un grupo (segunda línea chica, debajo del monto, a la
     // derecha) — no como badge junto al nombre, para no competir con cuotaBadge/vencidoBadge ahí.
@@ -279,7 +288,7 @@ function renderGastos(gastos,which) {
     var rowCls='grow g-drag-item '+gCls+(hoyFlag&&!p&&!tras?' row-hoy':'');
     return '<div class="'+rowCls+'" data-gid="'+g.id+'" onclick="editGasto(\''+g.id+'\',\''+which+'\')" onpointerdown="startDragGasto(event,\''+g.id+'\',\''+which+'\')">'
       +'<div class="gchk '+chkCls+'" onclick="toggleP(event,\''+g.id+'\',\''+which+'\')">'+ chkTxt +'</div>'
-      +'<div class="ginfo"><div class="gname '+namCls+'">'+esc(nombreGasto(g))+cuotaBadge+vencidoBadge+mensBadge+nopag+'</div><div class="gmeta">'+metaBase+dh+compBadge+'</div></div>'
+      +'<div class="ginfo"><div class="gname '+namCls+'">'+esc(nombreGasto(g))+cuotaBadge+mensBadge+'</div><div class="gmeta">'+metaBase+dh+compBadge+'</div></div>'
       +'<div style="text-align:right"><div class="gamt '+amtCls+'"'+(g.presupuesto<0?' style="color:var(--grn)"':'')+'>'+(g.presupuesto<0?'+':'')+cop(g.presupuesto)+'</div><div class="gmth">'+realLine+'</div></div>'
       +'</div>';
   }
