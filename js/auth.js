@@ -1,14 +1,20 @@
 // ── UI de la pantalla de bloqueo ────────────────────────────────────────────
 function buildKeypadHTML(){
-  const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
-  const bsIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9l-7-8 7-8z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>';
+  // El PIN siempre tiene 6 dígitos (ver lockPinConfirm) así que no hace falta un botón
+  // "Confirmar": al completar el 6° dígito se confirma solo. El espacio que quedaba vacío
+  // debajo del 7 ahora lo ocupa el acceso directo con Google.
+  const keys=['1','2','3','4','5','6','7','8','9','google','0','⌫'];
+  // Mismo lenguaje visual en ambos íconos: trazo 1.7, extremos redondeados, sin relleno,
+  // color #CBD5E1 (un poco más tenue que los dígitos en #F1F5F9, para leerse como acción).
+  const bsIcon='<svg viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5.5h10.2a1.8 1.8 0 0 1 1.8 1.8v9.4a1.8 1.8 0 0 1-1.8 1.8H9L3.2 12z"/><path d="m11.6 9.4 5.2 5.2M16.8 9.4l-5.2 5.2"/></svg>';
+  const googleIcon='<svg viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.66 6.34A8 8 0 1 0 20 12h-8"/></svg>';
   let h='<div class="lock-keys">';
   keys.forEach(function(k){
-    if(k==='⌫') h+='<button class="lock-key" onclick="lockPinBackspace()" aria-label="Borrar dígito">'+bsIcon+'</button>';
-    else if(k==='') h+='<div></div>';
+    if(k==='⌫') h+='<button class="lock-key lock-key-action" onclick="lockPinBackspace()" aria-label="Borrar dígito">'+bsIcon+'</button>';
+    else if(k==='google') h+='<button class="lock-key lock-key-action lock-key-google" onclick="syncSignInGoogleDesdeLock()" aria-label="Iniciar sesión con Google">'+googleIcon+'</button>';
     else h+='<button class="lock-key" onclick="lockPinPress(\''+k+'\')">'+k+'</button>';
   });
-  h+='</div><button class="lock-confirm" onclick="lockPinConfirm()">Confirmar</button>';
+  h+='</div>';
   return h;
 }
 function renderLockDots(){
@@ -31,8 +37,14 @@ async function showLockOverlay(mode){
   if(appEl) appEl.style.display='none';
   document.body.style.overflow='auto';
   document.getElementById('lockOverlay').classList.remove('hidden');
-  document.getElementById('lockTitle').textContent = (mode==='setup')?'Crea tu PIN':'Ingresa tu PIN';
-  document.getElementById('lockSub').textContent = (mode==='setup')?'Protege tu información financiera (4 a 6 dígitos). También se usará para cifrar tus copias de seguridad.':'';
+  // Saludo con el nombre del último usuario que inició sesión en este dispositivo — viene de
+  // fin26_last_name (ver cacheNombreParaSaludo), guardado en texto plano aparte del resto de
+  // datos (que viajan cifrados) justo para poder mostrarlo ANTES de que se ingrese el PIN.
+  const primerNombre = (mode==='setup')?'':primerNombreGuardado();
+  document.getElementById('lockTitle').textContent = (mode==='setup')?'Crea tu PIN':(primerNombre?('Hola, '+primerNombre):'Ingresa tu PIN');
+  document.getElementById('lockSub').textContent = (mode==='setup')?'Protege tu información financiera (6 dígitos). También se usará para cifrar tus copias de seguridad.':(primerNombre?'Ingresa tu PIN de 6 dígitos':'');
+  const kicker=document.getElementById('lockKicker');
+  if(kicker) kicker.style.display=(mode!=='setup'&&primerNombre)?'none':'';
   document.getElementById('lockError').textContent='';
   document.getElementById('lockKeypad').innerHTML = buildKeypadHTML();
   renderLockDots();
@@ -43,6 +55,22 @@ async function showLockOverlay(mode){
   const recoveryLink=document.getElementById('lockRecoveryLink');
   recoveryLink.textContent = (mode==='setup') ? '¿Ya usas la app en otro dispositivo?' : '¿Problemas para ingresar?';
   recoveryLink.style.display='block';
+}
+// Primer nombre a mostrar en el saludo de la pantalla de bloqueo, leído de fin26_last_name
+// (texto plano) — perfilNombre en sí vive cifrado y no está disponible hasta ingresar el PIN.
+function primerNombreGuardado(){
+  try{
+    const n=(localStorage.getItem('fin26_last_name')||'').trim();
+    if(!n||n==='undefined'||n==='null') return '';
+    return n.split(/\s+/)[0];
+  }catch(e){ return ''; }
+}
+function cacheNombreParaSaludo(){
+  try{
+    const n=(perfilNombre||'').trim();
+    if(n) localStorage.setItem('fin26_last_name', n);
+    else localStorage.removeItem('fin26_last_name');
+  }catch(e){}
 }
 function hideLockOverlay(){
   document.getElementById('lockOverlay').classList.add('hidden');
@@ -61,7 +89,7 @@ function lockPinPress(d){
 function lockPinBackspace(){ lockInput=lockInput.slice(0,-1); renderLockDots(); }
 
 async function lockPinConfirm(){
-  if(lockInput.length<4){ showLockError('Mínimo 4 dígitos'); return; }
+  if(lockInput.length!==6){ showLockError('El PIN debe tener 6 dígitos'); return; }
   if(lockMode==='unlock'){
     const ok = await pinVerify(lockInput);
     if(ok){
@@ -242,14 +270,14 @@ async function recoverWithPhone(){
 function promptNewPinAfterRecovery(){
   openModal('<div class="mtitle">Crea un PIN nuevo</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Recuperaste el acceso con tu número de celular. Por seguridad, define un PIN nuevo para seguir usando la app.</p>'
-    +'<div class="field"><label>PIN nuevo (4-6 dígitos)</label><input id="rp-new1" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
+    +'<div class="field"><label>PIN nuevo (6 dígitos)</label><input id="rp-new1" type="password" inputmode="numeric" maxlength="6" placeholder="••••••"></div>'
     +'<div class="field"><label>Confirma el PIN nuevo</label><input id="rp-new2" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
     +'<div class="macts"><button class="bpri" style="grid-column:1/-1" onclick="confirmRecoveryNewPin()">Guardar y continuar</button></div>');
 }
 async function confirmRecoveryNewPin(){
   const n1=document.getElementById('rp-new1').value.trim();
   const n2=document.getElementById('rp-new2').value.trim();
-  if(n1.length<4||n1.length>6){ showAlert('El PIN debe tener entre 4 y 6 dígitos'); return; }
+  if(n1.length!==6){ showAlert('El PIN debe tener 6 dígitos'); return; }
   if(n1!==n2){ showAlert('Los PIN no coinciden'); return; }
   if(!sessionDataKey){ showAlert('Ocurrió un error inesperado. Vuelve a intentar la recuperación.'); return; }
   try{
@@ -486,7 +514,7 @@ function openSeguridadMenu(){
 function startChangePIN(){
   openModal('<div class="mtitle">Cambiar PIN</div>'
     +'<div class="field"><label>PIN actual</label><input id="cp-old" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
-    +'<div class="field"><label>Nuevo PIN (4-6 dígitos)</label><input id="cp-new1" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
+    +'<div class="field"><label>Nuevo PIN (6 dígitos)</label><input id="cp-new1" type="password" inputmode="numeric" maxlength="6" placeholder="••••••"></div>'
     +'<div class="field"><label>Confirma nuevo PIN</label><input id="cp-new2" type="password" inputmode="numeric" maxlength="6" placeholder="••••"></div>'
     +'<p style="font-size:11px;color:var(--amb);margin-bottom:8px">Los backups ya exportados quedaron cifrados con tu PIN anterior; necesitarás ese PIN anterior para restaurarlos.</p>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button><button class="bpri" onclick="confirmChangePIN()">Guardar</button></div>');
@@ -532,7 +560,7 @@ async function confirmChangePIN(){
   const n1=document.getElementById('cp-new1').value.trim();
   const n2=document.getElementById('cp-new2').value.trim();
   if(!(await pinVerify(oldPin))){ showAlert('PIN actual incorrecto'); return; }
-  if(n1.length<4||n1.length>6){ showAlert('El nuevo PIN debe tener entre 4 y 6 dígitos'); return; }
+  if(n1.length!==6){ showAlert('El nuevo PIN debe tener 6 dígitos'); return; }
   if(n1!==n2){ showAlert('Los PIN nuevos no coinciden'); return; }
   if(!sessionDataKey){ showAlert('No se puede cambiar el PIN en este momento. Cierra y vuelve a abrir la app, e inténtalo de nuevo.'); return; }
   try{
@@ -824,6 +852,7 @@ function save(){
     if(!sessionDataKey) return; // no debería pasar: save() solo se usa después de desbloquear
     const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos});
     localStorage.setItem('fin26_enc', JSON.stringify(envelope));
+    cacheNombreParaSaludo();
     // Sincronización automática (ver js/sync.js) — no hace nada si no hay sesión de Google
     // iniciada; función definida en un archivo que carga después de este, de ahí el guard.
     if(typeof programarAutoSyncSubida==='function') programarAutoSyncSubida();
