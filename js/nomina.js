@@ -112,7 +112,11 @@ function renderNom(m) {
   // completo para que se vean idénticas, solo con "NETO" en vez de "DISPONIBLE".
   const tabsHtml=buildQCardsHtml(m,curNomQ,'selectNomQ','NETO',n1,n2);
 
-  var devRows='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Básico quincenal <span class="nom-row-nota-inline">· '+diasQ+' días</span></div></div><div class="nom-row-val">'+cop(bq)+'</div></div>';
+  // Solo informativo (sobre qué días se calculó esta cuota) — el control para cambiarlo vive en
+  // "Editar básico y bonos" (ver editBasico, tarjeta.js). En Q1 siempre son 15 días fijos
+  // (básico ÷ 2), así que no hace falta aclarar "automático"/"fijos" ahí.
+  var diasNotaHtml='<span class="nom-row-nota-inline">· '+diasQ+' días'+(isQ1?'':(perfilQ2DiasFijos?' (fijos)':' (automático)'))+'</span>';
+  var devRows='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Básico quincenal '+diasNotaHtml+'</div></div><div class="nom-row-val">'+cop(bq)+'</div></div>';
   if(auxq>0){
     devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Auxilio de transporte <span class="nom-row-nota-inline">· No es base de deducciones</span></div></div><div class="nom-row-val">'+cop(auxq)+'</div></div>';
   }

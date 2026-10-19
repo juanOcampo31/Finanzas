@@ -260,6 +260,11 @@ function pintarEstadoGasto(valor,wh){
 // Estado se selecciona en vivo (mismo criterio que saveG al guardar), sin esperar a guardar y
 // reabrir el formulario. No se desmarca sola si vuelves a bajar el valor — eso lo decide el
 // usuario a mano, tocando la tarjeta.
+// Ya NO marca "Pagado" solo porque el número escrito supera la cuota — eso le quitaba al
+// usuario la posibilidad de simplemente PROGRAMAR cuánto piensa pagar (ej. cancelar de una vez
+// un saldo de $80.000 contra una cuota de $50.000) sin comprometerse todavía. El estado lo
+// sigue decidiendo únicamente la tarjeta de Estado (ver seleccionarEstadoGasto); acá solo se
+// avisa en vivo cuánto es "de más" respecto a la cuota teórica.
 function mostrarCuotaOriginalSiCambia(el,cuotaValor,wh){
   const digits=(el.value||'').replace(/\D/g,'');
   const typed=digits?parseInt(digits):0;
@@ -270,16 +275,9 @@ function mostrarCuotaOriginalSiCambia(el,cuotaValor,wh){
   if(extraSpan){
     if(typed>cuotaValor){
       extraSpan.style.display='';
-      extraSpan.textContent=' · Pago extra: '+cop(typed-cuotaValor);
+      extraSpan.textContent=' · Extra sobre la cuota: '+cop(typed-cuotaValor);
     } else {
       extraSpan.style.display='none';
-    }
-  }
-  if(typed>cuotaValor){
-    const hidden=document.getElementById('g-estado');
-    if(hidden && hidden.value!=='pagado'){
-      hidden.value='pagado';
-      pintarEstadoGasto('pagado',wh);
     }
   }
 }

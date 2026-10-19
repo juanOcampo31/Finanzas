@@ -328,14 +328,24 @@ function confirmarEliminarAbonoTC(abonoId){
 }
 
 // ── Editar básico y bonos ─────────────────────────────────────────────────────
+// Si no es null, es el valor de perfilQ2DiasFijos que el usuario eligió DENTRO de este editor
+// pero todavía no guardó (ver setQ2DiasFijosEnEditor) — solo se confirma junto con el resto del
+// formulario al tocar "Guardar" (saveBasico), para no cambiar el ajuste global a mitad de una
+// edición que todavía se puede cancelar.
+let _editBasicoQ2DiasFijosPendiente=null;
 function editBasico(){
   const m=getM(), n=getNom(m);
   const mi=MESES.indexOf(m.nombre), dias=mi>=0?diasQ2(m.año,mi):15;
-  const infoTxt='Q1 = básico ÷ 2 &nbsp;·&nbsp; Q2 = básico ÷ 30 × '+dias+' días ('+m.nombre+')';
+  const q2Fijos=_editBasicoQ2DiasFijosPendiente!=null?_editBasicoQ2DiasFijosPendiente:perfilQ2DiasFijos;
+  function opcionQ2(label,sub,activo,val){
+    return '<div onclick="setQ2DiasFijosEnEditor('+val+')" style="flex:1;padding:10px;border-radius:12px;cursor:pointer;border:1.5px solid '+(activo?'var(--acc)':'var(--brd2)')+';background:'+(activo?'var(--acc-d)':'transparent')+'">'
+      +'<div style="font-weight:700;color:var(--txt);font-size:13px">'+label+'</div>'
+      +'<div style="font-size:10.5px;color:var(--mut);margin-top:2px;line-height:1.35">'+sub+'</div>'
+      +'</div>';
+  }
   openModal('<div class="mtitle">Editar básico y bonos</div>'
     +'<p style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
-    +'Ingresa los valores <b style="color:var(--txt)">totales del mes</b>. Los bonos son solo informativos.<br><br>'
-    +'<b style="color:var(--txt)">'+infoTxt+'</b></p>'
+    +'Ingresa los valores <b style="color:var(--txt)">totales del mes</b>. Los bonos son solo informativos.</p>'
     +'<div class="field"><label>Básico total mes</label>'
     +'<input id="b-bt" type="text" inputmode="numeric" value="'+moneyInputFmt(n.basico_total)+'" oninput="maskMoneyInput(this)"></div>'
     +'<div class="field"><label>Bonos total mes (solo informativo)</label>'
@@ -343,8 +353,26 @@ function editBasico(){
     +'<div class="field"><label>Auxilio de transporte</label>'
     +'<input id="b-aux" type="text" inputmode="numeric" value="'+moneyInputFmt(n.aux_transporte_total)+'" oninput="maskMoneyInput(this)">'
     +'<p style="font-size:11px;color:var(--mut);margin-top:5px;line-height:1.4">Cuenta para el neto y para la base de prima/cesantías, pero NO para las deducciones de salud/pensión.</p></div>'
-    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<div class="field"><label>¿Cómo se calcula la Quincena 2?</label>'
+    +'<div style="display:flex;gap:8px">'
+    +opcionQ2('Automático','Básico ÷ 30 × '+dias+' días ('+m.nombre.toLowerCase()+')',!q2Fijos,'false')
+    +opcionQ2('15 días fijos','Básico ÷ 30 × 15, sin importar el mes',q2Fijos,'true')
+    +'</div>'
+    +'<p style="font-size:10.5px;color:var(--mut);margin-top:6px;line-height:1.4">Q1 siempre es básico ÷ 2 (15 días fijos). Este ajuste de Q2 aplica a todos los meses, no solo a '+m.nombre.toLowerCase()+'.</p></div>'
+    +'<div class="macts"><button class="bcnl" onclick="cancelarEditBasico()">Cancelar</button>'
     +'<button class="bpri" onclick="saveBasico()">Guardar</button></div>');
+}
+// Guarda lo escrito (básico/bonos/aux) para no perderlo al re-renderizar el modal solo porque
+// cambió el pill de Q2 — mismo patrón que los pickers de Crédito/Gasto (snapshotModalFields).
+function setQ2DiasFijosEnEditor(val){
+  var snap=snapshotModalFields();
+  _editBasicoQ2DiasFijosPendiente=(val===true||val==='true');
+  editBasico();
+  restoreModalFields(snap);
+}
+function cancelarEditBasico(){
+  _editBasicoQ2DiasFijosPendiente=null;
+  closeModal();
 }
 function saveBasico(){
   const m=getM(),n=m.nomina;
@@ -357,6 +385,12 @@ function saveBasico(){
   n.basico_q2=basicoQ2({nombre:m.nombre,año:m.año,nomina:{basico_total:bt}});
   n.bonos_q1=Math.round(bon/2); n.bonos_q2=Math.round(bon/2);
   n.aux_transporte_q1=Math.round(aux/2); n.aux_transporte_q2=Math.round(aux/2);
+  // El ajuste de Quincena 2 (si se tocó en este editor) se confirma recién acá, junto con el
+  // resto del formulario — ver _editBasicoQ2DiasFijosPendiente.
+  if(_editBasicoQ2DiasFijosPendiente!=null){
+    perfilQ2DiasFijos=_editBasicoQ2DiasFijosPendiente;
+    _editBasicoQ2DiasFijosPendiente=null;
+  }
   save();closeModal();render();toast('Nómina actualizada');
 }
 

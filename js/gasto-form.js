@@ -14,12 +14,12 @@ function openGasto(g,which,parentId,skipFocus){
   const eid=isE?e.id:'';
   const wh=which||'q1';
 
-  // Si el gasto está ligado a un crédito, "Valor" arranca mostrando el valor de ESA cuota (el
-  // valor no lo decide el usuario, lo decide la tabla de amortización). El campo se puede
-  // seguir editando: si el usuario escribe un número mayor, mientras la ventana esté abierta se
-  // respeta tal cual lo que escribió (no se le pisa el campo en vivo) — solo AL GUARDAR (ver
-  // saveG) ese excedente se traslada a "valor real pagado" y el campo vuelve a fijarse en la
-  // cuota. Un valor igual o menor no dispara nada especial.
+  // Si el gasto está ligado a un crédito, "Valor" arranca mostrando el valor de ESA cuota la
+  // primera vez (todavía no hay nada guardado). Una vez guardado, si el gasto sigue sin pagar,
+  // "Valor" muestra lo que haya quedado presupuestado — que puede ser distinto a la cuota si el
+  // usuario programó pagar más (ver saveG): no se le pisa con la cuota teórica solo por estar
+  // ligado a un crédito. Recién al marcarlo "Pagado" ese excedente se traslada a "valor real
+  // pagado" y el campo vuelve a fijarse en la cuota (ver saveG).
   var creditoLigado=(e.creditoId&&creditos[e.creditoId])?creditos[e.creditoId]:null;
   var cuotaValorActual=null, cuotaNumActual=null, cuotaTotalActual=null;
   if(creditoLigado){
@@ -35,7 +35,7 @@ function openGasto(g,which,parentId,skipFocus){
     cuotaValorActual=amortLigado.valorCuota||(rowLigado?rowLigado.valorCuota:e.presupuesto);
     cuotaTotalActual=amortLigado.rows.length;
   }
-  var valorMostrado=creditoLigado?cuotaValorActual:e.presupuesto;
+  var valorMostrado=creditoLigado?(e.presupuesto||cuotaValorActual):e.presupuesto;
   // Si ya se pagó esta cuota con un valor distinto al fijo (abono mayor), se muestra como dato
   // adicional debajo de "Valor" — que siempre sigue mostrando la cuota, no lo realmente pagado.
   var pagadoRealDistinto=creditoLigado&&e.pagado_real!=null&&e.pagado_real!==cuotaValorActual;
@@ -184,6 +184,13 @@ function openGasto(g,which,parentId,skipFocus){
   const valorSubtitulo=creditoLigado
     ?('Cuota '+cuotaNumActual+' de '+cuotaTotalActual)
     :'COP · valor de la cuota';
+  // "Cuota original: $X" / "Extra sobre la cuota: $X" se calculaban solo en vivo (al escribir,
+  // ver mostrarCuotaOriginalSiCambia) — si el valor programado ya venía guardado de una edición
+  // anterior (ver saveG: ahora el "Valor" de un gasto ligado a un crédito puede quedar distinto
+  // a la cuota mientras no esté pagado), el mensaje no aparecía hasta volver a tocar el campo.
+  // Se calcula acá también para que se vea desde que se abre el formulario.
+  const extraSobreCuota=(creditoLigado&&valorMostrado>cuotaValorActual)?(valorMostrado-cuotaValorActual):0;
+  const cuotaOriginalVisible=creditoLigado&&valorMostrado!==cuotaValorActual;
   const valorBlockHtml=e.esGrupo
     ?('<input id="g-p" type="hidden" value="'+moneyInputFmt(valorMostrado)+'">')
     :('<div style="padding:0 4px 2px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center">'
@@ -195,8 +202,8 @@ function openGasto(g,which,parentId,skipFocus){
     +' style="font-family:inherit;width:180px;background:transparent;border:none;outline:none;font-size:38px;font-weight:800;color:var(--txt);letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:center;padding:0">'
     +'</div>'
     +'<div style="font-size:11px;color:var(--mut)">'+valorSubtitulo
-    +(creditoLigado?('<span id="g-cuota-original-line" style="display:none"> · Cuota original: '+cop(cuotaValorActual)+'</span>'):'')
-    +(creditoLigado?'<span id="g-pago-extra-span" style="display:none;color:var(--acc);font-weight:600"></span>':'')
+    +(creditoLigado?('<span id="g-cuota-original-line" style="'+(cuotaOriginalVisible?'':'display:none')+'"> · Cuota original: '+cop(cuotaValorActual)+'</span>'):'')
+    +(creditoLigado?('<span id="g-pago-extra-span" style="'+(extraSobreCuota>0?'':'display:none')+';color:var(--acc);font-weight:600">'+(extraSobreCuota>0?' · Extra sobre la cuota: '+cop(extraSobreCuota):'')+'</span>'):'')
     +(pagadoRealDistinto?(' · <span id="g-pagado-real-line" style="color:var(--acc);font-weight:600">Pagaste '+cop(e.pagado_real)+'</span>'):'')
     +'</div>'
     +'</div>');
@@ -391,12 +398,13 @@ function saveG(id,which,parentId){
     gasto=list.find(x=>x.id===id);
     if(gasto){
       const estadoAntes=gastoEstado(gasto);
-      // "Valor" de un gasto ligado a un crédito no es libre: lo fija la cuota de la tabla de
-      // amortización (ver comentario de creditoLigado en openGasto). Mientras el formulario
-      // está abierto se respeta lo que el usuario escriba (no se le pisa el campo en vivo);
-      // recién ACÁ, al guardar, si lo escrito supera la cuota se traslada a "valor real pagado"
-      // y "Valor" queda fijado en la cuota — sin esto último, cualquier número que se hubiera
-      // escrito de más quedaría guardado como presupuesto en vez de como pago real.
+      // "Valor" de un gasto ligado a un crédito: mientras NO esté marcado "Pagado" (tarjeta de
+      // Estado, decisión explícita del usuario), se respeta tal cual lo que haya escrito como
+      // presupuesto — así se puede PROGRAMAR pagar más que la cuota (ej. cancelar de una vez un
+      // saldo de $80.000 contra una cuota de $50.000) sin que eso lo marque pagado solo. Recién
+      // cuando SÍ queda "Pagado", si lo escrito no coincide con la cuota teórica, ese excedente
+      // se traslada a "valor real pagado" y "Valor" vuelve a fijarse en la cuota — igual que
+      // antes, pero ahora como consecuencia de marcar pagado, no como su disparador.
       let presupFinal=presup;
       if(gasto.creditoId && creditos[gasto.creditoId]){
         const amortG=calcAmortizacion(creditos[gasto.creditoId]);
@@ -405,12 +413,10 @@ function saveG(id,which,parentId){
         // con un abono mayor, rowG.valorCuota pasa a ser el monto REAL pagado (ver comentario
         // en openGasto), y pinear presupuesto a eso reintroduciría el mismo dato equivocado.
         const cuotaValorG=amortG.valorCuota||(rowG?rowG.valorCuota:presup);
-        // Siempre (no solo si "real" venía vacío): si ya había un abono mayor registrado y el
-        // usuario escribe un número distinto, ese nuevo número es el que debe quedar guardado.
-        // Escribir un valor mayor a la cuota es, en sí, la señal de que esta cuota se pagó, así
-        // que también marca "Pagado" (estado), sin obligar a tocar la tarjeta de Estado aparte.
-        if(presup>cuotaValorG){ real=presup; paid=true; sinpagar=false; }
-        presupFinal=cuotaValorG;
+        if(paid){
+          if(presup!==cuotaValorG) real=presup;
+          presupFinal=cuotaValorG;
+        }
       }
       gasto.nombre=nombre;gasto.catTipoId=catTipoIdSel||null;gasto.presupuesto=presupFinal;gasto.pagado_real=real;gasto.metodo=metodo;
       setGastoEstado(gasto,paid?'pagado':(sinpagar?'sinpagar':null));
