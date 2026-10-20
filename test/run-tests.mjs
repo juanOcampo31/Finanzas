@@ -244,3 +244,80 @@ test('sincronizarCreditoDesdeGasto: desmarcar una cuota pagada limpia cr.pagos y
   assert.equal(ctx.__internals.creditos.cr1.pagoDetalle[0], undefined);
   assert.equal(gasto.pagado_real, null, 'limpia el valor real pagado al desmarcar');
 });
+
+// ── ejecutarRefinanciacion ───────────────────────────────────────────────────
+test('ejecutarRefinanciacion: crea credito nuevo con el saldo pendiente y cierra el original', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro', valorPrestamo:12000000, pctAval:0, cuotas:12, tasa:0, fechaInicio:'2026-01-15', frecuencia:'mensual', pagos:[true,true] };
+  const nuevoId = ctx.ejecutarRefinanciacion('cr1', { nombre:'Carro (refinanciado)', cuotas:10, tasa:0, fechaInicio:'2026-03-15', frecuencia:'mensual', tcVinculada:null, esMensualidad:false });
+  const nuevo = ctx.__internals.creditos[nuevoId];
+  assert.ok(nuevo);
+  assert.equal(nuevo.valorPrestamo, 10000000);
+  assert.equal(nuevo.pctAval, 0);
+  assert.equal(nuevo.refinanciaDeId, 'cr1');
+  assert.equal(ctx.__internals.creditos.cr1.refinanciado, true);
+  assert.equal(ctx.__internals.creditos.cr1.refinanciadoPorId, nuevoId);
+  assert.equal(typeof ctx.__internals.creditos.cr1.refinanciadoEn, 'string');
+});
+test('ejecutarRefinanciacion: desvincula el gasto de una cuota sin pagar, no toca las pagadas', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro', valorPrestamo:12000000, pctAval:0, cuotas:12, tasa:0, fechaInicio:'2026-01-15', frecuencia:'mensual', pagos:[true] };
+  ctx.__internals.db[0].q1_gastos.push({ id:'g1', nombre:'Crédito Carro', presupuesto:1000000, creditoId:'cr1', numCuota:1, pagado_flag:true });
+  ctx.__internals.db[0].q2_gastos.push({ id:'g2', nombre:'Crédito Carro', presupuesto:1000000, creditoId:'cr1', numCuota:2, pagado_flag:false });
+  ctx.ejecutarRefinanciacion('cr1', { nombre:'Carro (refinanciado)', cuotas:10, tasa:0, fechaInicio:'2026-03-15', frecuencia:'mensual', tcVinculada:null, esMensualidad:false });
+  assert.equal(ctx.__internals.db[0].q1_gastos.find(function(g){return g.id==='g1';}).creditoId, 'cr1');
+  const g2=ctx.__internals.db[0].q2_gastos.find(function(g){return g.id==='g2';});
+  assert.equal(g2.creditoId, null);
+  assert.equal(g2.numCuota, null);
+});
+test('ejecutarRefinanciacion: desvincula tambien una deduccion de nomina sin pagar', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Libranza', valorPrestamo:6000000, pctAval:0, cuotas:12, tasa:0, fechaInicio:'2026-01-15', frecuencia:'mensual', pagos:[] };
+  ctx.__internals.db[0].nomina.ded_q1.push({ nombre:'Crédito Libranza', creditoId:'cr1', numCuota:1 });
+  ctx.ejecutarRefinanciacion('cr1', { nombre:'Libranza (refinanciada)', cuotas:12, tasa:0, fechaInicio:'2026-02-15', frecuencia:'mensual', tcVinculada:null, esMensualidad:false });
+  const d=ctx.__internals.db[0].nomina.ded_q1.find(function(x){return x.nombre==='Crédito Libranza';});
+  assert.equal(d.creditoId, null);
+});
+test('ejecutarRefinanciacion: una cuota diferida (sinpagar) sin registrar en cr.pagos tambien se desvincula', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro', valorPrestamo:12000000, pctAval:0, cuotas:12, tasa:0, fechaInicio:'2026-01-15', frecuencia:'mensual', pagos:[] };
+  ctx.__internals.db[0].q1_gastos.push({ id:'g1', nombre:'Crédito Carro', presupuesto:1000000, creditoId:'cr1', numCuota:1, sinpagar:true, pagado_flag:false });
+  ctx.ejecutarRefinanciacion('cr1', { nombre:'Carro (refinanciado)', cuotas:12, tasa:0, fechaInicio:'2026-02-15', frecuencia:'mensual', tcVinculada:null, esMensualidad:false });
+  assert.equal(ctx.__internals.db[0].q1_gastos.find(function(g){return g.id==='g1';}).creditoId, null);
+});
+test('ejecutarRefinanciacion: un credito sin saldo pendiente lanza error', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro', valorPrestamo:1000000, pctAval:0, cuotas:1, tasa:0, fechaInicio:'2026-01-15', frecuencia:'mensual', pagos:[true] };
+  assert.throws(function(){ ctx.ejecutarRefinanciacion('cr1', { nombre:'x', cuotas:1, tasa:0, fechaInicio:'2026-02-15', frecuencia:'mensual' }); }, /saldo pendiente/);
+});
+test('ejecutarRefinanciacion: encadenar sobre un credito que ya es resultado de otra refinanciacion funciona', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro v2', valorPrestamo:10000000, pctAval:0, cuotas:10, tasa:0, fechaInicio:'2026-03-15', frecuencia:'mensual', pagos:[], refinanciaDeId:'cr0' };
+  const nuevoId = ctx.ejecutarRefinanciacion('cr1', { nombre:'Carro v3', cuotas:8, tasa:0, fechaInicio:'2026-04-15', frecuencia:'mensual', tcVinculada:null, esMensualidad:false });
+  assert.equal(ctx.__internals.creditos[nuevoId].refinanciaDeId, 'cr1');
+});
+test('ejecutarRefinanciacion: respeta la cuota manual tal cual, sin recalcularla', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro', valorPrestamo:12000000, pctAval:0, cuotas:12, tasa:0, fechaInicio:'2026-01-15', frecuencia:'mensual', pagos:[] };
+  const nuevoId = ctx.ejecutarRefinanciacion('cr1', { nombre:'Carro (refinanciado)', cuotas:12, tasa:0, fechaInicio:'2026-02-15', frecuencia:'mensual', tcVinculada:null, esMensualidad:false, valorCuotaManual:2000000 });
+  assert.equal(ctx.__internals.creditos[nuevoId].valorCuotaManual, 2000000);
+});
+test('ejecutarRefinanciacion: una cuota manual mayor a la sugerida liquida el credito antes del plazo pactado', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro', valorPrestamo:12000000, pctAval:0, cuotas:12, tasa:0, fechaInicio:'2026-01-15', frecuencia:'mensual', pagos:[] };
+  // Saldo 12,000,000 a 12 cuotas sin interés sugiere 1,000,000/cuota — con 2,000,000 debería
+  // liquidarse en 6, no en las 12 pactadas.
+  const nuevoId = ctx.ejecutarRefinanciacion('cr1', { nombre:'Carro (refinanciado)', cuotas:12, tasa:0, fechaInicio:'2026-02-15', frecuencia:'mensual', tcVinculada:null, esMensualidad:false, valorCuotaManual:2000000 });
+  const amort = ctx.calcAmortizacion(ctx.__internals.creditos[nuevoId]);
+  assert.equal(amort.rows.length, 6);
+});
+
+// ── generarGastosCredito (draft mensual de créditos) ──────────────────────────
+test('generarGastosCredito: no genera gasto para un credito refinanciado', () => {
+  const ctx = freshApp();
+  ctx.__internals.creditos.cr1 = { id:'cr1', nombre:'Carro', valorPrestamo:1200000, pctAval:0, cuotas:12, tasa:0, fechaInicio:'2026-02-15', frecuencia:'mensual', pagos:[], refinanciado:true };
+  const nm = ctx.__internals.db[1]; // Febrero 2026
+  ctx.generarGastosCredito(nm);
+  assert.equal(nm.q1_gastos.length, 0);
+  assert.equal(nm.q2_gastos.length, 0);
+});

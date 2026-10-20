@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Finanzas">
-<link rel="manifest" href="manifest.json?v=2.84">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.84">
+<link rel="manifest" href="manifest.json?v=2.90">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.90">
 <title>Finanzas Personales</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,7 +43,6 @@
     <button class="tab" data-tabs="1" onclick="sw(1)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Ingresos</span></button>
     <button class="tab" data-tabs="2" onclick="sw(2)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg><span>Tarjeta</span></button>
     <button class="tab" data-tabs="4" onclick="sw(4)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="21" x2="21" y2="21"/><line x1="5" y1="21" x2="5" y2="10"/><line x1="9" y1="21" x2="9" y2="10"/><line x1="15" y1="21" x2="15" y2="10"/><line x1="19" y1="21" x2="19" y2="10"/><polygon points="12 2 21 9 3 9"/></svg><span>Créditos</span></button>
-    <button class="tab" data-tabs="-1" onclick="openReportes()"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg><span>Reportes</span></button>
   </div>
   <button class="fab" onclick="onFab()" aria-label="Agregar nuevo gasto o movimiento">&#43;</button>
 </div>
@@ -75,7 +74,7 @@
     <!-- Texto de respaldo: debe coincidir con CACHE_VERSION en sw.js. app.js lo actualiza
          en cuanto el service worker responde el postMessage GET_VERSION; esto es solo lo
          que se ve mientras esa respuesta no ha llegado (o si falla). -->
-    <div class="lock-version" id="lockVersion">V 2.84 &bull; Powered by Felipe Ocampo</div>
+    <div class="lock-version" id="lockVersion">V 2.90 &bull; Powered by Felipe Ocampo</div>
   </div>
 </div>
 
@@ -90,6 +89,7 @@
 <script src="js/creditos-ui.js"></script>
 <script src="js/creditos-abonos.js"></script>
 <script src="js/creditos-congelar.js"></script>
+<script src="js/creditos-refinanciar.js"></script>
 <script src="js/format-utils.js"></script>
 <script src="js/nomina-calc.js"></script>
 <script src="js/render.js"></script>
@@ -98,7 +98,6 @@
 <script src="js/render-tarjeta.js"></script>
 <script src="js/render-ingresos.js"></script>
 <script src="js/nomina.js"></script>
-<script src="js/reportes.js"></script>
 <script src="js/ui-core.js"></script>
 <script src="js/gasto-pickers.js"></script>
 <script src="js/gasto-form.js"></script>

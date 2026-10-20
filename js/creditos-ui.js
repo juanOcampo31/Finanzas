@@ -5,6 +5,22 @@
 // sus propios archivos (creditos-abonos.js, creditos-congelar.js) por ser features chicas y
 // autocontenidas dentro de este dominio.
 
+// Pill de estado reutilizado en renderCreditos/openCreditosMenu/openCreditoDetalle — antes se
+// armaba a mano 3 veces con el mismo estilo; ahora con un tercer estado ("Refinanciado") más que
+// solo "Activo"/"Pagado", mejor tenerlo en un solo lugar.
+function creditoEstadoPillHtml(cr,activo){
+  var style=cr.refinanciado?'background:var(--pur-d);color:var(--pur)'
+    :activo?'background:var(--grn-d);color:var(--grn)'
+    :'background:var(--brd2);color:var(--mut)';
+  var label=cr.refinanciado?'Refinanciado':(activo?'Activo':'Pagado');
+  return '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+style+'">'+label+'</div>';
+}
+// Enlace al crédito que reemplazó a este tras refinanciarlo — event.stopPropagation() porque las
+// tarjetas de la lista son clicables de punta a punta (abren el detalle del crédito VIEJO).
+function refinanciadoLinkHtml(cr){
+  if(!cr.refinanciado||!creditos[cr.refinanciadoPorId]) return '';
+  return '<div style="font-size:11px;margin-top:4px"><span onclick="event.stopPropagation();openCreditoDetalle(\''+cr.refinanciadoPorId+'\')" style="color:var(--acc);cursor:pointer;text-decoration:underline;text-underline-offset:2px">Ver crédito nuevo →</span></div>';
+}
 // Vista de la pestaña Créditos: hero con saldo total + 3 stats (cuotas del mes,
 // activos, próximo pago — este último con el mismo pill expandible que ya existía en
 // openCreditosMenu), y debajo la lista "Mis créditos" con las tarjetas de siempre
@@ -26,7 +42,7 @@ function renderCreditos(m){
     var cr=creditos[id];
     var estado=calcEstadoCredito(cr);
     var amort=estado.amort, pagadas=estado.pagadasVisual, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
-    var activo=proximaIdx!==-1;
+    var activo=proximaIdx!==-1 && !cr.refinanciado;
     var totalCuotas=amort.rows.length;
     var pct=totalCuotas>0?Math.round(pagadas/totalCuotas*100):0;
     var cuotasFaltantes=Math.max(totalCuotas-pagadas,0);
@@ -58,8 +74,10 @@ function renderCreditos(m){
   });
 
   var activos=infos.filter(function(x){return x.activo;});
-  var saldoTotal=infos.reduce(function(a,x){return a+x.saldoActual;},0);
-  var cuotasMes=infos.reduce(function(a,x){return a+x.cuotasDelMes;},0);
+  // Un crédito refinanciado ya transfirió su deuda al crédito nuevo — no debe sumar aquí, o el
+  // saldo total/cuotas del mes quedarían duplicados (viejo + nuevo) hasta que se termine de pagar.
+  var saldoTotal=infos.reduce(function(a,x){return x.cr.refinanciado?a:a+x.saldoActual;},0);
+  var cuotasMes=infos.reduce(function(a,x){return x.cr.refinanciado?a:a+x.cuotasDelMes;},0);
   var activosCount=activos.length;
 
   var proximo=activos.reduce(function(best,x){
@@ -120,8 +138,9 @@ function renderCreditos(m){
       +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
       +'<span style="font-size:14px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
       +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
-      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+(x.activo?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(x.activo?'Activo':'Pagado')+'</div>'
+      +creditoEstadoPillHtml(cr,x.activo)
       +'</div>'
+      +refinanciadoLinkHtml(cr)
       +'<div style="display:flex;align-items:center;gap:12px">'
       +'<div style="position:relative;width:64px;height:64px;flex-shrink:0">'
       +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+x.color+' '+(x.pct*3.6)+'deg,var(--brd) 0deg)"></div>'
@@ -174,7 +193,7 @@ function openCreditosMenu(){
     var cr=creditos[id];
     var estado=calcEstadoCredito(cr);
     var amort=estado.amort, pagadas=estado.pagadasVisual, saldoActual=estado.saldoActual, proximaIdx=estado.proximaIdx;
-    var activo=proximaIdx!==-1;
+    var activo=proximaIdx!==-1 && !cr.refinanciado;
     var totalCuotas=amort.rows.length;
     var pct=totalCuotas>0?Math.round(pagadas/totalCuotas*100):0;
     var cuotasFaltantes=Math.max(totalCuotas-pagadas,0);
@@ -245,8 +264,9 @@ function openCreditosMenu(){
       +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
       +'<span style="font-size:14px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
       +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
-      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+(x.activo?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(x.activo?'Activo':'Pagado')+'</div>'
+      +creditoEstadoPillHtml(cr,x.activo)
       +'</div>'
+      +refinanciadoLinkHtml(cr)
       +'<div style="display:flex;align-items:center;gap:12px">'
       +'<div style="position:relative;width:64px;height:64px;flex-shrink:0">'
       +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+x.color+' '+(x.pct*3.6)+'deg,var(--brd) 0deg)"></div>'
@@ -386,13 +406,14 @@ function openNewCredito(modo){
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;align-items:end">'
     +'<div class="field" style="margin:0"><label>Tasa de interés %</label><input id="cr-tasa" type="number" step="0.01" placeholder="Ej: 2.0" oninput="updateCuotaSugerida()"></div>'
-    +stdFormDateFieldHtml('cr-fecha','Fecha inicio',fechaActualNew)
+    +stdFormDateFieldHtml('cr-fecha','Fecha inicio',fechaActualNew,'updateCuotaSugerida()')
     +'</div>'
     +frecuenciaFieldHtml('cr-frec',frecActual)
     +'<div class="field" style="margin-top:8px"><label>Valor de cuota manual (opcional)</label>'
-    +'<input id="cr-cuota-manual" type="text" inputmode="numeric" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this)">'
+    +'<input id="cr-cuota-manual" type="text" inputmode="numeric" placeholder="Se sugiere automáticamente" oninput="maskMoneyInput(this);updateCuotaSugerida()">'
     +'<div id="cr-cuota-sugerida-txt" style="font-size:11px;color:var(--acc);margin-top:4px"></div>'
     +'</div>'
+    +'<div id="cr-proyeccion" style="margin-top:10px"></div>'
     +'<div class="cbx-row" style="margin-top:2px"><input type="checkbox" id="cr-esmens"'+(creditoDesdeGastoCtx?' checked':'')+'>'
     +'<label for="cr-esmens" style="font-size:13px;color:var(--txt)">Es una mensualidad (colegio, transporte, suscripción...)</label></div>'
     +tarjetaVinculadaFieldHtml(tcVincActual||null)
@@ -422,6 +443,69 @@ function updateCuotaSugerida(){
     txtEl.textContent='';
     if(inputManual) inputManual.placeholder='Se sugiere automáticamente';
   }
+  const fechaInicio=document.getElementById('cr-fecha')?.value;
+  const frecuencia=document.getElementById('cr-frec')?.value;
+  const cuotaManual=moneyVal('cr-cuota-manual')||null;
+  renderProyeccionCredito('cr-proyeccion',valor,pctAval,cuotas,tasaPct,fechaInicio,frecuencia,cuotaManual);
+}
+
+// Resumen (cuotas, valor de cuota, fecha fin, total a pagar, intereses) + tabla completa del
+// plan de pagos para un crédito que todavía no existe (ni en "Nuevo crédito" ni en
+// "Refinanciar crédito", ver js/creditos-refinanciar.js, que también llama esta función) — se
+// arma un borrador sin id para calcAmortizacionSinCache, así nunca toca la caché real de
+// amortización. `cuotaManual`, si se da, se valida igual que en saveNewCredito: si no cubre el
+// interés del primer período, se bloquea con un mensaje en vez de mostrar una tabla sin sentido.
+function renderProyeccionCredito(targetElId,valorPrestamo,pctAval,cuotas,tasaPct,fechaInicio,frecuencia,cuotaManual){
+  const el=document.getElementById(targetElId); if(!el) return;
+  if(!(valorPrestamo>0)||!(cuotas>0)){ el.innerHTML=''; return; }
+  const tasa=tasaPct/100;
+  const aval=Math.round(valorPrestamo*((pctAval||0)/100));
+  const total=valorPrestamo+aval;
+  if(cuotaManual){
+    const interesPrimera=Math.round(total*tasa*100)/100;
+    if(cuotaManual<=interesPrimera){
+      el.innerHTML='<div style="font-size:12px;color:var(--red);margin-top:6px">Esta cuota ('+cop(cuotaManual)+') no alcanza a cubrir el interés de la primera cuota ('+cop(interesPrimera)+'). El saldo aumentaría en vez de disminuir. Sube la cuota o reduce la tasa.</div>';
+      return;
+    }
+  }
+  const credBorrador={valorPrestamo:valorPrestamo,pctAval:pctAval||0,cuotas:cuotas,tasa:tasaPct,fechaInicio:fechaInicio||new Date().toISOString().slice(0,10),frecuencia:frecuencia||'quincenal',valorCuotaManual:cuotaManual||null};
+  var amort;
+  try{ amort=calcAmortizacionSinCache(credBorrador); }catch(e){ el.innerHTML=''; return; }
+  if(!amort.rows.length){ el.innerHTML=''; return; }
+  const ultimaFecha=new Date(amort.rows[amort.rows.length-1].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
+  const totalPagar=amort.rows.reduce(function(a,r){return a+r.valorCuota;},0);
+  const intereses=Math.max(0,Math.round(totalPagar-total));
+  const celdaEstilo='padding:6px 8px;border-bottom:1px solid var(--brd);white-space:nowrap';
+  const filasHtml=amort.rows.map(function(r){
+    const f=new Date(r.fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
+    return '<tr>'
+      +'<td style="'+celdaEstilo+';color:var(--mut)">'+r.numero+'</td>'
+      +'<td style="'+celdaEstilo+';color:var(--mut)">'+f+'</td>'
+      +'<td style="'+celdaEstilo+';color:var(--txt);font-weight:600;text-align:right">'+cop(r.valorCuota)+'</td>'
+      +'<td style="'+celdaEstilo+';color:var(--mut);text-align:right">'+cop(r.intereses)+'</td>'
+      +'<td style="'+celdaEstilo+';color:var(--mut);text-align:right">'+cop(r.capital)+'</td>'
+      +'<td style="'+celdaEstilo+';color:var(--txt);text-align:right">'+cop(r.saldo)+'</td>'
+      +'</tr>';
+  }).join('');
+  const encabezadoEstilo='padding:6px 8px;border-bottom:1px solid var(--brd2);color:var(--mut);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;position:sticky;top:0;background:var(--surf2)';
+  const tablaHtml='<table style="width:100%;border-collapse:collapse;font-size:11px">'
+    +'<thead><tr>'
+    +'<th style="'+encabezadoEstilo+';text-align:left">#</th>'
+    +'<th style="'+encabezadoEstilo+';text-align:left">Fecha</th>'
+    +'<th style="'+encabezadoEstilo+';text-align:right">Cuota</th>'
+    +'<th style="'+encabezadoEstilo+';text-align:right">Interés</th>'
+    +'<th style="'+encabezadoEstilo+';text-align:right">Capital</th>'
+    +'<th style="'+encabezadoEstilo+';text-align:right">Saldo</th>'
+    +'</tr></thead><tbody>'+filasHtml+'</tbody></table>';
+  el.innerHTML='<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r2);padding:10px;font-size:12px;color:var(--mut)">'
+    +'<div style="display:flex;justify-content:space-between"><span>Cuotas</span><span style="color:var(--txt);font-weight:700">'+amort.rows.length+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:3px"><span>Valor de cuota</span><span style="color:var(--acc);font-weight:700">'+cop(Math.round(amort.valorCuota))+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:3px"><span>Termina</span><span style="color:var(--txt)">'+ultimaFecha+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:3px"><span>Total a pagar</span><span style="color:var(--txt)">'+cop(Math.round(totalPagar))+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:3px"><span>Intereses</span><span style="color:var(--txt)">'+cop(intereses)+'</span></div>'
+    +'</div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--mut);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em">Plan de pagos</div>'
+    +'<div style="max-height:220px;overflow-y:auto;overflow-x:auto;border:1px solid var(--brd);border-radius:var(--r2)">'+tablaHtml+'</div>';
 }
 
 function saveNewCredito(){
@@ -605,6 +689,17 @@ function confirmImportCreditoPlan(){
 }
 
 let creditoOcultarPagadas=true;
+// Píldora "Acciones" del detalle de un crédito (Abonar/Congelar/Refinanciar/Editar) — mismo
+// popup anclado que Filtro/Ordenar (stdPillPopupHtml). Una sola variable de estado alcanza
+// porque solo hay un detalle de crédito abierto a la vez.
+let creditoAccionesOpen=false;
+function toggleCreditoAccionesDropdown(id){ creditoAccionesOpen=!creditoAccionesOpen; openCreditoDetalle(id); }
+// Fila de una acción dentro del popup — a diferencia de stdPillPopupOptHtml (pensada para
+// seleccionar una opción, con check/casilla), estas filas disparan una acción y llevan su propio
+// ícono en vez de una marca de selección.
+function creditoAccionOptHtml(iconName,label,onclickAttr){
+  return '<div onclick="'+onclickAttr+'" style="padding:10px 14px;font-size:12px;white-space:nowrap;cursor:pointer;color:var(--txt);font-weight:500;display:flex;align-items:center;gap:8px">'+icon(iconName,13)+label+'</div>';
+}
 // Pills de la lista "Mis créditos" (ver renderCreditos): a diferencia de creditoOcultarPagadas
 // (que oculta CUOTAS ya pagadas dentro del detalle de UN crédito), estos controlan la lista
 // completa — qué créditos se muestran (Filtro) y en qué orden (Ordenar). Ambos usan el mismo
@@ -663,7 +758,7 @@ function openCreditoDetalle(id){
   const pagos=cr.pagos||[];
   const ocultar=creditoOcultarPagadas;
 
-  var activoCr=estado.proximaIdx!==-1;
+  var activoCr=estado.proximaIdx!==-1 && !cr.refinanciado;
   var proximaFechaHdr=activoCr?new Date(amort.rows[estado.proximaIdx].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
   var proximaCuotaValHdr=activoCr?amort.rows[estado.proximaIdx].valorCuota:0;
 
@@ -787,15 +882,9 @@ function openCreditoDetalle(id){
   }
 
   const puedeAbonar=activoCr && !esImportadoCr;
-  var abonoBtnHtml=puedeAbonar
-    ?'<button onclick="openAbonoModal(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('dollar',13)+'Abonar a capital</button>'
-    :'';
   // Congelar solo tiene sentido con un plan calculado por esta app (no uno importado del banco,
   // donde las fechas ya vienen dadas) y con una cuota siguiente que empujar (ver
   // openCongelarModal/generarFechasCredito).
-  var congelarBtnHtml=puedeAbonar
-    ?'<button onclick="openCongelarModal(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('snowflake',13)+'Congelar cuota</button>'
-    :'';
   const mActual=getM();
   const tcVincNombre=(cr.tcVinculada && mActual.tarjetas && mActual.tarjetas[cr.tcVinculada])?mActual.tarjetas[cr.tcVinculada].nombre:null;
   const tcVincBadge=tcVincNombre?'<div style="font-size:11px;color:var(--mut);margin-bottom:6px">Vinculado a tarjeta: <b style="color:var(--txt)">'+esc(tcVincNombre)+'</b></div>':'';
@@ -806,8 +895,9 @@ function openCreditoDetalle(id){
     +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
     +'<span style="font-size:15px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
     +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
-    +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+(activoCr?'background:var(--grn-d);color:var(--grn)':'background:var(--brd2);color:var(--mut)')+'">'+(activoCr?'Activo':'Pagado')+'</div>'
+    +creditoEstadoPillHtml(cr,activoCr)
     +'</div>'
+    +refinanciadoLinkHtml(cr)
     +'<div style="display:flex;align-items:center;gap:12px">'
     +'<div style="position:relative;width:66px;height:66px;flex-shrink:0">'
     +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--acc) '+(pctProgreso*3.6)+'deg,var(--brd) 0deg)"></div>'
@@ -823,12 +913,13 @@ function openCreditoDetalle(id){
     +'</div>'
     +'</div>'
     +'</div>';
+  var accionesOptsHtml=''
+    +(puedeAbonar?creditoAccionOptHtml('dollar','Abonar a capital','creditoAccionesOpen=false;openAbonoModal(\''+id+'\')'):'')
+    +(puedeAbonar?creditoAccionOptHtml('snowflake','Congelar cuota','creditoAccionesOpen=false;openCongelarModal(\''+id+'\')'):'')
+    +((activoCr&&!cr.refinanciado)?creditoAccionOptHtml('refresh','Refinanciar','creditoAccionesOpen=false;abrirRefinanciarCredito(\''+id+'\')'):'')
+    +creditoAccionOptHtml('edit','Editar crédito','creditoAccionesOpen=false;editCredito(\''+id+'\')');
+  var accionesPillHtml=stdPillPopupHtml('Acciones',creditoAccionesOpen,'toggleCreditoAccionesDropdown(\''+id+'\')',accionesOptsHtml);
   openWindow(tcVincBadge
-    +'<div style="display:flex;justify-content:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:4px">'
-    +abonoBtnHtml
-    +congelarBtnHtml
-    +'<button onclick="editCredito(\''+id+'\')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">'+btnIcon('edit',13)+'Editar crédito</button>'
-    +'</div>'
     +creditoHeaderHtml
     +'<div style="margin-bottom:7px">'
     +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-bottom:3px">'
@@ -839,9 +930,10 @@ function openCreditoDetalle(id){
     +'<div style="height:100%;width:'+pctProgreso+'%;background:var(--acc);border-radius:4px"></div>'
     +'</div>'
     +'</div>'
-    +'<div style="display:flex;justify-content:flex-end;margin-bottom:4px">'
-    +'<button onclick="toggleOcultarPagadas(\''+id+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--mut);cursor:pointer">'
+    +'<div style="display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-bottom:4px;position:relative">'
+    +'<button onclick="toggleOcultarPagadas(\''+id+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;color:var(--mut);cursor:pointer">'
     +(ocultar?'Mostrar pagadas':'Ocultar pagadas')+'</button>'
+    +accionesPillHtml
     +'</div>'
     +'<div id="cr-list" style="max-height:380px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2)">'+rowsHtml+'</div>'
     +'<div class="macts" style="margin-top:10px">'

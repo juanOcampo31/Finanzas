@@ -327,11 +327,6 @@ function renderGastos(gastos,which) {
     ordenOpen,"toggleGOrden('"+which+"')",ordenOptsHtml
   );
 
-  // Enlace directo al balance tipo "cuenta T" de esta quincena (ver js/reportes.js) — mismo
-  // estilo de píldora que las de arriba, para no competir visualmente con el encabezado.
-  var balanceBtnHtml='<button onclick="openReportes(\''+which+'\')" style="background:none;border:1px solid var(--brd2);border-radius:20px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--mut);display:flex;align-items:center;gap:4px;flex-shrink:0">'
-    +icon('barChart',10)+'Balance'
-    +'</button>';
   var noteFilterRow=sinPagarCount>0
     ?'<div class="glist-note-row has-note"><span class="glist-note-txt">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</span></div>'
     :'';
@@ -342,7 +337,7 @@ function renderGastos(gastos,which) {
   return '<div class="glist-card" style="overflow:visible">'
     +'<div class="glist-head">'
     +'<span class="glist-title"><span style="color:var(--acc)">Gastos Q'+qLabel+'</span> · '+totalIndividual+'</span>'
-    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+balanceBtnHtml+filtroBtnHtml+ordenBtnHtml+'</span>'
+    +'<span class="glist-sub" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+filtroBtnHtml+ordenBtnHtml+'</span>'
     +'</div>'
     +'<div class="glist-totals">'
     +'<div class="glist-tot"><div class="glist-tot-lbl">GASTOS Q'+qLabel+'</div><div class="glist-tot-val" style="color:var(--txt)">'+cop(total)+'</div></div>'

@@ -664,6 +664,7 @@ function generarGastosCredito(nm){
     try{
       if(creditoManejadoPorNomina(crId)) return;
       var cr=creditos[crId];
+      if(cr.refinanciado) return;
       var amort=calcAmortizacion(cr);
       // Cuotas ya cubiertas por un gasto O por una deducción de nómina — si no se revisa también
       // la nómina, un crédito así termina con un gasto duplicado además de su deducción real.
