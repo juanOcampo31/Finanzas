@@ -917,7 +917,8 @@ function openCreditoDetalle(id){
     +(puedeAbonar?creditoAccionOptHtml('dollar','Abonar a capital','creditoAccionesOpen=false;openAbonoModal(\''+id+'\')'):'')
     +(puedeAbonar?creditoAccionOptHtml('snowflake','Congelar cuota','creditoAccionesOpen=false;openCongelarModal(\''+id+'\')'):'')
     +((activoCr&&!cr.refinanciado)?creditoAccionOptHtml('refresh','Refinanciar','creditoAccionesOpen=false;abrirRefinanciarCredito(\''+id+'\')'):'')
-    +creditoAccionOptHtml('edit','Editar crédito','creditoAccionesOpen=false;editCredito(\''+id+'\')');
+    +creditoAccionOptHtml('edit','Editar crédito','creditoAccionesOpen=false;editCredito(\''+id+'\')')
+    +creditoAccionOptHtml('print','Imprimir comprobante','creditoAccionesOpen=false;imprimirComprobanteCredito(\''+id+'\')');
   var accionesPillHtml=stdPillPopupHtml('Acciones',creditoAccionesOpen,'toggleCreditoAccionesDropdown(\''+id+'\')',accionesOptsHtml);
   openWindow(tcVincBadge
     +creditoHeaderHtml
@@ -945,6 +946,125 @@ function openCreditoDetalle(id){
     var el=document.getElementById('cr-row-'+proximaIdx);
     if(el) el.scrollIntoView({block:'center'});
   },50);
+}
+
+// Comprobante imprimible de un crédito (estilo planilla: datos generales + tabla de plan de
+// pagos completa), pensado para refinanciaciones ("quiero algo que no se pueda modificar") — una
+// vez impreso/guardado como PDF desde el diálogo nativo del navegador, es una foto fija del
+// crédito en ese momento, aparte de la app. Se arma en #printArea (ver index.html/style.css,
+// @media print) y se dispara window.print(); no usa ninguna librería nueva.
+function imprimirComprobanteCredito(id){
+  const cr=creditos[id]; if(!cr) return;
+  const amort=calcAmortizacion(cr);
+  const frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
+  const fmtFecha=function(f){ return new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'2-digit'}); };
+  const pagadasCount=(cr.pagos||[]).filter(Boolean).length;
+
+  const celda='border:1px solid #000;padding:1px 5px;font-size:10px';
+  // Lista de campos en vez de pares fijos: así el AVAL (si no aplica) simplemente no entra a la
+  // lista, sin dejar huecos ni celdas vacías — y "Cuota Sugerida" ya no se muestra (se pidió
+  // quitarla, el dato que importa para el comprobante es "Valor Cuota", el que de verdad se paga).
+  var camposInfo=[{label:'Valor del Préstamo',val:'<span style="color:#00c">'+cop(cr.valorPrestamo)+'</span>'}];
+  if(amort.aval>0){
+    camposInfo.push({label:'% AVAL',val:(cr.pctAval||0)+'%'});
+    camposInfo.push({label:'AVAL',val:cop(amort.aval)});
+  }
+  camposInfo.push({label:'Cuotas',val:cr.cuotas||amort.rows.length});
+  camposInfo.push({label:'Tasa de interés',val:(cr.tasa||0)+'%'});
+  camposInfo.push({label:'TOTAL',val:cop(amort.total)});
+  camposInfo.push({label:'Valor Cuota',val:cop(amort.valorCuota)});
+  camposInfo.push({label:'Inicio Crédito',val:fmtFecha(cr.fechaInicio)});
+  camposInfo.push({label:'Frecuencia',val:frecLbl});
+  var infoFilas='';
+  for(var ci=0;ci<camposInfo.length;ci+=2){
+    var campoA=camposInfo[ci], campoB=camposInfo[ci+1];
+    infoFilas+='<tr>'
+      +'<td style="'+celda+';font-weight:bold">'+campoA.label+'</td><td style="'+celda+';text-align:right">'+campoA.val+'</td>'
+      +(campoB
+        ?('<td style="'+celda+';font-weight:bold">'+campoB.label+'</td><td style="'+celda+';text-align:right">'+campoB.val+'</td>')
+        :'<td style="'+celda+'" colspan="2"></td>')
+      +'</tr>';
+  }
+  const infoHtml='<table style="width:100%;border-collapse:collapse;margin-top:0">'+infoFilas+'</table>';
+
+  const celdaTabla='border:1px solid #000;padding:1px 4px;font-size:9.5px;line-height:1.2';
+  // Abonos a capital (ver openAbonoModal/js/creditos-abonos.js) agrupados por la cuota después de
+  // la cual se aplicaron (idx===-1 = antes de la cuota 1) — se intercalan como una fila extra
+  // justo debajo de esa cuota, en vez de aparecer en una sección aparte.
+  const abonosPorIdx={};
+  (cr.abonos||[]).forEach(function(ab){ (abonosPorIdx[ab.idx]=abonosPorIdx[ab.idx]||[]).push(ab); });
+  const abonoRowHtml=function(ab,saldoDespues){
+    return '<tr style="background:#eee;font-style:italic">'
+      +'<td style="'+celdaTabla+';text-align:center">—</td>'
+      +'<td style="'+celdaTabla+'">'+fmtFecha(ab.fecha)+' (Abono Adic)</td>'
+      +'<td style="'+celdaTabla+';text-align:right">'+cop(ab.monto)+'</td>'
+      +'<td style="'+celdaTabla+';text-align:right">'+cop(ab.monto)+'</td>'
+      +'<td style="'+celdaTabla+';text-align:right">—</td>'
+      +'<td style="'+celdaTabla+';text-align:right">'+cop(saldoDespues)+'</td>'
+      +'<td style="'+celdaTabla+'"></td>'
+      +'</tr>';
+  };
+  let filasHtml='';
+  if(abonosPorIdx[-1]){
+    var cursorIni=amort.total;
+    abonosPorIdx[-1].forEach(function(ab){
+      cursorIni=Math.max(0,Math.round((cursorIni-ab.monto)*100)/100);
+      filasHtml+=abonoRowHtml(ab,cursorIni);
+    });
+  }
+  amort.rows.forEach(function(r,i){
+    const pagada=!!(cr.pagos&&cr.pagos[i]);
+    const marca=pagada
+      ?'<span style="color:#080;font-weight:bold">&#10003;</span>'
+      :'<span style="display:inline-block;width:7px;height:7px;border:1px solid #000"></span>';
+    // r.saldo YA incluye el efecto de un abono aplicado DESPUÉS de esta cuota (ver
+    // calcAmortizacionSinCache) — para que el saldo de la cuota no se vea "afectado" por el
+    // abono (y confunda, mostrando el mismo número en las dos filas), se le suma de vuelta el
+    // abono acá, y el saldo real (ya rebajado) solo aparece en la fila del abono, debajo.
+    const totalAquí=abonosPorIdx[i]?abonosPorIdx[i].reduce(function(a,ab){return a+ab.monto;},0):0;
+    const saldoCuota=Math.round((r.saldo+totalAquí)*100)/100;
+    filasHtml+='<tr>'
+      +'<td style="'+celdaTabla+';text-align:center">'+r.numero+'</td>'
+      +'<td style="'+celdaTabla+'">'+fmtFecha(r.fecha)+'</td>'
+      +'<td style="'+celdaTabla+';text-align:right">'+cop(r.valorCuota)+'</td>'
+      +'<td style="'+celdaTabla+';text-align:right">'+cop(r.capital)+'</td>'
+      +'<td style="'+celdaTabla+';text-align:right">'+cop(r.intereses)+'</td>'
+      +'<td style="'+celdaTabla+';text-align:right">'+cop(saldoCuota)+'</td>'
+      +'<td style="'+celdaTabla+';text-align:center">'+marca+'</td>'
+      +'</tr>';
+    if(abonosPorIdx[i]){
+      var cursor=saldoCuota;
+      abonosPorIdx[i].forEach(function(ab){
+        cursor=Math.max(0,Math.round((cursor-ab.monto)*100)/100);
+        filasHtml+=abonoRowHtml(ab,cursor);
+      });
+    }
+  });
+  const totalAbonosGeneral=(cr.abonos||[]).reduce(function(a,ab){return a+ab.monto;},0);
+  const totalCuota=amort.rows.reduce(function(a,r){return a+r.valorCuota;},0)+totalAbonosGeneral;
+  const totalCapital=amort.rows.reduce(function(a,r){return a+r.capital;},0)+totalAbonosGeneral;
+  const totalIntereses=amort.rows.reduce(function(a,r){return a+r.intereses;},0);
+  const encCeldas='border:1px solid #000;padding:2px 4px;font-size:9px;font-weight:bold;background:#ccc;text-transform:uppercase';
+  const planHtml='<table style="width:100%;border-collapse:collapse;margin-top:8px">'
+    +'<thead><tr>'
+    +'<th style="'+encCeldas+'">Cuota</th><th style="'+encCeldas+'">Fecha Pago</th><th style="'+encCeldas+'">Valor Cuota</th>'
+    +'<th style="'+encCeldas+'">Capital</th><th style="'+encCeldas+'">Intereses</th><th style="'+encCeldas+'">Saldo</th><th style="'+encCeldas+'">Pago</th>'
+    +'</tr></thead><tbody>'+filasHtml
+    +'<tr style="font-weight:bold">'
+    +'<td style="'+celdaTabla+'" colspan="2">Total</td>'
+    +'<td style="'+celdaTabla+';text-align:right">'+cop(totalCuota)+'</td>'
+    +'<td style="'+celdaTabla+';text-align:right">'+cop(totalCapital)+'</td>'
+    +'<td style="'+celdaTabla+';text-align:right">'+cop(totalIntereses)+'</td>'
+    +'<td style="'+celdaTabla+'"></td>'
+    +'<td style="'+celdaTabla+';text-align:center">'+pagadasCount+'</td>'
+    +'</tr></tbody></table>';
+
+  document.getElementById('printArea').innerHTML=
+    '<div style="font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;max-width:720px;margin:0 auto;border:2px solid #000">'
+    +'<div style="text-align:center;font-size:17px;font-weight:bold;padding:4px;border-bottom:2px solid #000">Préstamo '+esc(cr.nombre)+'</div>'
+    +'<div style="padding:4px">'+infoHtml+planHtml+'</div>'
+    +'</div>';
+  window.print();
 }
 
 // Editor completo del crédito — antes solo se podía renombrar (editNombreCredito), y

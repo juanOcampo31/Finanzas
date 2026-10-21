@@ -364,3 +364,18 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .qr-status{position:absolute;bottom:0;left:0;right:0;padding:16px 16px max(16px,env(safe-area-inset-bottom));text-align:center;color:#fff;font-size:13px;font-weight:600;z-index:2;background:linear-gradient(0deg,rgba(0,0,0,.6),transparent)}
 .qr-confirm{flex:1;background:var(--bg);padding:16px 16px max(16px,env(safe-area-inset-bottom));display:flex;flex-direction:column;overflow-y:auto}
 .qr-confirm-raw{font-size:11px;color:var(--mut);background:var(--surf);border:1px solid var(--brd);border-radius:var(--r2);padding:10px;margin-top:4px;word-break:break-all;max-height:80px;overflow-y:auto}
+
+/* ── Comprobante imprimible de crédito (ver imprimirComprobanteCredito, js/creditos-ui.js) ───
+   #printArea vive fuera de #app, siempre en el DOM pero vacío/oculto en pantalla; al imprimir,
+   @media print esconde todo lo demás (el candado, los modales, la barra inferior...) y solo deja
+   ver el comprobante — así "Guardar como PDF" del diálogo de impresión del celular produce un
+   documento limpio, sin la interfaz de la app alrededor. */
+#printArea{display:none}
+@media print{
+  /* html,body traen height:100%+overflow:hidden globales (pensados para que la app nunca
+     scrollee como página, solo por dentro) — sin anularlos acá, el comprobante quedaba
+     recortado a una sola pantalla/página aunque el plan de pagos tuviera más cuotas. */
+  html,body{background:#fff!important;height:auto!important;overflow:visible!important}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block!important;position:static;background:#fff;color:#000}
+}
