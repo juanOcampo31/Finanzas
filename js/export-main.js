@@ -13,6 +13,10 @@ function backupNubeSectionHtml(){
       +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Sincronizado automáticamente como <b style="color:var(--txt)">'+esc(user.email||user.displayName||'')+'</b>.'
       +(lastSyncTxt?(' Última sincronización: '+esc(lastSyncTxt)+'.'):' Todavía no se ha sincronizado nada en este dispositivo.')
       +'</p>'
+      +((typeof syncEnPausa==='function'&&syncEnPausa())
+        ?'<p style="font-size:11px;color:var(--amb);margin-bottom:10px">⚠️ Sincronización en pausa: la nube tiene datos más nuevos que este dispositivo. Toca <b>Bajar ahora</b> para traerlos, o <b>Subir ahora</b> para reemplazarlos con los de aquí.</p>'
+        :'')
+      +''
       +'<div style="display:flex;flex-direction:column;gap:10px">'
       +'<button class="bpri" onclick="subirBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('upload',16)+' Subir ahora</button>'
       +'<button class="bcnl" onclick="bajarBackupNube()" style="display:flex;align-items:center;justify-content:center;gap:8px">'+icon('download',16)+' Bajar ahora</button>'
@@ -248,6 +252,9 @@ function confirmImport(){
   gSort={q1:'orden',q2:'orden'};
   gFilterOpen={q1:false,q2:false};
   gOrdenOpen={q1:false,q2:false};
+  // Los datos locales acaban de reemplazarse a propósito: si la sincronización estaba en pausa
+  // por una nube más nueva (ver js/sync.js), ya no hay nada que proteger — este save() sube.
+  if(typeof syncMarcarListo==='function') syncMarcarListo();
   save();closeModal();render();
   toast('Datos importados correctamente ✓');
   window._importedDb=null;

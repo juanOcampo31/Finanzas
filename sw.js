@@ -1,7 +1,7 @@
 ﻿// Sube este número cada vez que despliegues cambios en index.html/CSS/JS.
 // Si lo olvidas, los usuarios seguirán viendo la versión anterior offline
 // hasta que haya red disponible para revalidar.
-const CACHE_VERSION = '2.91';
+const CACHE_VERSION = '2.92';
 const CACHE = 'finanzas-' + CACHE_VERSION;
 const FILES = ['./', './index.html', './style.css',
   './js/core.js', './js/state.js', './js/auth.js', './js/creditos-calculo.js', './js/creditos-ui.js',

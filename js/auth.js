@@ -77,6 +77,10 @@ function hideLockOverlay(){
   const appEl=document.getElementById('app');
   if(appEl) appEl.style.display='flex';
   document.body.style.overflow='hidden';
+  // Todos los caminos que desbloquean la app pasan por acá — revisa en segundo plano si hay un
+  // respaldo más nuevo en la nube y habilita la subida automática (ver js/sync.js). No bloquea
+  // el desbloqueo ni reemplaza nada sin preguntar primero.
+  if(typeof revisarSyncAlDesbloquear==='function') revisarSyncAlDesbloquear();
 }
 
 function lockPinPress(d){
@@ -97,10 +101,7 @@ async function lockPinConfirm(){
       try{
         if(!sessionDataKey){ await ensureDataKey(pin); await loadAppData(); }
         clearPinRecoveryBackup(); // el material actual funciona de punta a punta: ya no hace falta el respaldo
-        appUnlocked=true; hideLockOverlay(); render();
-        // Revisa en segundo plano si hay un respaldo más nuevo en la nube (ver js/sync.js) —
-        // no bloquea el desbloqueo ni reemplaza nada sin preguntar primero.
-        if(typeof revisarSyncAlDesbloquear==='function') revisarSyncAlDesbloquear();
+        appUnlocked=true; hideLockOverlay(); render(); // hideLockOverlay también revisa la nube
       }catch(e){
         // Nota: mantenemos sessionPIN (el PIN correcto y ya verificado) en memoria — las
         // opciones de recuperación de abajo lo necesitan para re-envolver la data key una
