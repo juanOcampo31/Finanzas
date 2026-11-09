@@ -326,9 +326,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
    espacio vacío que quedaba debajo del 7. Mismo fondo oscuro que las demás teclas; el color del
    ícono (#CBD5E1) ya viene fijo en el propio SVG, ver buildKeypadHTML. */
 .lock-key-action svg{width:26px;height:26px}
-.lock-bio-btn{width:100%;margin-top:18px;padding:12px;font-size:13px;font-weight:600;border-radius:16px;border:1px solid rgba(148,163,184,.18);background:rgba(255,255,255,.03);color:var(--mut);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background-color .12s,border-color .12s,transform .12s}
-.lock-bio-btn:active{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.3);transform:scale(.98)}
-.lock-bio-btn svg{width:18px;height:18px}
+/* Huella (ver js/bio.js): botón redondo con el mismo cian y brillo de los puntos del PIN
+   (.lock-dot.filled) y de la insignia de la app, en vez de la barra gris de antes. Mientras
+   espera el dedo (.lock-bio-activo) emite un anillo que se expande, como un sensor escuchando. */
+.lock-bio-btn{display:flex;flex-direction:column;align-items:center;gap:8px;margin:20px auto 0;padding:0;background:none;border:none;color:var(--mut);font-size:12px;font-weight:600;letter-spacing:.01em;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.lock-bio-ico{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--acc);background:radial-gradient(circle at 50% 30%,rgba(34,211,238,.20),rgba(34,211,238,.04) 70%);border:1px solid rgba(34,211,238,.38);box-shadow:0 0 18px rgba(34,211,238,.16),0 0 0 1px rgba(255,255,255,.03) inset;transition:transform .12s,box-shadow .2s,background-color .2s}
+.lock-bio-ico svg{width:32px;height:32px}
+.lock-bio-btn:active .lock-bio-ico{transform:scale(.93);box-shadow:0 0 26px rgba(34,211,238,.38)}
+.lock-bio-btn.lock-bio-activo{color:var(--acc)}
+.lock-bio-btn.lock-bio-activo .lock-bio-ico{animation:lock-bio-escucha 1.5s ease-out infinite}
+@keyframes lock-bio-escucha{0%{box-shadow:0 0 18px rgba(34,211,238,.25),0 0 0 0 rgba(34,211,238,.45)}100%{box-shadow:0 0 18px rgba(34,211,238,.25),0 0 0 18px rgba(34,211,238,0)}}
+@media (prefers-reduced-motion:reduce){.lock-bio-btn.lock-bio-activo .lock-bio-ico{animation:none;box-shadow:0 0 26px rgba(34,211,238,.4)}}
+/* Variante para el modal de sugerencia (bioSugerirTrasPin): misma insignia, centrada arriba. */
+.bio-sug-ico{margin:4px auto 14px}
 /* Verificando el PIN (ver lockSetBusy en auth.js): los puntos pulsan en ola y el teclado se
    atenúa y deja de aceptar toques, para que se note que la app está trabajando y no trabada. */
 .lock-card.lock-busy .lock-keys{opacity:.45;pointer-events:none;transition:opacity .2s}

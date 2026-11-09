@@ -212,8 +212,9 @@ async function bioSugerirTrasPin(){
     const texto=(estado==='invalidado')
       ?'La huella se desactivó porque cambiaste el PIN o restauraste tus datos. ¿La activas de nuevo?'
       :'La próxima vez puedes entrar con tu huella, sin escribir el PIN. El PIN sigue funcionando siempre como respaldo.';
-    openModal('<div class="mtitle" style="display:flex;align-items:center;gap:8px">'+icon('fingerprint',20)+'Entrar con huella</div>'
-      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'+esc(texto)+'</p>'
+    openModal('<div class="lock-bio-ico bio-sug-ico">'+icon('fingerprint',32).replace('stroke-width="2"','stroke-width="1.6"')+'</div>'
+      +'<div class="mtitle" style="text-align:center">Entrar con huella</div>'
+      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px;text-align:center">'+esc(texto)+'</p>'
       +'<div class="macts">'
       +'<button class="bcnl" onclick="bioPosponerSugerencia()">Ahora no</button>'
       +'<button class="bpri" onclick="bioActivar({desdeSugerencia:true})">Activar huella</button>'
@@ -266,6 +267,8 @@ async function bioDesbloquear(){
   _bioEnCurso=true;
   const necesitaCargar=!sessionDataKey;
   lockSetBusy(true);
+  const btnBio=document.getElementById('lockBioBtn');
+  if(btnBio) btnBio.classList.add('lock-bio-activo'); // anillo pulsando mientras espera el dedo
   try{
     const secret=await bioObtenerSecreto(b64dec(reg.credId), b64dec(reg.prfSalt));
     const clave=await bioClaveDesdeSecreto(secret);
@@ -291,6 +294,7 @@ async function bioDesbloquear(){
     }
   }finally{
     _bioEnCurso=false;
+    if(btnBio) btnBio.classList.remove('lock-bio-activo');
     lockSetBusy(false);
   }
 }
