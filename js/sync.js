@@ -354,3 +354,8 @@ function revisarSyncAlDesbloquear(){
     revisarNubeParaUsuario(user);
   });
 }
+
+// sync.js carga con `defer` (ver index.html): si la app ya se desbloqueó antes de que este
+// archivo terminara de cargar, hideLockOverlay() no encontró revisarSyncAlDesbloquear y la
+// revisión de la nube se habría saltado — se hace acá en ese caso.
+if(typeof appUnlocked!=='undefined' && appUnlocked) revisarSyncAlDesbloquear();

@@ -55,6 +55,8 @@ async function showLockOverlay(mode){
   const recoveryLink=document.getElementById('lockRecoveryLink');
   recoveryLink.textContent = (mode==='setup') ? '¿Ya usas la app en otro dispositivo?' : '¿Problemas para ingresar?';
   recoveryLink.style.display='block';
+  // Botón "Usar huella" y, si está activada, el aviso de huella automático (ver js/bio.js).
+  if(typeof bioPrepararLock==='function') bioPrepararLock(mode);
 }
 // Primer nombre a mostrar en el saludo de la pantalla de bloqueo, leído de fin26_last_name
 // (texto plano) — perfilNombre en sí vive cifrado y no está disponible hasta ingresar el PIN.
@@ -81,37 +83,88 @@ function hideLockOverlay(){
   // respaldo más nuevo en la nube y habilita la subida automática (ver js/sync.js). No bloquea
   // el desbloqueo ni reemplaza nada sin preguntar primero.
   if(typeof revisarSyncAlDesbloquear==='function') revisarSyncAlDesbloquear();
+  if(typeof bioAlDesbloquear==='function') bioAlDesbloquear();
+}
+
+// Mientras se verifica el PIN (PBKDF2 puede tardar casi un segundo en un celular de gama media)
+// la pantalla mostraba los 6 puntos llenos sin ningún cambio y parecía trabada: ahora los puntos
+// pulsan, el teclado se atenúa (y no acepta toques) y el subtítulo dice "Desbloqueando…".
+let lockBusy=false;
+let lockSubAntesDeBusy='';
+function lockSetBusy(on){
+  lockBusy=on;
+  const card=document.querySelector('.lock-card');
+  if(card) card.classList.toggle('lock-busy', on);
+  const sub=document.getElementById('lockSub');
+  if(!sub) return;
+  if(on){ lockSubAntesDeBusy=sub.textContent; sub.textContent='Desbloqueando…'; }
+  else sub.textContent=lockSubAntesDeBusy;
 }
 
 function lockPinPress(d){
-  if(lockInput.length>=6) return;
+  if(lockBusy || lockInput.length>=6) return;
   lockInput+=d;
   renderLockDots();
   document.getElementById('lockError').textContent='';
-  if(lockInput.length===6) setTimeout(lockPinConfirm,150);
+  // Sin la espera fija de 150 ms de antes: el 6° punto se pinta igual, porque todo el trabajo
+  // de lockPinConfirm (WebCrypto) es asíncrono y le cede el turno al navegador para dibujar.
+  if(lockInput.length===6) lockPinConfirm();
 }
-function lockPinBackspace(){ lockInput=lockInput.slice(0,-1); renderLockDots(); }
+function lockPinBackspace(){ if(lockBusy) return; lockInput=lockInput.slice(0,-1); renderLockDots(); }
+
+// Verifica el PIN con UNA sola derivación PBKDF2 en el caso normal. Antes eran dos seguidas
+// (pinVerify + ensureDataKey, ~200k iteraciones cada una) aunque desenvolver la data key ya
+// prueba el PIN por sí solo: AES-GCM rechaza la clave equivocada.
+//  - true: PIN correcto (y, si hacía falta, sessionDataKey ya quedó desenvuelta).
+//  - false: PIN incorrecto.
+//  - lanza: el PIN SÍ es correcto pero la data key no abre (p.ej. un cambio de PIN
+//    interrumpido) — el llamador muestra las opciones de recuperación, igual que antes.
+async function verificarPinYAbrirDataKey(pin){
+  // Re-bloqueo (la data key sigue en memoria) o dato legacy sin data key todavía: basta pinVerify.
+  if(sessionDataKey || !localStorage.getItem('fin26_datakey')) return pinVerify(pin);
+  try{
+    sessionDataKey=await unwrapDataKey(pin);
+    return true;
+  }catch(e){
+    // AES-GCM falla igual con un PIN incorrecto que con una data key rota: solo en este caso de
+    // error se paga la segunda derivación para distinguir uno del otro.
+    if(await pinVerify(pin)) throw e;
+    return false;
+  }
+}
+
+// Último tramo de un desbloqueo exitoso, compartido entre el PIN (lockPinConfirm) y la huella
+// (bioDesbloquear, js/bio.js): para entonces sessionDataKey y sessionPIN ya están en memoria.
+async function completarDesbloqueo(necesitaCargar){
+  if(necesitaCargar) await loadAppData();
+  clearPinRecoveryBackup(); // el material actual funciona de punta a punta: ya no hace falta el respaldo
+  appUnlocked=true; hideLockOverlay(); render(); // hideLockOverlay también revisa la nube
+}
 
 async function lockPinConfirm(){
   if(lockInput.length!==6){ showLockError('El PIN debe tener 6 dígitos'); return; }
   if(lockMode==='unlock'){
-    const ok = await pinVerify(lockInput);
-    if(ok){
-      const pin=lockInput; sessionPIN=pin; lockInput='';
-      try{
-        if(!sessionDataKey){ await ensureDataKey(pin); await loadAppData(); }
-        clearPinRecoveryBackup(); // el material actual funciona de punta a punta: ya no hace falta el respaldo
-        appUnlocked=true; hideLockOverlay(); render(); // hideLockOverlay también revisa la nube
-      }catch(e){
-        // Nota: mantenemos sessionPIN (el PIN correcto y ya verificado) en memoria — las
-        // opciones de recuperación de abajo lo necesitan para re-envolver la data key una
-        // vez restaurado el acceso. No se persiste en ningún momento, solo vive en RAM.
-        sessionDataKey=null;
-        showLockError('No se pudieron descifrar tus datos. Intenta de nuevo.');
-        document.getElementById('lockRecoveryLink').style.display='block';
+    const pin=lockInput;
+    const necesitaCargar=!sessionDataKey;
+    lockSetBusy(true);
+    try{
+      if(!(await verificarPinYAbrirDataKey(pin))){
+        showLockError('PIN incorrecto'); lockInput=''; renderLockDots();
+        return;
       }
-    } else {
-      showLockError('PIN incorrecto'); lockInput=''; renderLockDots();
+      sessionPIN=pin; lockInput='';
+      if(necesitaCargar && !sessionDataKey) await ensureDataKey(pin); // solo dato legacy: crea la data key por primera vez
+      await completarDesbloqueo(necesitaCargar);
+    }catch(e){
+      // Nota: mantenemos sessionPIN (el PIN correcto y ya verificado) en memoria — las
+      // opciones de recuperación de abajo lo necesitan para re-envolver la data key una
+      // vez restaurado el acceso. No se persiste en ningún momento, solo vive en RAM.
+      sessionPIN=pin; lockInput=''; renderLockDots();
+      sessionDataKey=null;
+      showLockError('No se pudieron descifrar tus datos. Intenta de nuevo.');
+      document.getElementById('lockRecoveryLink').style.display='block';
+    }finally{
+      lockSetBusy(false);
     }
   } else if(lockMode==='setup1'){
     lockFirstPin=lockInput; lockInput=''; lockMode='setup2';
@@ -442,7 +495,7 @@ function executeWipeAll(){
   if(v!=='BORRAR'){ showAlert('Escribe BORRAR para confirmar.'); return; }
   ['fin26_pin_salt','fin26_pin_check_iv','fin26_pin_check_ct',
    'fin26_pin_salt_prev','fin26_pin_check_iv_prev','fin26_pin_check_ct_prev',
-   'fin26_datakey','fin26_datakey_prev','fin26_recovery','fin26_enc',
+   'fin26_datakey','fin26_datakey_prev','fin26_recovery','fin26_bio','fin26_enc',
    'fin26','fin26_creditos','fin26_cat_metodos','fin26_cat_tipos','fin26_cat_categorias','fin26m'
   ].forEach(function(k){ localStorage.removeItem(k); });
   location.reload();
@@ -499,6 +552,7 @@ function openSeguridadMenu(){
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<button class="bcnl" onclick="closeModal();startChangePIN()">'+btnIcon('key')+'Cambiar contraseña (PIN)</button>'
     +'<button class="bcnl" onclick="closeModal();startSetRecoveryPhone()">'+btnIcon('phone')+(hasRecoveryPhone?'Editar':'Configurar')+' número de recuperación</button>'
+    +(typeof bioBotonSeguridadHtml==='function'?bioBotonSeguridadHtml():'')
     +'</div>'
     +'<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--brd)">'
     +'<p style="font-size:11px;color:var(--mut);margin-bottom:10px">Exporta tus datos para guardarlos en Drive, WhatsApp o email, o importa un backup para restaurarlos.</p>'
@@ -567,7 +621,14 @@ async function confirmChangePIN(){
   try{
     await commitNewPin(n1);
     closeModal();
-    toast('PIN actualizado ✓');
+    // La copia de la huella guarda el PIN viejo (ver js/bio.js): ya no sirve. Reactivarla pide
+    // poner el dedo de nuevo, así que no se hace sola — solo se avisa.
+    if(typeof bioEstado==='function' && bioEstado()!=='no'){
+      bioDesactivar();
+      toast('PIN actualizado ✓ Vuelve a activar la huella en Seguridad.',6000);
+    } else {
+      toast('PIN actualizado ✓');
+    }
   }catch(e){
     console.error('Error cambiando PIN — no se modificó ninguna información', e);
     showAlert('No se pudo cambiar el PIN de forma segura. No se modificó tu información; intenta de nuevo.');
@@ -809,19 +870,28 @@ async function encryptPayload(obj){
   const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, sessionDataKey, pt);
   return {iv:b64enc(iv), ct:b64enc(ct)};
 }
-async function decryptPayload(envelope){
+// Devuelve el JSON descifrado como TEXTO (no el objeto) — loadAppData lo compara contra lo que
+// guardaría save() para saber si las migraciones cambiaron algo.
+async function decryptPayloadTexto(envelope){
   const iv = new Uint8Array(b64dec(envelope.iv));
   const ct = b64dec(envelope.ct);
   const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:iv}, sessionDataKey, ct);
-  return JSON.parse(new TextDecoder().decode(pt));
+  return new TextDecoder().decode(pt);
+}
+// Lo que se cifra en fin26_enc — compartido entre save() y la comparación de loadAppData(),
+// para que ambos generen exactamente el mismo JSON (mismo orden de campos).
+function datosParaGuardar(){
+  return {db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos};
 }
 
 // Carga db/creditos/catálogos ya descifrados con sessionDataKey (o migra datos legacy en
 // texto plano la primera vez). Requiere que ensureDataKey() ya se haya ejecutado.
 async function loadAppData(){
   const encRaw = localStorage.getItem('fin26_enc');
+  let textoOriginal = null;
   if(encRaw){
-    const payload = await decryptPayload(JSON.parse(encRaw)); // lanza si la clave no coincide
+    textoOriginal = await decryptPayloadTexto(JSON.parse(encRaw)); // lanza si la clave no coincide
+    const payload = JSON.parse(textoOriginal);
     db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||''; perfilQ2DiasFijos = !!payload.q2DiasFijos;
   } else {
     loadLegacyPlaintext();
@@ -835,7 +905,11 @@ async function loadAppData(){
   // candidatos del mes son de la misma tarjeta (tcCardId), para no adivinar mal a cuál tarjeta
   // pertenecía si hubiera varias distintas.
   repararGastosHuerfanosDeGrupo();
-  await save();
+  // Antes se volvía a cifrar y escribir TODO en cada desbloqueo (y eso además programaba una
+  // subida a la nube), aunque las migraciones casi nunca cambian nada. Ahora solo se guarda si
+  // el resultado difiere de lo que ya estaba cifrado, o si se acaban de migrar datos legacy.
+  if(textoOriginal===null || JSON.stringify(datosParaGuardar())!==textoOriginal) await save();
+  else cacheNombreParaSaludo(); // lo único de save() que sí hace falta en cada carga
   localStorage.removeItem('fin26');
   localStorage.removeItem('fin26_creditos');
   localStorage.removeItem('fin26_cat_metodos');
@@ -851,7 +925,7 @@ async function loadAppData(){
 function save(){
   saveChain = saveChain.then(async function(){
     if(!sessionDataKey) return; // no debería pasar: save() solo se usa después de desbloquear
-    const envelope = await encryptPayload({db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos});
+    const envelope = await encryptPayload(datosParaGuardar());
     localStorage.setItem('fin26_enc', JSON.stringify(envelope));
     cacheNombreParaSaludo();
     // Sincronización automática (ver js/sync.js) — no hace nada si no hay sesión de Google

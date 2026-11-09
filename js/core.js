@@ -53,9 +53,10 @@ window.addEventListener('storage', function(e){
 });
 
 // ── SEGURIDAD: PIN y cifrado de backups (AES-GCM) ──────────────────────────────
-// (No hay biometría/WebAuthn implementada — solo PIN. Si se agrega a futuro, debe ser un
-// segundo factor de conveniencia sobre este PIN, no un reemplazo: WebAuthn no produce
-// material criptográfico portable para derivar la data key entre dispositivos.)
+// El PIN es la llave principal. La huella (js/bio.js) es una llave ADICIONAL y opcional, por
+// dispositivo: una passkey con la extensión PRF de WebAuthn entrega un secreto que solo sale con
+// la huella, y con él se abre una copia de la data key (+ el PIN) guardada en fin26_bio. No es
+// portable entre dispositivos ni reemplaza al PIN (que sigue cifrando los respaldos).
 let appUnlocked = false;   // controla si la UI está visible o tapada por el lock
 let sessionPIN  = null;    // PIN en memoria durante la sesión (nunca se persiste)
 let lockMode    = 'unlock';// 'unlock' | 'setup1' | 'setup2'
