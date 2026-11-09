@@ -155,6 +155,9 @@ async function lockPinConfirm(){
       sessionPIN=pin; lockInput='';
       if(necesitaCargar && !sessionDataKey) await ensureDataKey(pin); // solo dato legacy: crea la data key por primera vez
       await completarDesbloqueo(necesitaCargar);
+      // Solo tras entrar con PIN (no con huella ni por recuperación): ofrece activar la huella
+      // si este dispositivo la soporta y todavía no está activa (ver js/bio.js).
+      if(typeof bioSugerirTrasPin==='function') bioSugerirTrasPin();
     }catch(e){
       // Nota: mantenemos sessionPIN (el PIN correcto y ya verificado) en memoria — las
       // opciones de recuperación de abajo lo necesitan para re-envolver la data key una
@@ -495,7 +498,7 @@ function executeWipeAll(){
   if(v!=='BORRAR'){ showAlert('Escribe BORRAR para confirmar.'); return; }
   ['fin26_pin_salt','fin26_pin_check_iv','fin26_pin_check_ct',
    'fin26_pin_salt_prev','fin26_pin_check_iv_prev','fin26_pin_check_ct_prev',
-   'fin26_datakey','fin26_datakey_prev','fin26_recovery','fin26_bio','fin26_enc',
+   'fin26_datakey','fin26_datakey_prev','fin26_recovery','fin26_bio','fin26_bio_sugerencia','fin26_enc',
    'fin26','fin26_creditos','fin26_cat_metodos','fin26_cat_tipos','fin26_cat_categorias','fin26m'
   ].forEach(function(k){ localStorage.removeItem(k); });
   location.reload();

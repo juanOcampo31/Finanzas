@@ -105,7 +105,10 @@ function bioBotonSeguridadHtml(){
   return '<button class="bcnl" onclick="bioActivar()">'+btnIcon('fingerprint')+'Activar desbloqueo con huella</button>';
 }
 
-async function bioActivar(){
+// opts.desdeSugerencia: viene del modal de bioSugerirTrasPin — al terminar se cierra ese modal
+// en vez de abrir el menú de Seguridad (que el usuario nunca abrió).
+async function bioActivar(opts){
+  const desdeSugerencia=!!(opts&&opts.desdeSugerencia);
   if(!sessionDataKey){ showAlert('No se puede activar en este momento. Cierra y vuelve a abrir la app, e inténtalo de nuevo.'); return; }
   let pin=sessionPIN;
   if(!pin){
@@ -157,7 +160,7 @@ async function bioActivar(){
     }));
     if(anterior && anterior.credId!==b64enc(cred.rawId)) bioOlvidarPasskey(anterior);
     toast('Desbloqueo con huella activado ✓');
-    openSeguridadMenu();
+    if(desdeSugerencia) closeModal(); else openSeguridadMenu();
   }catch(e){
     if(cred) bioOlvidarPasskey({credId:b64enc(cred.rawId)}); // passkey creada pero sin terminar: no dejarla huérfana
     if(e && e.name==='NotAllowedError') return; // canceló o se venció el tiempo: no es un error
@@ -169,9 +172,63 @@ async function bioActivar(){
 function bioConfirmarDesactivar(){
   showConfirm('Vas a volver a entrar solo con tu PIN en este dispositivo.',function(){
     bioDesactivar();
+    bioGuardarPrefSugerencia({nunca:true}); // la quitaste a propósito: no volver a ofrecerla sola
     toast('Desbloqueo con huella desactivado');
     openSeguridadMenu();
   },{title:'Desactivar huella', confirmLabel:'Desactivar'});
+}
+
+// ── Sugerencia después de entrar con el PIN ─────────────────────────────────────────────
+// Sin esto, la huella solo se encontraba entrando a Seguridad. Ahora, al desbloquear con PIN en
+// un dispositivo que la soporta y sin huella activa (o con una que se invalidó al cambiar el
+// PIN), se ofrece activarla. "Ahora no" la pospone BIO_SUGERENCIA_ESPERA_MS; "No volver a
+// preguntar" (o desactivarla a mano en Seguridad) la apaga para siempre en este dispositivo.
+const BIO_SUGERENCIA_KEY='fin26_bio_sugerencia';
+const BIO_SUGERENCIA_ESPERA_MS=7*24*60*60*1000;
+
+function bioLeerPrefSugerencia(){
+  try{ return JSON.parse(localStorage.getItem(BIO_SUGERENCIA_KEY)||'{}')||{}; }
+  catch(e){ return {}; }
+}
+function bioGuardarPrefSugerencia(pref){
+  try{ localStorage.setItem(BIO_SUGERENCIA_KEY, JSON.stringify(pref)); }catch(e){}
+}
+
+async function bioSugerirTrasPin(){
+  const estado=bioEstado();
+  if(estado==='activo') return;
+  const pref=bioLeerPrefSugerencia();
+  if(pref.nunca) return;
+  if(pref.hasta && Date.now()<pref.hasta) return;
+  if(!(await bioDisponibleEnDispositivo())) return;
+  // Pequeña espera para no taparle la pantalla apenas entra, y para que el aviso de "respaldo
+  // más reciente en la nube" (ver js/sync.js), que importa más, salga primero si aplica. Si ya
+  // hay cualquier modal abierto, no se sugiere ahora — y como no se registra como "Ahora no",
+  // vuelve a ofrecerse en el próximo desbloqueo con PIN.
+  setTimeout(function(){
+    if(!appUnlocked) return;
+    const mbg=document.getElementById('mbg');
+    if(mbg && mbg.classList.contains('open')) return;
+    const texto=(estado==='invalidado')
+      ?'La huella se desactivó porque cambiaste el PIN o restauraste tus datos. ¿La activas de nuevo?'
+      :'La próxima vez puedes entrar con tu huella, sin escribir el PIN. El PIN sigue funcionando siempre como respaldo.';
+    openModal('<div class="mtitle" style="display:flex;align-items:center;gap:8px">'+icon('fingerprint',20)+'Entrar con huella</div>'
+      +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">'+esc(texto)+'</p>'
+      +'<div class="macts">'
+      +'<button class="bcnl" onclick="bioPosponerSugerencia()">Ahora no</button>'
+      +'<button class="bpri" onclick="bioActivar({desdeSugerencia:true})">Activar huella</button>'
+      +'</div>'
+      +'<button class="lock-link" style="color:var(--mut)" onclick="bioNoVolverASugerir()">No volver a preguntar</button>');
+  }, 1500);
+}
+function bioPosponerSugerencia(){
+  bioGuardarPrefSugerencia({hasta:Date.now()+BIO_SUGERENCIA_ESPERA_MS});
+  closeModal();
+}
+function bioNoVolverASugerir(){
+  bioGuardarPrefSugerencia({nunca:true});
+  closeModal();
+  toast('Puedes activarla cuando quieras en Seguridad',4000);
 }
 
 // ── Pantalla de bloqueo ─────────────────────────────────────────────────────────────────
