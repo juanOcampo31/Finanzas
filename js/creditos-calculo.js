@@ -111,7 +111,110 @@ function etiquetaCredito(cred){ return cred.esMensualidad?'de la mensualidad':'d
 // filas) muchas veces dentro del mismo render. invalidarAmortCache() se llama ahí cuando
 // cambian esos campos.
 const _amortCache=new Map();
-function invalidarAmortCache(id){ _amortCache.delete(id); }
+function invalidarAmortCache(id){ _amortCache.delete(id); programarAjusteGastosCredito(id); }
+
+// ── Gastos de cuotas que ya no existen ───────────────────────────────────────
+// invalidarAmortCache() es el punto por el que pasan TODOS los cambios que pueden acortar (o
+// volver a alargar) un crédito: abonos a capital, pagar una cuota por más de su valor (desde la
+// lista de gastos, el formulario, el detalle del crédito o Nómina), quitar un abono, editar el
+// crédito. En vez de repetir la limpieza en cada uno de esos caminos, se agenda acá y corre en
+// el siguiente turno (setTimeout 0), cuando el llamador ya terminó de mutar y guardar — así no
+// se le cambian las listas de gastos en medio de un recorrido.
+const _creditosPorAjustar=new Set();
+function programarAjusteGastosCredito(id){
+  if(!id) return;
+  const estabaVacio=!_creditosPorAjustar.size;
+  _creditosPorAjustar.add(id);
+  if(estabaVacio) setTimeout(procesarAjustesGastosCredito,0);
+}
+function procesarAjustesGastosCredito(){
+  const ids=Array.from(_creditosPorAjustar);
+  _creditosPorAjustar.clear();
+  if(!appUnlocked) return; // con la app bloqueada no se toca nada (no se podría guardar)
+  var quitadas=0, restauradas=0, ajustadas=0;
+  ids.forEach(function(id){
+    try{
+      const r=ajustarGastosCreditoAlPlazo(id);
+      quitadas+=r.quitadas; restauradas+=r.restauradas; ajustadas+=r.ajustadas;
+    }catch(err){ console.error('No se pudieron ajustar los gastos del crédito '+id+':',err); }
+  });
+  if(!quitadas && !restauradas && !ajustadas) return;
+  save(); render();
+  if(quitadas) toast(quitadas===1?'Se quitó 1 cuota pendiente que ya no debes':'Se quitaron '+quitadas+' cuotas pendientes que ya no debes',3500);
+  else toast(restauradas===1?'Se restauró 1 cuota pendiente':'Se restauraron '+restauradas+' cuotas pendientes',3500);
+}
+// Quita de sus quincenas los gastos SIN PAGAR de cuotas que ya no existen en la tabla del
+// crédito (un abono o un pago de más lo saldó o le acortó el plazo). Los quitados se guardan en
+// cr.gastosRetirados para devolverlos a su lugar si después la cuota vuelve a existir (se
+// elimina el abono, se desmarca el pago). También ajusta el valor de la nueva última cuota, que
+// tras un abono suele ser menor que la cuota fija. Los gastos pagados nunca se tocan.
+function ajustarGastosCreditoAlPlazo(crId){
+  const res={quitadas:0, restauradas:0, ajustadas:0};
+  const cr=creditos[crId];
+  if(!cr || cr.refinanciado) return res;
+  const amort=calcAmortizacion(cr);
+  const n=amort.rows.length;
+  const pagos=cr.pagos||[];
+
+  Object.keys(db).forEach(function(k){
+    const mes=db[k];
+    ['q1','q2'].forEach(function(w){
+      const key=w+'_gastos';
+      const lista=mes[key]||[];
+      const quedan=lista.filter(function(g){
+        if(g.creditoId!==crId || !g.numCuota || g.pagado_flag || g.numCuota<=n) return true;
+        if(!cr.gastosRetirados) cr.gastosRetirados=[];
+        cr.gastosRetirados.push({mesKey:k, which:w, gasto:g});
+        // Si nació de un recordatorio de la Agenda, el recordatorio queda sin gasto enlazado
+        // (igual que agBorrarSoloGasto) en vez de apuntar a uno que ya no está.
+        if(g.agendaId && Array.isArray(mes.agenda)){
+          const it=mes.agenda.find(function(x){return x.id===g.agendaId;});
+          if(it && it.gastoId===g.id) it.gastoId=null;
+        }
+        res.quitadas++;
+        return false;
+      });
+      if(quedan.length!==lista.length) mes[key]=quedan;
+    });
+  });
+
+  if(cr.gastosRetirados && cr.gastosRetirados.length){
+    const usadas=cuotasOcupadasCredito(crId);
+    cr.gastosRetirados=cr.gastosRetirados.filter(function(r){
+      const num=r.gasto.numCuota;
+      if(num>n) return true; // la cuota sigue sin existir: se conserva para después
+      const mes=db[r.mesKey];
+      if(mes && !pagos[num-1] && !usadas[num]){
+        const key=r.which+'_gastos';
+        mes[key]=mes[key]||[];
+        mes[key].push(r.gasto);
+        usadas[num]=true;
+        if(r.gasto.agendaId && Array.isArray(mes.agenda)){
+          const it=mes.agenda.find(function(x){return x.id===r.gasto.agendaId;});
+          if(it && !it.gastoId) it.gastoId=r.gasto.id;
+        }
+        res.restauradas++;
+      }
+      return false;
+    });
+    if(!cr.gastosRetirados.length) delete cr.gastosRetirados;
+  }
+
+  // Plazo acortado: la última cuota que queda cierra el crédito con el remanente exacto.
+  if(n && n<(cr.cuotas||0)){
+    const ultima=amort.rows[n-1];
+    Object.keys(db).forEach(function(k){
+      const mes=db[k];
+      (mes.q1_gastos||[]).concat(mes.q2_gastos||[]).forEach(function(g){
+        if(g.creditoId===crId && g.numCuota===n && !g.pagado_flag && Math.abs((g.presupuesto||0)-ultima.valorCuota)>1){
+          g.presupuesto=ultima.valorCuota;
+          res.ajustadas++;
+        }
+      });
+    });
+  }
+  return res;
+}
 function calcAmortizacion(cred){
   if(cred.id && _amortCache.has(cred.id)) return _amortCache.get(cred.id);
   const resultado=calcAmortizacionSinCache(cred);

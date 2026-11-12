@@ -649,6 +649,41 @@ function creditoManejadoPorNomina(crId){
   });
 }
 
+// Al CREAR un crédito: antes sus gastos solo aparecían al crear el mes siguiente
+// (generarGastosCredito), así que en los meses que ya existían no se veía ninguna cuota. Ahora
+// se agregan de una vez en cada mes ya creado donde caiga una cuota sin pagar — solo desde el
+// mes actual en adelante (o cuotas que todavía no vencen): las de meses pasados casi siempre ya
+// se pagaron y solo ensuciarían esos meses. Devuelve cuántos gastos agregó.
+function crearGastosCreditoNuevo(crId){
+  const cr=creditos[crId]; if(!cr || cr.refinanciado) return 0;
+  if(creditoManejadoPorNomina(crId)) return 0;
+  const amort=calcAmortizacion(cr);
+  const pagos=cr.pagos||[];
+  const usadas=cuotasOcupadasCredito(crId);
+  const hoy=new Date();
+  const hoyStr=hoy.toISOString().slice(0,10);
+  const mesActual=hoy.getFullYear()*12+hoy.getMonth();
+  var agregados=0;
+  amort.rows.forEach(function(row,idx){
+    if(pagos[idx] || usadas[row.numero]) return;
+    const bucket=calcQuincenaCuota(new Date(row.fecha+'T12:00:00'));
+    if(bucket.año*12+bucket.mes<mesActual && row.fecha<hoyStr) return;
+    const nombreMes=MESES[bucket.mes];
+    const key=Object.keys(db).find(function(k){return db[k].año===bucket.año && db[k].nombre===nombreMes;});
+    if(!key) return; // ese mes aún no existe: generarGastosCredito lo agrega al crearlo
+    const lista=db[key][bucket.which+'_gastos']=db[key][bucket.which+'_gastos']||[];
+    lista.push({
+      id:uid(), nombre:prefijoCredito(cr)+cr.nombre, presupuesto:row.valorCuota, metodo:'Nequi',
+      pagado_real:null, estado:null, pagado_flag:false, sinpagar:false, parentId:null, esGrupo:false,
+      cuotas_total:cr.cuotas, cuota_actual:row.numero, creditoId:crId, numCuota:row.numero,
+      fecha_pago:null, comprobante:null
+    });
+    usadas[row.numero]=true;
+    agregados++;
+  });
+  return agregados;
+}
+
 function generarGastosCredito(nm){
   // Para cada crédito activo, revisar si alguna cuota cae en el mes nm (según su bucket
   // año/mes/quincena real, no el mes calendario crudo de la fecha — ver calcQuincenaCuota).

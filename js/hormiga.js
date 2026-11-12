@@ -130,24 +130,8 @@ function hormigaTarjetaInicioHtml(m,which){
     +'</div>';
 }
 
-// ── "+" de Inicio: gasto planeado o gasto hormiga ─────────────────────────────
-function hormigaElegirTipoGasto(which){
-  function opcion(iconName,bg,fg,titulo,desc,onclick){
-    return '<div class="horm-opc" onclick="'+onclick+'">'
-      +'<div class="horm-opc-ico" style="background:'+bg+';color:'+fg+'">'+icon(iconName,18)+'</div>'
-      +'<div style="flex:1;min-width:0"><div class="horm-opc-tit">'+titulo+'</div><div class="horm-opc-desc">'+desc+'</div></div>'
-      +'<span style="color:var(--mut);display:flex">'+icon('chevronRight',16)+'</span>'
-      +'</div>';
-  }
-  openModal(stdFormHeaderHtml('¿Qué vas a registrar?')
-    +'<div style="display:flex;flex-direction:column;gap:8px;margin:6px 0 4px">'
-    +opcion('card','var(--acc-d)','var(--acc)','Gasto','Arriendo, servicios, cuotas… lo que planeas pagar',"closeModal();openGasto(null,'"+which+"')")
-    +opcion('coffee','var(--amb-d)','var(--amb)','Gasto hormiga','Café, domicilio, snack… una compra pequeña que ya hiciste',"openHormigaNuevo('"+which+"')")
-    +'</div>');
-}
-
 // ── Formulario (nuevo / editar) ───────────────────────────────────────────────
-// Entrada "suelta" (tarjeta de Inicio o el "+"): al guardar se cierra, no vuelve al detalle.
+// Entrada "suelta" (el + de la tarjeta de Inicio): al guardar se cierra, no vuelve al detalle.
 function openHormigaNuevo(which){
   _hormigaVolverDetalle=null;
   openHormiga(null,which);

@@ -558,13 +558,18 @@ function saveNewCredito(){
     // Si el crédito se creó desde "+ Crear crédito nuevo" en un gasto, se le agrega ahí mismo
     // el gasto de la primera cuota ya vinculado, en vez de mandar al usuario a la sección de
     // Créditos y hacerlo volver a asociarlo manualmente.
+    // En ambos casos, el resto de cuotas se agrega en los meses que ya existen (ver
+    // crearGastosCreditoNuevo, catalogos.js) — antes solo aparecían al crear el mes siguiente.
     if(creditoDesdeGastoCtx){
       const ctx=creditoDesdeGastoCtx; creditoDesdeGastoCtx=null;
       crearGastoDesdeCredito(id,ctx);
+      const extra=crearGastosCreditoNuevo(id);
       save();closeModal();render();
-      toast('Crédito creado y gasto agregado');
+      toast(extra?('Crédito creado · '+(extra+1)+' cuotas en tus quincenas'):'Crédito creado y gasto agregado',3000);
     } else {
-      save();closeModal();openCreditosMenu();toast('Crédito creado');
+      const agregados=crearGastosCreditoNuevo(id);
+      save();closeModal();openCreditosMenu();
+      toast(agregados?('Crédito creado · '+agregados+(agregados===1?' cuota agregada':' cuotas agregadas')+' a tus quincenas'):'Crédito creado',3000);
     }
   }catch(err){
     delete creditos[id];
@@ -679,7 +684,9 @@ function confirmImportCreditoPlan(){
       cuotas:plano.cuotas, tasa:0, fechaInicio:plano.fechaInicio, frecuencia:'quincenal',
       valorCuotaManual:null, pagos:[], planImportado:plano.rows
     };
-    save();closeModal();openCreditosMenu();toast('Plan de pagos importado ✓');
+    const agregados=crearGastosCreditoNuevo(id);
+    save();closeModal();openCreditosMenu();
+    toast(agregados?('Plan importado · '+agregados+(agregados===1?' cuota agregada':' cuotas agregadas')+' a tus quincenas'):'Plan de pagos importado ✓',3000);
     window._importedPlano=null;
   }catch(err){
     delete creditos[id];
@@ -1315,28 +1322,55 @@ function toggleCuotaPago(id,idx){
   openCreditoDetalle(id);
 }
 
+// Gastos SIN PAGAR de las cuotas de un crédito, en todos los meses — son los que se borran al
+// eliminar el crédito (ver deleteCredito).
+function gastosPendientesCredito(id){
+  const out=[];
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    (mes.q1_gastos||[]).concat(mes.q2_gastos||[]).forEach(function(g){
+      if(g.creditoId===id && !g.pagado_flag) out.push(g);
+    });
+  });
+  return out;
+}
 function confirmDeleteCredito(id){
   const cr=creditos[id]; if(!cr) return;
+  const pend=gastosPendientesCredito(id).length;
+  const txtPend=pend
+    ?('Se borrarán también <b style="color:var(--txt)">'+pend+(pend===1?' cuota pendiente':' cuotas pendientes')+'</b> de tus quincenas. ')
+    :'';
   openModal('<div class="mtitle">¿Eliminar '+esc(cr.nombre)+'?</div>'
-    +'<p style="font-size:13px;color:var(--mut);margin-bottom:16px">Esta acción no se puede deshacer. Los gastos y deducciones de nómina ya creados que apuntan a este crédito no se borran, pero quedan desvinculados (sin número de cuota ni progreso asociado).</p>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:16px">Esta acción no se puede deshacer. '+txtPend
+    +'Las cuotas que ya pagaste se conservan como historial (sin número de cuota ni progreso), igual que las deducciones de nómina.</p>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCreditoDetalle(\''+id+'\')">Cancelar</button>'
     +'<button class="bpri" style="background:var(--red);color:#fff" onclick="deleteCredito(\''+id+'\')">Eliminar</button>'
     +'</div>');
 }
 
-// Al eliminar un crédito, los gastos (q1_gastos/q2_gastos) y deducciones de nómina
-// (ded_q1/ded_q2) que lo referencian quedaban con un creditoId apuntando a nada — sin romper
-// la UI (todos los usos ya validan creditos[g.creditoId]), pero perdiendo en silencio el
-// número de cuota y el badge de progreso. Se desvinculan explícitamente en vez de dejarlos
-// huérfanos.
+// Al eliminar un crédito: los gastos de cuotas SIN PAGAR se borran de todos los meses (antes
+// quedaban sueltos restando del disponible por una deuda que ya no existe en la app); los ya
+// pagados se conservan como historial y, igual que las deducciones de nómina, se desvinculan
+// (sin creditoId ni número de cuota) en vez de quedar apuntando a un crédito que ya no existe.
 function deleteCredito(id){
+  var borrados=0;
   Object.keys(db).forEach(function(k){
     var mes=db[k];
-    [mes.q1_gastos||[], mes.q2_gastos||[]].forEach(function(list){
-      list.forEach(function(g){
-        if(g.creditoId===id){ g.creditoId=null; g.numCuota=null; }
+    ['q1_gastos','q2_gastos'].forEach(function(key){
+      var lista=mes[key]||[];
+      var quedan=lista.filter(function(g){
+        if(g.creditoId!==id) return true;
+        if(g.pagado_flag){ g.creditoId=null; g.numCuota=null; return true; }
+        // Recordatorio de la Agenda enlazado: queda sin gasto (igual que agBorrarSoloGasto).
+        if(g.agendaId && Array.isArray(mes.agenda)){
+          var it=mes.agenda.find(function(x){return x.id===g.agendaId;});
+          if(it && it.gastoId===g.id) it.gastoId=null;
+        }
+        borrados++;
+        return false;
       });
+      if(quedan.length!==lista.length) mes[key]=quedan;
     });
     var nom=mes.nomina;
     if(nom){
@@ -1349,6 +1383,7 @@ function deleteCredito(id){
   });
   delete creditos[id];
   invalidarAmortCache(id);
-  save();closeModal();closeWindow();openCreditosMenu();toast('Crédito eliminado');
+  save();closeModal();closeWindow();openCreditosMenu();render();
+  toast(borrados?('Crédito eliminado · '+borrados+(borrados===1?' cuota pendiente borrada':' cuotas pendientes borradas')):'Crédito eliminado',3000);
 }
 

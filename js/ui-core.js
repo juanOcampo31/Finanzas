@@ -84,7 +84,7 @@ function runConfirmYes(){
 
 // ── FAB ───────────────────────────────────────────────────────────────────────
 function onFab(){
-  if(curTab===0)hormigaElegirTipoGasto(homeQ); // gasto planeado o gasto hormiga, ver js/hormiga.js
+  if(curTab===0)openGasto(null,homeQ); // los gastos hormiga se agregan desde su propia tarjeta en Inicio (js/hormiga.js)
   else if(curTab===1)openIngresoModal(null,curIngQ);
   else if(curTab===2)openTCModal(null);
   else if(curTab===3)addDed(curNomQ==='q1'?'Nómina Q1':'Nómina Q2');
