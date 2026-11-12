@@ -84,6 +84,9 @@ function hideLockOverlay(){
   // el desbloqueo ni reemplaza nada sin preguntar primero.
   if(typeof revisarSyncAlDesbloquear==='function') revisarSyncAlDesbloquear();
   if(typeof bioAlDesbloquear==='function') bioAlDesbloquear();
+  // Número de recuperación obligatorio (ver exigirNumeroRecuperacion): en el siguiente turno,
+  // para que el llamador termine primero lo suyo (appUnlocked=true, closeModal(), render()).
+  setTimeout(exigirNumeroRecuperacion,0);
 }
 
 // Mientras se verifica el PIN (PBKDF2 puede tardar casi un segundo en un celular de gama media)
@@ -645,16 +648,38 @@ async function confirmChangePIN(){
 // permiten recuperar el acceso desde la pantalla de bloqueo y de inmediato definir un PIN nuevo.
 // El número se guarda cifrado junto al resto de los datos (perfilTelefono, dentro de fin26_enc);
 // nunca se guarda en texto plano en localStorage.
-function startSetRecoveryPhone(){
+//
+// Es OBLIGATORIO: sin él, un error con el PIN deja los datos sin forma de recuperarlos. Por eso
+// ya no existe la opción de quitarlo (solo de cambiarlo), y si la app está desbloqueada sin
+// número (usuario nuevo, o uno que ya existía antes de esta regla, o un backup importado sin
+// teléfono) se pide en un modal que no se puede cerrar hasta guardarlo (ver
+// exigirNumeroRecuperacion; closeModal/closeBg en ui-core.js lo respetan).
+function faltaNumeroRecuperacion(){
+  return appUnlocked && !!sessionDataKey && !localStorage.getItem('fin26_recovery');
+}
+function exigirNumeroRecuperacion(){
+  if(!faltaNumeroRecuperacion()) return;
+  startSetRecoveryPhone({obligatorio:true});
+}
+function startSetRecoveryPhone(opts){
+  const obligatorio=!!(opts&&opts.obligatorio);
+  const intro=obligatorio
+    ?('<b style="color:var(--txt)">Necesitamos un número de celular para proteger tus datos.</b> '
+      +'Si alguna vez tu PIN no logra descifrarlos (por ejemplo, tras un cambio de PIN que falló), '
+      +'con los <b style="color:var(--txt)">últimos 6 dígitos</b> de este número recuperas el acceso y defines un PIN nuevo. '
+      +'Sin él, tus datos podrían quedar sin forma de recuperarse. ')
+    :('Si alguna vez tu PIN no logra descifrar tus datos (por ejemplo, tras un cambio de PIN que falló), '
+      +'podrás recuperar el acceso ingresando los <b style="color:var(--txt)">últimos 6 dígitos</b> de este número, '
+      +'y de inmediato se te pedirá definir un PIN nuevo. ');
+  const acciones=obligatorio
+    ?'<div class="macts"><button class="bpri" style="grid-column:1/-1" onclick="confirmSetRecoveryPhone()">Guardar y continuar</button></div>'
+    :'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button><button class="bpri" onclick="confirmSetRecoveryPhone()">Guardar</button></div>';
   openModal('<div class="mtitle">Número de recuperación</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">'
-    +'Si alguna vez tu PIN no logra descifrar tus datos (por ejemplo, tras un cambio de PIN que falló), '
-    +'podrás recuperar el acceso ingresando los <b style="color:var(--txt)">últimos 6 dígitos</b> de este número, '
-    +'y de inmediato se te pedirá definir un PIN nuevo. '
-    +'<b style="color:var(--amb)">Cualquiera que conozca estos 6 dígitos podrá recuperar el acceso a tus datos</b>, así que elige un número que solo tú sepas de memoria.</p>'
+    +intro
+    +'<b style="color:var(--amb)">Cualquiera que conozca estos 6 dígitos podrá recuperar el acceso a tus datos</b>, así que usa un número que solo tú sepas de memoria.</p>'
     +'<div class="field"><label>Número de celular</label><input id="rp-phone" type="tel" inputmode="numeric" maxlength="15" placeholder="Ej: 3001234567" value="'+(perfilTelefono||'').replace(/"/g,'&quot;')+'"></div>'
-    +(perfilTelefono?'<button class="bcnl" style="width:100%;color:var(--red);margin-bottom:10px" onclick="removeRecoveryPhone()">'+btnIcon('trash')+'Quitar número de recuperación</button>':'')
-    +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cancelar</button><button class="bpri" onclick="confirmSetRecoveryPhone()">Guardar</button></div>');
+    +acciones);
 }
 async function confirmSetRecoveryPhone(){
   const raw=(document.getElementById('rp-phone').value||'').trim();
@@ -675,13 +700,6 @@ async function confirmSetRecoveryPhone(){
     console.error('Error guardando número de recuperación', e);
     showAlert('No se pudo guardar el número de recuperación. Intenta de nuevo.');
   }
-}
-function removeRecoveryPhone(){
-  localStorage.removeItem('fin26_recovery');
-  perfilTelefono='';
-  save();
-  closeModal();
-  toast('Número de recuperación eliminado');
 }
 
 function lockNow(){
@@ -728,6 +746,10 @@ function migrateMonth(m) {
   if (!Array.isArray(m.q1_gastos)) m.q1_gastos = [];
   if (!Array.isArray(m.q2_gastos)) m.q2_gastos = [];
   if (!Array.isArray(m.agenda)) m.agenda = []; // ver js/agenda.js — recordatorios/tareas manuales de este mes
+  // Gastos hormiga (ver js/hormiga.js): compras pequeñas sueltas, por quincena.
+  if (!m.hormiga || typeof m.hormiga !== 'object') m.hormiga = {q1:[], q2:[]};
+  if (!Array.isArray(m.hormiga.q1)) m.hormiga.q1 = [];
+  if (!Array.isArray(m.hormiga.q2)) m.hormiga.q2 = [];
 
   // ── Ingresos adicionales (aparte de la nómina), asociados a Q1 o Q2 ──────────
   if (!m.ingresos) m.ingresos = {q1:[], q2:[]};

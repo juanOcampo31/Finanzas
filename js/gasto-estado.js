@@ -165,6 +165,9 @@ function buildDraftMonth(){
   // recurrente sí debe seguir generándose para el mes nuevo, pero eso ya lo hace por su cuenta
   // agGenerarSiguienteRecurrente (agenda.js) al pagar el periodo actual, no esta copia.
   nm.agenda = [];
+  // Los gastos hormiga son compras ya hechas en el mes que se cierra — el mes nuevo arranca
+  // sin ninguna (si no, la copia profunda las duplicaba y restaban del disponible nuevo).
+  nm.hormiga = {q1:[], q2:[]};
 
   var prevLinkedGroups=(lm.q2_gastos||[]).filter(function(g){return g.esGrupo&&g.tcCardId;});
   prevLinkedGroups.forEach(function(prevG){

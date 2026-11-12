@@ -1,10 +1,55 @@
 // ── Navegación ────────────────────────────────────────────────────────────────
-function sw(i){curTab=i;headerUserMenuOpen=false;headerMonthPanelOpen=false;render();}
+function sw(i){curTab=i;headerUserMenuOpen=false;headerMonthPanelOpen=false;registrarUsoTab(i);render();}
+
+// ── Orden de la barra inferior por uso ───────────────────────────────────────
+// Inicio (0) y Nómina (3) quedan SIEMPRE en las dos primeras posiciones; el resto (Agenda,
+// Ingresos, Tarjeta, Créditos) se ordena de la más reciente a la menos reciente según la
+// última vez que se abrió cada una (guardado por dispositivo en localStorage). El orden se
+// aplica una sola vez al abrir la app (ver render()), no en cada toque: si los botones se
+// reacomodaran apenas se toca uno, cambiarían de lugar debajo del dedo.
+const TAB_USO_KEY='fin26_tab_uso';
+const TABS_FIJAS=['0','3'];
+let tabsOrdenadas=false;
+function leerUsoTabs(){
+  try{ return JSON.parse(localStorage.getItem(TAB_USO_KEY))||{}; }catch(e){ return {}; }
+}
+function registrarUsoTab(i){
+  if(TABS_FIJAS.indexOf(String(i))>=0) return;
+  const uso=leerUsoTabs();
+  uso[i]=Date.now();
+  try{ localStorage.setItem(TAB_USO_KEY,JSON.stringify(uso)); }catch(e){}
+}
+function ordenarTabsPorUso(){
+  const bar=document.querySelector('.tabs');
+  if(!bar || typeof bar.querySelectorAll!=='function' || typeof bar.appendChild!=='function') return;
+  const botones=Array.prototype.slice.call(bar.querySelectorAll('.tab'));
+  if(!botones.length) return;
+  const uso=leerUsoTabs();
+  const clave=function(b){ return b.dataset.tabs||''; };
+  const fijas=TABS_FIJAS.map(function(t){ return botones.find(function(b){ return clave(b)===t; }); }).filter(Boolean);
+  const resto=botones
+    .filter(function(b){ return TABS_FIJAS.indexOf(clave(b))<0; })
+    .map(function(b,idx){ return {b:b, idx:idx, t:uso[clave(b)]||0}; })
+    .sort(function(a,b){ return (b.t-a.t) || (a.idx-b.idx); }) // nunca usadas: orden original
+    .map(function(x){ return x.b; });
+  fijas.concat(resto).forEach(function(b){ bar.appendChild(b); });
+}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openModal(h){document.getElementById('mc').innerHTML=h;document.getElementById('mbg').classList.add('open');}
-function closeModal(){document.getElementById('mbg').classList.remove('open');}
-function closeBg(e){if(e.target===document.getElementById('mbg'))closeModal();}
+// Número de recuperación obligatorio (ver exigirNumeroRecuperacion en auth.js): mientras falte,
+// cerrar cualquier modal vuelve a mostrar el que lo pide, y tocar el fondo no lo cierra. Si un
+// flujo cierra y abre otro modal enseguida (p.ej. showConfirm → acción), ese nuevo lo tapa y al
+// cerrarlo vuelve a aparecer el del número.
+function closeModal(){
+  document.getElementById('mbg').classList.remove('open');
+  if(typeof faltaNumeroRecuperacion==='function' && faltaNumeroRecuperacion()) exigirNumeroRecuperacion();
+}
+function closeBg(e){
+  if(e.target!==document.getElementById('mbg')) return;
+  if(typeof faltaNumeroRecuperacion==='function' && faltaNumeroRecuperacion()) return;
+  closeModal();
+}
 
 // Ventana de pantalla completa (a diferencia del modal, que es un popup tipo bottom-sheet) —
 // usada para vistas que se sienten como una pantalla propia (ej: detalle de un crédito) en
@@ -39,7 +84,7 @@ function runConfirmYes(){
 
 // ── FAB ───────────────────────────────────────────────────────────────────────
 function onFab(){
-  if(curTab===0)openGasto(null,homeQ);
+  if(curTab===0)hormigaElegirTipoGasto(homeQ); // gasto planeado o gasto hormiga, ver js/hormiga.js
   else if(curTab===1)openIngresoModal(null,curIngQ);
   else if(curTab===2)openTCModal(null);
   else if(curTab===3)addDed(curNomQ==='q1'?'Nómina Q1':'Nómina Q2');

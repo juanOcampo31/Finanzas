@@ -321,3 +321,27 @@ test('generarGastosCredito: no genera gasto para un credito refinanciado', () =>
   assert.equal(nm.q1_gastos.length, 0);
   assert.equal(nm.q2_gastos.length, 0);
 });
+
+// ── Gastos hormiga (js/hormiga.js) ──────────────────────────────────────────
+test('gastos hormiga: restan del disponible solo en su quincena', () => {
+  const ctx = freshApp();
+  const m = ctx.getM(); ctx.migrateMonth(m);
+  const d1 = ctx.calcDisponibleQuincena(m, 'q1'), d2 = ctx.calcDisponibleQuincena(m, 'q2');
+  m.hormiga.q1.push({ id: 'a', monto: 5500, nota: 'Café', fecha: '2026-01-03' });
+  m.hormiga.q1.push({ id: 'b', monto: 4000, nota: 'cafe', fecha: '2026-01-10' });
+  assert.equal(ctx.calcHormigaQuincena(m, 'q1'), 9500);
+  assert.equal(ctx.calcDisponibleQuincena(m, 'q1'), d1 - 9500);
+  assert.equal(ctx.calcDisponibleQuincena(m, 'q2'), d2);
+  const r = ctx.hormigaResumen(m.hormiga.q1);
+  assert.equal(r.conceptos.length, 1, '"Café" y "cafe" se agrupan como el mismo concepto');
+});
+test('gastos hormiga: el mes nuevo arranca sin registros', () => {
+  const ctx = freshApp();
+  const db = ctx.__internals.db;
+  Object.values(db).forEach(m => ctx.migrateMonth(m));
+  const ultimo = db[Math.max(...Object.keys(db).map(Number))];
+  ultimo.hormiga.q1.push({ id: 'x', monto: 1000, nota: 'a', fecha: '2026-06-02' });
+  const draft = ctx.buildDraftMonth();
+  assert.equal(draft.nm.hormiga.q1.length + draft.nm.hormiga.q2.length, 0);
+  assert.equal(ultimo.hormiga.q1.length, 1, 'el mes anterior conserva los suyos');
+});

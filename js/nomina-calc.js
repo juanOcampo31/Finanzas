@@ -110,11 +110,19 @@ function calcIngresosQuincena(m, which){
   const lista=(m.ingresos&&m.ingresos[which])||[];
   return lista.reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
 }
+// Total de gastos hormiga (compras pequeñas sueltas: café, domicilios... ver js/hormiga.js)
+// registrados en una quincena. Viven aparte de q1_gastos/q2_gastos (que son los gastos
+// PLANEADOS), en m.hormiga.q1/q2.
+function calcHormigaQuincena(m, which){
+  const lista=(m.hormiga&&m.hormiga[which])||[];
+  return lista.reduce(function(a,x){return a+Math.abs(x.monto||0);},0);
+}
 // Disponible de una quincena = neto de nómina (ya incluye los ingresos adicionales vía su
-// deducción tipo Suma) menos el total de gastos activos.
+// deducción tipo Suma) menos el total de gastos activos y menos los gastos hormiga (plata que
+// sí salió, aunque no esté en la lista de gastos planeados).
 function calcDisponibleQuincena(m, which){
   const netoQ=which==='q1'?netoQ1(m):netoQ2(m);
-  return netoQ-calcTotalQuincena(m,which);
+  return netoQ-calcTotalQuincena(m,which)-calcHormigaQuincena(m,which);
 }
 // Cuotas de crédito vencidas dentro de una quincena: gastos ligados a un crédito, sin
 // marcar como pagados ni "sin pagar" (movidos a la otra quincena), cuya propia fecha de

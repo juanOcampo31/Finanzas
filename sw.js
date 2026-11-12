@@ -9,7 +9,7 @@ const FILES = ['./', './index.html', './style.css',
   './js/render.js', './js/render-inicio.js', './js/render-gastos.js', './js/render-tarjeta.js', './js/render-ingresos.js',
   './js/nomina.js', './js/ui-core.js', './js/gasto-pickers.js', './js/gasto-form.js', './js/gasto-drag.js',
   './js/gasto-pago.js', './js/tarjeta.js',
-  './js/nomina-deducciones.js', './js/catalogos.js', './js/gasto-estado.js', './js/agenda.js', './js/export-main.js',
+  './js/nomina-deducciones.js', './js/catalogos.js', './js/gasto-estado.js', './js/agenda.js', './js/hormiga.js', './js/export-main.js',
   './js/sync.js',
   './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 

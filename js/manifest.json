@@ -26,6 +26,7 @@
   "js/catalogos.js",
   "js/gasto-estado.js",
   "js/agenda.js",
+  "js/hormiga.js",
   "js/export-main.js",
   "js/sync.js"
 ]

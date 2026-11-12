@@ -386,3 +386,46 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
   body>*:not(#printArea){display:none!important}
   #printArea{display:block!important;position:static;background:#fff;color:#000}
 }
+
+/* ── Gastos hormiga (ver js/hormiga.js) ───────────────────────────────────── */
+.horm-card{flex-shrink:0;display:flex;align-items:center;gap:11px;background:var(--surf);border:1px solid var(--brd2);border-radius:14px;padding:9px 10px 9px 12px;margin-bottom:10px;cursor:pointer}
+.horm-ico{width:34px;height:34px;border-radius:10px;background:var(--amb-d);color:var(--amb);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.horm-mid{flex:1;min-width:0}
+.horm-tit{font-size:13px;font-weight:800;color:var(--txt)}
+.horm-sub{font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.horm-val{font-size:15px;font-weight:800;color:var(--amb);font-variant-numeric:tabular-nums;flex-shrink:0}
+.horm-add{width:34px;height:34px;border-radius:50%;border:1px solid var(--brd2);background:var(--surf2);color:var(--acc);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0}
+.horm-add:active{transform:scale(.92)}
+.horm-opc{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--surf);border:1px solid var(--brd2);border-radius:14px;cursor:pointer}
+.horm-opc:active{background:var(--surf2)}
+.horm-opc-ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.horm-opc-tit{font-size:14.5px;font-weight:800;color:var(--txt)}
+.horm-opc-desc{font-size:12px;color:var(--mut);margin-top:1px}
+.horm-lbl{display:block;font-size:11px;font-weight:700;color:var(--mut);letter-spacing:.04em;margin-bottom:5px;text-transform:uppercase}
+.horm-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.horm-chip{padding:7px 12px;border-radius:20px;border:1px solid var(--brd2);background:var(--surf2);color:var(--txt);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.horm-chip span{color:var(--mut);font-weight:600}
+.horm-chip.sel{background:var(--acc-d);border-color:var(--acc);color:var(--acc)}
+.horm-hero{text-align:center;padding:12px 0 14px}
+.horm-hero-lbl{font-size:10.5px;font-weight:700;color:var(--mut);letter-spacing:.08em}
+.horm-hero-val{font-size:34px;font-weight:800;color:var(--amb);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.horm-hero-sub{font-size:12px;color:var(--mut)}
+.horm-sec{font-size:10.5px;font-weight:700;color:var(--mut);letter-spacing:.08em;text-transform:uppercase;margin:4px 2px 6px}
+.horm-box{background:var(--surf);border:1px solid var(--brd);border-radius:14px;padding:4px 12px;margin-bottom:12px}
+.horm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;color:var(--txt);padding:8px 0}
+.horm-box>.horm-row+.horm-row{border-top:1px solid var(--brd)}
+.horm-row small{color:var(--mut);font-weight:600}
+.horm-top{padding:4px 0 8px}
+.horm-top+.horm-top{border-top:1px solid var(--brd)}
+.horm-top .horm-row{padding:6px 0 5px}
+.horm-bar{height:5px;border-radius:3px;background:var(--surf2);overflow:hidden}
+.horm-bar>div{height:100%;border-radius:3px;background:var(--amb)}
+.horm-proy{display:flex;gap:9px;align-items:flex-start;background:var(--amb-d);color:var(--amb);border-radius:14px;padding:11px 13px;margin-bottom:12px;font-size:13px;line-height:1.45}
+.horm-proy span{color:var(--txt)}
+.horm-proy small{color:var(--mut)}
+.horm-proy svg{flex-shrink:0;margin-top:2px}
+.horm-item{display:flex;align-items:center;gap:10px;padding:9px 0;cursor:pointer}
+.horm-item+.horm-item{border-top:1px solid var(--brd)}
+.horm-item-nota{font-size:13.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.horm-item-sub{font-size:11px;color:var(--mut)}
+.horm-item-val{font-size:13.5px;font-weight:800;color:var(--txt);font-variant-numeric:tabular-nums}

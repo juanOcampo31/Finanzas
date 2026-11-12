@@ -156,6 +156,8 @@ function renderInicio(m){
   const list=homeQ==='q1'?(m.q1_gastos||[]):(m.q2_gastos||[]);
   const listHtml=renderGastos(list,homeQ);
 
-  return '<div class="home-view">'+qcardsHtml+tcHtml+listHtml+'</div>';
+  const hormigaHtml=(typeof hormigaTarjetaInicioHtml==='function')?hormigaTarjetaInicioHtml(m,homeQ):'';
+
+  return '<div class="home-view">'+qcardsHtml+hormigaHtml+tcHtml+listHtml+'</div>';
 }
 
