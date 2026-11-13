@@ -185,8 +185,9 @@ function renderHeaderUserMenu(){
   }
   const filas=fila('Mi perfil','openSecurityMenu()')
     +fila('Catálogos','openCatalogosMenu()')
-    +fila('Información general','openInfoGeneral()')
-    +fila('Seguridad','openSeguridadMenu()');
+    +(tieneNomina()?fila('Información general','openInfoGeneral()'):'')
+    +fila('Seguridad','openSeguridadMenu()')
+    +fila('Cómo funciona','abrirAyuda()');
   return '<div style="margin:0 16px 14px;background:var(--surf2);border:1px solid var(--brd2);border-radius:16px;overflow:hidden">'+sesionHtml+filas+'</div>';
 }
 // Selector de mes: la lista reemplaza a las antiguas pestañas — mismo punto ámbar de "tiene
@@ -313,9 +314,8 @@ function render() {
       return breakdownRow('<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">'+icon('alertTriangle',12)+esc(v.nombre)+'</span> · cuota '+v.numCuota+'/'+v.cuotasTotal,cop(v.valorCuota),'var(--red)',i<venc.length-1);
     }).join('');
   }
-  const hormQ1=calcHormigaQuincena(m,'q1'), hormQ2=calcHormigaQuincena(m,'q2');
-  const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',true)+breakdownRow('Hormiga Q1',cop(hormQ1),'var(--red)',vencQ1.length>0)+vencidosRowsHtml(vencQ1);
-  const dispQ2BreakdownHtml=breakdownRow('Neto Q2',cop(n2),'var(--grn)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',true)+breakdownRow('Hormiga Q2',cop(hormQ2),'var(--red)',vencQ2.length>0)+vencidosRowsHtml(vencQ2);
+  const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',vencQ1.length>0)+vencidosRowsHtml(vencQ1);
+  const dispQ2BreakdownHtml=breakdownRow('Neto Q2',cop(n2),'var(--grn)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',vencQ2.length>0)+vencidosRowsHtml(vencQ2);
   [['basico',basicoBreakdownHtml],['ingresos',ingresosBreakdownHtml],['gastos',gastosBreakdownHtml],['dispQ1',dispQ1BreakdownHtml],['dispQ2',dispQ2BreakdownHtml]].forEach(function(pair){
     var key=pair[0], html=pair[1];
     var el=document.getElementById(STAT_BREAKDOWN_DOM_IDS[key]);
@@ -378,6 +378,11 @@ function render() {
   // desplazarse (overflow-y:hidden por fuera y sin scroll propio por dentro). Ahora se
   // comportan como Tarjeta/Ingresos: toda la pantalla se desplaza junto. Nómina sigue en
   // scroll-home porque .nom-lists sí conserva su propio scroll interno.
+  // Independiente (sin nómina, ver tieneNomina): la pestaña Nómina no aplica — se oculta y, si
+  // justo estaba abierta, se vuelve a Inicio.
+  const sinNomina=!tieneNomina();
+  document.querySelectorAll('.tab[data-tabs="3"]').forEach(function(t){ t.style.display=sinNomina?'none':''; });
+  if(sinNomina && curTab===3) curTab=0;
   el.classList.toggle('scroll-home', curTab===3);
   if      (curTab===0) el.innerHTML=renderInicio(m);
   else if (curTab===1) el.innerHTML=renderIngresos(m);

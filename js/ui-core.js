@@ -57,6 +57,31 @@ function closeBg(e){
 function openWindow(h){closeModal();document.getElementById('wc').innerHTML=h;document.getElementById('wbg').classList.add('open');}
 function closeWindow(){document.getElementById('wbg').classList.remove('open');}
 
+// ── Guía "Cómo funciona" (docs/ayuda.html) ─────────────────────────────────────────
+// Se muestra en un iframe a pantalla completa, por encima de todo, en vez de navegar a la
+// página: navegar descargaría la app y al volver pediría el PIN otra vez. `seccion` es el id
+// de una sección de docs/ayuda.html (quincenas, nomina, ingresos, gastos, hormiga, tarjeta, creditos, agenda, meses, seguridad) para
+// abrir directo ahí — así cualquier pantalla puede poner un "?" que lleve a su explicación.
+function abrirAyuda(seccion){
+  render(); // cierra el menú de usuario de fondo (headerUserMenuOpen ya quedó en false)
+  let bg=document.getElementById('ayudaBg');
+  if(!bg){
+    bg=document.createElement('div');
+    bg.id='ayudaBg';
+    bg.className='ayuda-bg';
+    bg.innerHTML='<div class="ayuda-bar"><span>Cómo funciona</span>'
+      +'<button type="button" onclick="cerrarAyuda()" aria-label="Cerrar guía">'+icon('x',18)+'</button></div>'
+      +'<iframe id="ayudaFrame" title="Cómo funciona"></iframe>';
+    document.body.appendChild(bg);
+  }
+  document.getElementById('ayudaFrame').src='docs/ayuda.html'+(seccion?('#'+seccion):'');
+  bg.classList.add('open');
+}
+function cerrarAyuda(){
+  const bg=document.getElementById('ayudaBg');
+  if(bg) bg.classList.remove('open');
+}
+
 // ── Reemplazo consistente de alert()/confirm() nativos con el estilo propio de la app ──
 function showAlert(message,opts){
   opts=opts||{};

@@ -96,7 +96,7 @@ async function construirYSubirBackup(pin){
   const user=syncUsuarioActual();
   if(!user) return;
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre,q2DiasFijos:perfilQ2DiasFijos});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre,q2DiasFijos:perfilQ2DiasFijos,pago:perfilPago,tipoIngreso:perfilTipoIngreso});
   const envelope=await encryptString(payload,pin);
   const fileObj=Object.assign({encrypted:true, app:'FinanzasPersonales', version:2, fecha:hoy}, envelope);
   await firebase.firestore().collection('usuarios').doc(user.uid).set({
@@ -201,6 +201,8 @@ async function bajarBackupNubeDesdeLock(){
     // criterio que syncSignInGoogle(), nunca pisa uno que el respaldo sí traiga.
     perfilNombre=importedPayload.nombre||user.displayName||'';
     perfilQ2DiasFijos=!!importedPayload.q2DiasFijos;
+    perfilPago=normalizarPerfilPago(importedPayload.pago);
+    perfilTipoIngreso=normalizarTipoIngreso(importedPayload.tipoIngreso);
     sessionDataKey=await generateDataKey();
     await wrapAndStoreDataKey(sessionDataKey, sessionPIN);
     const digitsRestored=perfilTelefono.replace(/\D/g,'');

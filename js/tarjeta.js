@@ -214,7 +214,7 @@ function syncTCGrupo(m){
     } else {
       listas.q2.push({
         id:uid(),nombre:'Abono TC',presupuesto:abonoSugerido,
-        metodo:g.metodo||'BBVA',pagado_real:null,estado:null,pagado_flag:false,
+        metodo:g.metodo||'',pagado_real:null,estado:null,pagado_flag:false,
         sinpagar:false,parentId:g.id,esGrupo:false,tcLinked:false,
         cuotas_total:0,cuota_actual:0
       });

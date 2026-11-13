@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F172A">
+<title>Cómo funciona</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<!--
+  Guía "Cómo funciona" de Finanzas Personales. Se abre DENTRO de la app (iframe a pantalla
+  completa, ver abrirAyuda en js/ui-core.js) para no perder la sesión desbloqueada; también se
+  puede abrir sola en el navegador. Se puede enlazar a una sección con #id (p.ej. docs/ayuda.html#hormiga).
+  Misma estructura que docs/reglas.html del proyecto natillera: portada, barra de secciones fija
+  y una columna de lectura. Versión inicial — se irá ampliando por secciones.
+  Si cambias una regla de la app, actualiza aquí el texto correspondiente.
+-->
+<style>
+:root{
+  --bg:#0F172A; --bg-2:#0B1322; --surf:#1E293B; --surf2:#253347;
+  --brd:rgba(148,163,184,.14); --brd2:rgba(148,163,184,.24);
+  --txt:#F1F5F9; --mut:#94A3B8;
+  --acc:#22D3EE; --acc-d:rgba(34,211,238,.12);
+  --grn:#34D399; --grn-d:rgba(52,211,153,.12);
+  --amb:#FBBF24; --amb-d:rgba(251,191,36,.12);
+  --red:#F87171;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:"Manrope","Segoe UI",system-ui,sans-serif;font-size:15.5px;line-height:1.6;-webkit-text-size-adjust:100%}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{line-height:1.2;margin:0;text-wrap:balance}
+p{margin:0}
+strong,b{font-weight:700;color:var(--txt)}
+.num{font-variant-numeric:tabular-nums}
+
+/* Portada */
+.hero{background:linear-gradient(180deg,var(--bg-2) 0%,var(--bg) 100%);border-bottom:1px solid var(--brd);padding-top:env(safe-area-inset-top,0px)}
+.hero .wrap{padding-block:30px 24px;display:grid;gap:10px}
+.eyebrow{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);font-weight:700}
+.hero h1{font-size:clamp(28px,7vw,40px);font-weight:800;letter-spacing:-.01em}
+.hero h1 span{color:var(--acc)}
+.hero p{color:var(--mut);max-width:60ch}
+
+/* Barra de secciones */
+.toc{position:sticky;top:0;z-index:5;background:rgba(15,23,42,.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--brd)}
+.toc .wrap{display:flex;gap:6px;overflow-x:auto;padding-block:9px;scrollbar-width:none}
+.toc .wrap::-webkit-scrollbar{display:none}
+.toc a{flex:none;text-decoration:none;color:var(--mut);font-size:13px;font-weight:700;padding:6px 12px;border-radius:999px;background:var(--surf2)}
+.toc a.on{background:var(--acc);color:#06202B}
+a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+/* Secciones */
+main .wrap{display:grid;gap:44px;padding-block:28px 56px}
+section{display:grid;gap:14px;scroll-margin-top:60px}
+.sec-head{display:grid;gap:2px}
+.sec-n{font-weight:800;color:var(--acc);font-size:13px;letter-spacing:.04em}
+section h2{font-size:clamp(22px,5vw,28px);font-weight:800}
+section h3{font-size:17px;font-weight:800;margin-top:6px}
+ul,ol{margin:0;padding-left:1.2em;display:grid;gap:6px}
+li::marker{color:var(--mut)}
+.mut{color:var(--mut)}
+.rule{background:var(--surf);border:1px solid var(--brd);border-left:4px solid var(--acc);border-radius:4px 12px 12px 4px;padding:12px 14px;font-weight:700}
+.note{background:var(--amb-d);border-radius:12px;padding:11px 14px;font-size:14.5px}
+.note b{color:var(--amb)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.tile{background:var(--surf);border:1px solid var(--brd);border-radius:14px;padding:12px 14px;display:grid;gap:3px;min-width:0}
+.tile .k{font-size:11.5px;color:var(--mut);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.tile .v{font-size:19px;font-weight:800}
+.tile p{font-size:14.5px;color:var(--mut)}
+.formula{font-weight:800;font-size:clamp(15px,3.8vw,18px);line-height:1.45;background:var(--surf);border:1px solid var(--brd2);border-radius:14px;padding:14px 16px}
+.formula .g{color:var(--grn)} .formula .r{color:var(--red)} .formula .a{color:var(--acc)}
+
+/* Pasos */
+.steps{list-style:none;padding:0;display:grid;gap:8px;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:30px 1fr;gap:12px;align-items:start;background:var(--surf);border:1px solid var(--brd);border-radius:12px;padding:10px 14px}
+.steps li::before{content:counter(s);width:26px;height:26px;border-radius:50%;background:var(--acc-d);color:var(--acc);display:grid;place-items:center;font-weight:800;font-size:13px}
+
+/* Tablas */
+.tbl{overflow-x:auto;border:1px solid var(--brd);border-radius:12px;background:var(--surf)}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--brd);vertical-align:top}
+th{font-size:12px;color:var(--mut);font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:var(--surf2)}
+tr:last-child td{border-bottom:none}
+.pill{display:inline-block;font-size:12px;font-weight:800;border-radius:999px;padding:1px 9px;white-space:nowrap}
+.pill.g{background:var(--grn-d);color:var(--grn)} .pill.a{background:var(--amb-d);color:var(--amb)} .pill.m{background:var(--surf2);color:var(--mut)}
+
+footer{border-top:1px solid var(--brd);color:var(--mut);font-size:13px}
+footer .wrap{padding-block:18px calc(28px + env(safe-area-inset-bottom,0px))}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Finanzas Personales · Guía</div>
+    <h1>Cómo <span>funciona</span></h1>
+    <p>Qué hace cada parte de la app y cómo calcula tus números. Es una primera versión: se irá completando sección por sección.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Secciones">
+  <div class="wrap">
+    <a href="#quincenas">Quincenas</a>
+    <a href="#nomina">Nómina</a>
+    <a href="#ingresos">Ingresos</a>
+    <a href="#gastos">Gastos</a>
+    <a href="#hormiga">Hormiga</a>
+    <a href="#tarjeta">Tarjeta</a>
+    <a href="#creditos">Créditos</a>
+    <a href="#agenda">Agenda</a>
+    <a href="#meses">Meses</a>
+    <a href="#seguridad">Seguridad</a>
+  </div>
+</nav>
+
+<main>
+<div class="wrap">
+
+<!-- 1 -->
+<section id="quincenas">
+  <div class="sec-head"><div class="sec-n">1</div><h2>Quincenas y disponible</h2></div>
+  <p>Cada mes se divide en dos quincenas. En <b>Inicio</b> ves una tarjeta por cada una, con lo que te queda disponible y la fecha de pago.</p>
+  <div class="grid2">
+    <div class="tile"><div class="k">Q1</div><div class="v">Del 1 al 15</div></div>
+    <div class="tile"><div class="k">Q2</div><div class="v">Del 16 a fin de mes</div></div>
+  </div>
+  <div class="formula">Disponible = <span class="g">neto de nómina</span> + <span class="g">ingresos</span> − <span class="r">gastos de la quincena</span></div>
+  <ul>
+    <li>Los <b>ingresos</b> son los que registras en la pestaña Ingresos. Suman directo al disponible: no pasan por la nómina.</li>
+    <li>Si eres <b>independiente</b> (sin nómina), el neto de nómina es 0 y tu disponible sale solo de los ingresos.</li>
+    <li>Los gastos marcados <b>Sin pagar</b> no restan: ya decidiste que no se pagan en esa quincena.</li>
+    <li>Si el disponible queda en negativo, la tarjeta dice <b>SIN SALDO DISPONIBLE</b>.</li>
+    <li>El <b>día de pago</b> de cada quincena lo eliges en <b>Mi perfil → Días de pago</b>. Por defecto es el 15 para Q1 y el último día del mes para Q2. Si cae en fin de semana o festivo, se corre al día hábil anterior o al siguiente, según lo que elijas.</li>
+  </ul>
+</section>
+
+<!-- 2 -->
+<section id="nomina">
+  <div class="sec-head"><div class="sec-n">2</div><h2>Nómina</h2></div>
+  <p>En la pestaña <b>Nómina</b> registras tu salario y lo que te descuentan o suman en cada quincena. De ahí sale el <b>neto</b> que usa el disponible.</p>
+  <h3>Tipo de ingreso</h3>
+  <p>Lo eliges al empezar y lo puedes cambiar en <b>Mi perfil → Tipo de ingreso</b>. Tus datos no se borran al cambiarlo.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Tipo</th><th>Cómo funciona</th></tr></thead>
+    <tbody>
+      <tr><td><b>Empleado</b></td><td>Nómina completa, con prima y cesantías.</td></tr>
+      <tr><td><b>Pensionado</b></td><td>Nómina con tu mesada y sus descuentos. Sin prima ni cesantías.</td></tr>
+      <tr><td><b>Independiente</b></td><td>Sin nómina: la pestaña Nómina se oculta y tu plata entra por <b>Ingresos</b>.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Al configurar la app por primera vez, los descuentos de nómina se ofrecen como <b>plantillas</b> que puedes desmarcar: Salud y Pensión (4%) si eres empleado, o Salud (12%) si eres pensionado.</p>
+  <div class="grid2">
+    <div class="tile"><div class="k">Básico Q1</div><div class="v">Básico ÷ 2</div></div>
+    <div class="tile"><div class="k">Básico Q2</div><div class="v">Básico ÷ 30 × días</div><p>Los días van del 16 a fin de mes: entre 13 y 16 según el mes.</p></div>
+  </div>
+  <div class="formula">Neto = <span class="a">básico de la quincena</span> + <span class="g">sumas</span> − <span class="r">descuentos</span> + <span class="g">auxilio de transporte</span></div>
+  <ul>
+    <li><b>Deducciones:</b> cada una resta (salud, pensión, libranza…) o suma. Puede ser un <b>porcentaje</b>, que se calcula sobre el básico de la quincena, o un <b>valor fijo</b>.</li>
+    <li><b>Auxilio de transporte:</b> se reparte mitad y mitad entre las quincenas y suma al neto. No es base de las deducciones por porcentaje.</li>
+    <li><b>Bonos:</b> son solo informativos; no cambian el neto.</li>
+    <li><b>Prima</b> (solo empleados): se calcula sola y se suma en <b>junio (Q2)</b> y en <b>diciembre (Q1)</b>, según lo que ganaste en el semestre.</li>
+    <li>Una deducción se puede <b>vincular a un crédito</b> (por ejemplo, una libranza). La app te sugiere el valor de la próxima cuota, y ese crédito deja de crear gastos porque ya se paga por nómina.</li>
+  </ul>
+  <p class="note"><b>Q2 de 15 días fijos:</b> si tu empresa siempre te paga la Q2 como 15 días, sin importar cuántos tenga el mes, actívalo en <b>Información general</b>.</p>
+</section>
+
+<!-- 3 -->
+<section id="ingresos">
+  <div class="sec-head"><div class="sec-n">3</div><h2>Ingresos adicionales</h2></div>
+  <p>La pestaña <b>Ingresos</b> es para la plata que entra aparte de la nómina: trabajos extra, ventas, arriendos… Cada ingreso va en Q1 o Q2.</p>
+  <p class="rule">El total de ingresos de cada quincena se suma directo al disponible de esa quincena. No aparece en la nómina.</p>
+  <ul>
+    <li>Marca <b>Repetir cada mes</b> en un ingreso fijo (arriendo, pensión, un trabajo estable): al crear el mes siguiente se copia solo, en la misma quincena y el mismo día. Los demás ingresos no pasan al mes nuevo.</li>
+    <li>Las tarjetas Q1 y Q2 de esta pestaña muestran el total de ingresos de cada quincena, no el disponible.</li>
+  </ul>
+</section>
+
+<!-- 4 -->
+<section id="gastos">
+  <div class="sec-head"><div class="sec-n">4</div><h2>Gastos y sus estados</h2></div>
+  <p>Los gastos de cada quincena son lo que <b>planeas pagar</b>: arriendo, servicios, cuotas, mercado… Cada uno tiene un estado:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Estado</th><th>Qué significa</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill m">Sin definir</span></td><td>Todavía no lo revisas. Cuenta como pendiente.</td></tr>
+      <tr><td><span class="pill g">Pagado</span></td><td>Ya lo pagaste. Puedes anotar el valor real, la fecha y el comprobante.</td></tr>
+      <tr><td><span class="pill a">Sin pagar</span></td><td>En Q1 es <b>Mover a Q2</b>: la app ofrece crearlo también en la Q2. En Q2 queda como recordatorio.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="rule">El porcentaje de avance del mes cuenta lo pagado y lo marcado Sin pagar como resuelto. Lo que está Sin definir lo frena.</p>
+  <p class="mut">Próximamente: grupos de gastos y formas de pago.</p>
+</section>
+
+<!-- 5 -->
+<section id="hormiga">
+  <div class="sec-head"><div class="sec-n">5</div><h2>Gastos hormiga</h2></div>
+  <p>Son las compras pequeñas que se escapan: café, domicilios, antojos, taxis. Van aparte de los gastos planeados, en su propia tarjeta de Inicio.</p>
+  <ol class="steps">
+    <li><div>Toca el <b>+</b> de la tarjeta <b>Gastos hormiga</b>.</div></li>
+    <li><div>Escribe el valor y, si quieres, una nota. Tus notas más usadas aparecen como atajos y llenan nota y valor con un toque.</div></li>
+    <li><div>La quincena sale de la <b>fecha</b>: del 1 al 15 va a Q1 y del 16 en adelante a Q2.</div></li>
+  </ol>
+  <p class="rule">Los gastos hormiga no restan del disponible: son solo para que veas cuánto se te va en compras pequeñas.</p>
+  <p>Al tocar la tarjeta ves el análisis: total, promedio, comparación con la otra quincena y con el mes anterior, en qué se te va más y cuánto sería al mes y al año a ese ritmo.</p>
+</section>
+
+<!-- 6 -->
+<section id="tarjeta">
+  <div class="sec-head"><div class="sec-n">6</div><h2>Tarjeta de crédito</h2></div>
+  <p>En la pestaña <b>Tarjeta</b> llevas los movimientos de cada tarjeta. Puedes tener varias y cambiar entre ellas con las pastillas de arriba.</p>
+  <div class="grid2">
+    <div class="tile"><div class="k">Compra</div><p>Lo que pagaste con la tarjeta. Sube el saldo.</p></div>
+    <div class="tile"><div class="k">Abono</div><p>Lo que le pagaste a la tarjeta. Baja el saldo.</p></div>
+  </div>
+  <div class="formula">Saldo = <span class="r">compras</span> − <span class="g">abonos</span> &nbsp;·&nbsp; Cupo libre = <span class="a">cupo</span> − saldo</div>
+  <ul>
+    <li>En los datos de la tarjeta puedes anotar el <b>cupo</b>, la <b>fecha de corte</b> y la <b>fecha de pago</b>. Con la fecha de pago, la Agenda te recuerda pagarla.</li>
+    <li>La tarjeta que elijas también se ve en <b>Inicio</b>, con su saldo y el cupo libre.</li>
+  </ul>
+  <h3>Grupo de gastos vinculado a la tarjeta</h3>
+  <p>Un grupo de gastos se puede vincular a una tarjeta. Así, lo que compras con ella también se ve en tus quincenas:</p>
+  <ul>
+    <li>El valor del grupo es el <b>saldo de la tarjeta</b>.</li>
+    <li>En la <b>Q2</b>, la app crea un gasto <b>"Abono TC"</b> por lo que tienes que pagar: el saldo menos los gastos del grupo que todavía no pagas, para no cobrarte dos veces.</li>
+    <li>En la <b>Q1</b>, el saldo se muestra solo como información y no resta del disponible. Los gastos que agregues al grupo sí restan.</li>
+    <li>Pagar un gasto del grupo registra un <b>abono</b> en la tarjeta.</li>
+  </ul>
+</section>
+
+<!-- 7 -->
+<section id="creditos">
+  <div class="sec-head"><div class="sec-n">7</div><h2>Créditos y cuotas</h2></div>
+  <p>Cada cuota de un crédito se vuelve un gasto en la quincena que le toca según su fecha de pago:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Día de pago de la cuota</th><th>Aparece en</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1 al 10</td><td><b>Q2 del mes anterior</b>, para que la veas con tiempo antes de que venza</td></tr>
+      <tr><td class="num">11 al 15</td><td>Q1 del mismo mes</td></tr>
+      <tr><td class="num">16 a fin de mes</td><td>Q2 del mismo mes</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><b>Al crear un crédito</b>, sus cuotas se agregan en los meses que ya existen, desde el mes actual en adelante. Los meses nuevos reciben la suya al crearlos.</li>
+    <li>Las cuotas se pagan <b>en orden</b>: no puedes marcar una si la anterior sigue pendiente.</li>
+    <li>Un <b>abono a capital</b> no cambia el valor de la cuota: reduce cuántas cuotas faltan.</li>
+    <li>Si un abono o un pago de más <b>salda el crédito</b> o acorta el plazo, las cuotas pendientes que sobran se quitan solas. Si eliminas ese abono, vuelven.</li>
+    <li>Si <b>eliminas un crédito</b>, se borran sus cuotas sin pagar. Las pagadas se conservan como historial.</li>
+  </ul>
+  <p class="mut">Próximamente: congelar cuotas, refinanciar e importar un plan de pagos.</p>
+</section>
+
+<!-- 8 -->
+<section id="agenda">
+  <div class="sec-head"><div class="sec-n">8</div><h2>Agenda</h2></div>
+  <p>La <b>Agenda</b> reúne en un calendario todo lo que tiene fecha en el mes. Las entradas vienen de tres lugares:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Origen</th><th>Qué muestra</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill m">Tuyas</span></td><td><b>Tareas</b> y <b>pagos</b> que creas a mano.</td></tr>
+      <tr><td><span class="pill g">Automáticas</span></td><td>Los días de pago de nómina Q1 y Q2, con su neto, y la fecha de pago de cada tarjeta con saldo.</td></tr>
+      <tr><td><span class="pill a">Vencidos</span></td><td>Los gastos marcados <b>Sin pagar</b>: vencen al cierre de su quincena, el 15 o el último día del mes.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Recordatorios de pago</h3>
+  <ul>
+    <li>Al crear un pago puedes <b>crear también su gasto</b> en la quincena o <b>asociarlo a un gasto que ya existe</b>.</li>
+    <li>La quincena sale de la fecha, pero la puedes cambiar. Por ejemplo, un pago del día 24 que harás con la plata de la Q1.</li>
+    <li>Cuando pagas el gasto enlazado, el recordatorio se marca solo.</li>
+    <li>Un pago puede <b>repetirse</b> cada quincena o cada mes. Al pagar uno, se crea el siguiente, si su mes ya existe.</li>
+    <li>Si borras un gasto que tiene recordatorio, la app te pregunta si borrar solo el gasto o los dos.</li>
+  </ul>
+  <p>La pestaña Agenda muestra un <b>punto ámbar</b> cuando tienes algo pendiente en los próximos 7 días.</p>
+</section>
+
+<!-- 9 -->
+<section id="meses">
+  <div class="sec-head"><div class="sec-n">9</div><h2>Crear un mes nuevo</h2></div>
+  <p>Desde el selector de mes, <b>+ Nuevo mes</b> crea el siguiente copiando la estructura del último:</p>
+  <div class="grid2">
+    <div class="tile"><div class="k">Se copia</div><p>Gastos (quedan pendientes otra vez), nómina y los ingresos marcados <b>Repetir cada mes</b>.</p></div>
+    <div class="tile"><div class="k">Empieza vacío</div><p>Movimientos de tarjeta, recordatorios de Agenda y gastos hormiga.</p></div>
+    <div class="tile"><div class="k">Se agrega solo</div><p>La cuota de cada crédito que caiga en ese mes.</p></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="seguridad">
+  <div class="sec-head"><div class="sec-n">10</div><h2>Seguridad y respaldo</h2></div>
+  <div class="grid2">
+    <div class="tile"><div class="k">PIN</div><p>6 dígitos. Cifra todos tus datos en el teléfono: sin él no se pueden leer.</p></div>
+    <div class="tile"><div class="k">Huella</div><p>Opcional y por dispositivo. Abre la app sin escribir el PIN; el PIN sigue funcionando siempre.</p></div>
+    <div class="tile"><div class="k">Número de recuperación</div><p>Obligatorio. Con sus últimos 6 dígitos recuperas el acceso si el PIN falla.</p></div>
+    <div class="tile"><div class="k">Nube</div><p>Con tu cuenta de Google, la app guarda una copia cifrada y la sincroniza entre dispositivos.</p></div>
+  </div>
+  <p class="note"><b>Importante:</b> cualquiera que conozca los últimos 6 dígitos de tu número de recuperación puede entrar a tus datos. Usa un número que solo tú sepas de memoria.</p>
+</section>
+
+</div>
+</main>
+
+<footer><div class="wrap">Finanzas Personales · Guía en construcción</div></footer>
+
+<script>
+(function(){
+  // Sección activa en la barra (igual que la guía de la natillera).
+  const links=[...document.querySelectorAll('.toc a')];
+  const byId={}; links.forEach(a=>byId[a.getAttribute('href').slice(1)]=a);
+  function marcar(id){
+    const a=byId[id]; if(!a) return;
+    links.forEach(x=>x.classList.remove('on'));
+    a.classList.add('on');
+    a.parentElement.scrollTo({left:a.offsetLeft-16});
+  }
+  if('IntersectionObserver' in window){
+    const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting) marcar(e.target.id); }); },{rootMargin:'-40% 0px -55% 0px'});
+    document.querySelectorAll('main section').forEach(s=>io.observe(s));
+  }
+  if(location.hash) marcar(location.hash.slice(1));
+})();
+</script>
+</body>
+</html>

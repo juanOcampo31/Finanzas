@@ -43,10 +43,10 @@ function renderNom(m) {
   const miSafe=mi>=0?mi:0;
   const bas1=basicoQ1(m), bas2=basicoQ2(m);
   const aux1=auxTransporteQ1(m), aux2=auxTransporteQ2(m);
-  const ing1=calcIngresosQuincena(m,'q1'), ing2=calcIngresosQuincena(m,'q2');
   const ded1=sumDeducciones(bas1,nom.ded_q1), ded2=sumDeducciones(bas2,nom.ded_q2);
   const n1=netoQ1(m), n2=netoQ2(m);
-  const dev1=bas1+aux1+ing1, dev2=bas2+aux2+ing2;
+  // Los ingresos adicionales ya no son parte de la nómina: suman directo al disponible.
+  const dev1=bas1+aux1, dev2=bas2+aux2;
   const mesDev=dev1+dev2, mesDed=ded1+ded2;
   const diasQ1c=15, diasQ2c=diasQ2(m.año,miSafe);
   const {q1:fechaQ1,q2:fechaQ2}=getPago(m.año,miSafe);
@@ -54,7 +54,7 @@ function renderNom(m) {
   const which=curNomQ;
   const isQ1=which==='q1';
   const bq=isQ1?bas1:bas2, bonq=isQ1?(nom.bonos_q1||0):(nom.bonos_q2||0), auxq=isQ1?aux1:aux2;
-  const ingQ=isQ1?ing1:ing2, dedQ=isQ1?ded1:ded2, devQ=isQ1?dev1:dev2, netoQ=isQ1?n1:n2;
+  const dedQ=isQ1?ded1:ded2, devQ=isQ1?dev1:dev2, netoQ=isQ1?n1:n2;
   const diasQ=isQ1?diasQ1c:diasQ2c;
   const deds=(isQ1?nom.ded_q1:nom.ded_q2)||[];
   const lbl=isQ1?'Nómina Q1':'Nómina Q2';
@@ -123,13 +123,10 @@ function renderNom(m) {
   if(bonq>0){
     devRows+='<div class="nom-row"><div class="nom-row-info"><div class="nom-row-name">Bonos <span class="nom-row-nota-inline">· no cuenta para el neto</span></div></div><div class="nom-row-val" style="color:var(--mut)">'+cop(bonq)+'</div></div>';
   }
-  const ingList=(m.ingresos&&m.ingresos[which])||[];
-  devRows+=ingList.map(function(x){
-    return '<div class="nom-row" onclick="editIngreso(\''+x.id+'\',\''+which+'\')" style="cursor:pointer"><div class="nom-row-info"><div class="nom-row-name">'+esc(x.nombre)+' <span class="nom-row-nota-inline">· '+fmtD(x.fecha)+'</span></div></div><div class="nom-row-val">'+cop(x.valor)+'</div></div>';
-  }).join('');
+  // Los ingresos adicionales ya no se listan acá: suman directo al disponible (pestaña Ingresos).
 
   var dedRows=deds.map(function(d,i){
-    if(d.esIngresos) return null; // el agregado automático de Ingresos ya se lista arriba en "Devengados"
+    if(d.esIngresos) return null; // deducción vieja de Ingresos (limpiarDedIngresosLegacy la quita al cargar)
     const esSuma=d.tipo==='suma';
     const val=d.porcentaje?bq*d.porcentaje:(d.valor_fijo||0);
     const base=d.porcentaje?Math.round(d.porcentaje*100)+'%':'Fijo';

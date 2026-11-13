@@ -424,3 +424,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .horm-item-nota{font-size:13.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .horm-item-sub{font-size:11px;color:var(--mut)}
 .horm-item-val{font-size:13.5px;font-weight:800;color:var(--txt);font-variant-numeric:tabular-nums}
+
+/* ── Guía "Cómo funciona" (ayuda.html en iframe, ver abrirAyuda en js/ui-core.js) ── */
+.ayuda-bg{position:fixed;inset:0;z-index:250;background:var(--bg);display:none;flex-direction:column}
+.ayuda-bg.open{display:flex}
+.ayuda-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(8px + env(safe-area-inset-top)) 10px 8px 16px;background:var(--bg-2);border-bottom:1px solid var(--brd);flex-shrink:0}
+.ayuda-bar span{font-size:15px;font-weight:800;color:var(--txt)}
+.ayuda-bar button{width:38px;height:38px;border-radius:12px;border:none;background:var(--surf2);color:var(--txt);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ayuda-bg iframe{flex:1;width:100%;border:0;background:var(--bg)}

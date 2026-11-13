@@ -207,27 +207,51 @@ async function lockPinConfirm(){
 // Reemplaza el arranque silencioso en Enero con valores de ejemplo (INIT, en core.js) la
 // primera vez de verdad que alguien usa la app: se pregunta el mes/año reales, en qué quincena
 // está ahora mismo (no siempre coincide con la fecha del sistema — puede estar cargando datos
-// atrasados) y su básico mensual. Las deducciones arrancan solo con Salud y Pensión (4% cada
-// una, los básicos de ley) — sin los descuentos propios de Loggro que traía INIT (AporteFE,
-// AhorroFE, F. Solidaridad), ya que no aplican a un usuario genérico; se pueden agregar después
-// desde Nómina si hacen falta.
+// atrasados), cómo recibe su plata (tipo de ingreso) y, si tiene nómina, su básico/mesada. Las
+// deducciones NO se imponen: se ofrecen como plantillas marcables según el tipo (empleado: Salud
+// y Pensión 4%; pensionado: Salud 12%) y se pueden editar o agregar después desde Nómina.
 let fpQuincenaSel='q1';
-function abrirAsistentePrimeraConfiguracion(){
+let fpTipoSel='empleado';
+// Plantillas de deducción ofrecidas en el asistente, por tipo de ingreso (marcadas por defecto).
+const FP_PLANTILLAS_DED={
+  empleado:[{id:'salud',nombre:'Salud',porcentaje:0.04,txt:'Salud (4%)'},{id:'pension',nombre:'Pensión',porcentaje:0.04,txt:'Pensión (4%)'}],
+  pensionado:[{id:'salud12',nombre:'Salud',porcentaje:0.12,txt:'Salud (12%) · revisa el % que te descuentan'}],
+  independiente:[]
+};
+function abrirAsistentePrimeraConfiguracion(previo){
   const hoy=new Date();
-  fpQuincenaSel=hoy.getDate()<=15?'q1':'q2';
-  const mesOpts=MESES.map(function(nm,i){return '<option value="'+i+'"'+(i===hoy.getMonth()?' selected':'')+'>'+nm+'</option>';}).join('');
+  previo=previo||{};
+  if(!previo.mantenerQuincena) fpQuincenaSel=hoy.getDate()<=15?'q1':'q2';
+  const mesSel=previo.mes!=null?previo.mes:hoy.getMonth();
+  const mesOpts=MESES.map(function(nm,i){return '<option value="'+i+'"'+(i===mesSel?' selected':'')+'>'+nm+'</option>';}).join('');
+  const plantillas=FP_PLANTILLAS_DED[fpTipoSel]||[];
+  const nominaHtml=fpTipoSel==='independiente'
+    ?'<p style="font-size:11.5px;color:var(--mut);line-height:1.5;margin-bottom:12px">Sin nómina: registra lo que te entra en la pestaña <b style="color:var(--txt)">Ingresos</b> (puedes marcar los que se repiten cada mes).</p>'
+    :('<div class="field"><label>'+(fpTipoSel==='pensionado'?'Mesada mensual':'Básico mensual')+'</label><input id="fp-basico" type="text" inputmode="numeric" placeholder="Ej: 2.500.000" value="'+(previo.basico?moneyInputFmt(previo.basico):'')+'" oninput="maskMoneyInput(this)"></div>'
+      +(plantillas.length?('<div class="field"><label>Descuentos de nómina</label>'
+        +plantillas.map(function(pl){
+          return '<label style="display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--txt);font-weight:600;margin:4px 0"><input type="checkbox" class="fp-ded" data-id="'+pl.id+'" checked style="width:18px;height:18px;accent-color:var(--acc)">'+esc(pl.txt)+'</label>';
+        }).join('')
+        +'<p style="font-size:11px;color:var(--mut);line-height:1.5;margin-top:4px">Desmarca los que no aplican. Puedes agregar o editar descuentos después en Nómina.</p></div>'):''));
   openModal('<div class="mtitle">Configura tu primer mes</div>'
-    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Antes de empezar, cuéntanos desde cuándo vas a llevar tus finanzas acá.</p>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Antes de empezar, cuéntanos desde cuándo vas a llevar tus finanzas acá y cómo recibes tu plata.</p>'
+    +'<div class="field"><label>¿Cómo recibes tu plata?</label>'+tipoIngresoOpcionesHtml(fpTipoSel,'setFPTipo')+'</div>'
     +'<div class="field"><label>Mes</label><select id="fp-mes">'+mesOpts+'</select></div>'
-    +'<div class="field"><label>Año</label><input id="fp-anio" type="text" inputmode="numeric" maxlength="4" value="'+hoy.getFullYear()+'"></div>'
+    +'<div class="field"><label>Año</label><input id="fp-anio" type="text" inputmode="numeric" maxlength="4" value="'+(previo.anio||hoy.getFullYear())+'"></div>'
     +'<div class="field"><label>¿En qué quincena estás ahora?</label>'
     +'<div class="trow2">'
     +'<button class="topt'+(fpQuincenaSel==='q1'?' sa':'')+'" id="fp-q1" onclick="setFPQuincena(\'q1\')">Quincena 1</button>'
     +'<button class="topt'+(fpQuincenaSel==='q2'?' sa':'')+'" id="fp-q2" onclick="setFPQuincena(\'q2\')">Quincena 2</button>'
     +'</div></div>'
-    +'<div class="field"><label>Básico mensual</label><input id="fp-basico" type="text" inputmode="numeric" placeholder="Ej: 2.500.000" oninput="maskMoneyInput(this)"></div>'
-    +'<p style="font-size:11px;color:var(--mut);line-height:1.5">Las deducciones de nómina arrancan con <b style="color:var(--txt)">Salud (4%)</b> y <b style="color:var(--txt)">Pensión (4%)</b> — los básicos de ley. Puedes editarlas después en Nómina.</p>'
+    +nominaHtml
     +'<div class="macts"><button class="bpri" style="grid-column:1/-1" onclick="confirmarPrimeraConfiguracion()">Empezar</button></div>');
+}
+// Cambiar el tipo reabre el asistente (cambia qué campos aplican) sin perder lo ya escrito.
+function setFPTipo(t){
+  const mesEl=document.getElementById('fp-mes'), anioEl=document.getElementById('fp-anio');
+  const previo={mantenerQuincena:true, mes:mesEl?parseInt(mesEl.value,10):null, anio:anioEl?anioEl.value:'', basico:moneyVal('fp-basico')||0};
+  fpTipoSel=normalizarTipoIngreso(t);
+  abrirAsistentePrimeraConfiguracion(previo);
 }
 function setFPQuincena(q){
   fpQuincenaSel=q;
@@ -238,11 +262,17 @@ async function confirmarPrimeraConfiguracion(){
   const mesIdx=parseInt(document.getElementById('fp-mes').value)||0;
   const anio=parseInt(document.getElementById('fp-anio').value)||0;
   if(!anio||anio<2000||anio>2100){ showAlert('Ingresa un año válido'); return; }
-  const basico=moneyVal('fp-basico')||0;
-  if(basico<=0){ showAlert('Ingresa tu básico mensual'); return; }
+  const conNomina=fpTipoSel!=='independiente';
+  const basico=conNomina?(moneyVal('fp-basico')||0):0;
+  if(conNomina && basico<=0){ showAlert(fpTipoSel==='pensionado'?'Ingresa tu mesada mensual':'Ingresa tu básico mensual'); return; }
+  // Solo las plantillas que quedaron marcadas (ninguna si es independiente).
+  const marcadas={};
+  document.querySelectorAll('.fp-ded').forEach(function(el){ if(el.checked) marcadas[el.dataset.id]=true; });
+  const plantillasElegidas=(FP_PLANTILLAS_DED[fpTipoSel]||[]).filter(function(pl){ return marcadas[pl.id]; });
   function dedSaludPension(){
-    return [{nombre:'Salud',porcentaje:0.04,valor_fijo:null},{nombre:'Pensión',porcentaje:0.04,valor_fijo:null}];
+    return plantillasElegidas.map(function(pl){ return {nombre:pl.nombre,porcentaje:pl.porcentaje,valor_fijo:null}; });
   }
+  perfilTipoIngreso=normalizarTipoIngreso(fpTipoSel);
   const mes={
     nombre:MESES[mesIdx], año:anio,
     q1_gastos:[], q2_gastos:[],
@@ -262,7 +292,7 @@ async function confirmarPrimeraConfiguracion(){
   mes.nomina.basico_q2=basicoQ2(mes);
   db={0:mes};
   creditos={};
-  catMetodos=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'].map(function(n){return {id:uid(),nombre:n};});
+  catMetodos=METODOS_PAGO_INICIALES.map(function(n){return {id:uid(),nombre:n};});
   catTipos=[];
   Object.keys(db).forEach(function(k){ db[k]=migrateMonth(db[k]); });
   migrarEstadoGastos();
@@ -461,6 +491,8 @@ function lockImportBackup(input){
       perfilTelefono=importedPayload.telefono||'';
       perfilNombre=importedPayload.nombre||'';
       perfilQ2DiasFijos=!!importedPayload.q2DiasFijos;
+      perfilPago=normalizarPerfilPago(importedPayload.pago);
+      perfilTipoIngreso=normalizarTipoIngreso(importedPayload.tipoIngreso);
       // Esta ruta genera una data key COMPLETAMENTE NUEVA (la anterior se da por perdida), así
       // que cualquier número de recuperación configurado con la data key vieja ya no sirve.
       // Si el backup traía un teléfono, se reconstruye el envelope de recuperación bajo la
@@ -539,10 +571,82 @@ function initApp(){
 function openSecurityMenu(){
   openModal('<div class="mtitle">Perfil</div>'
     +'<div class="field"><label>Nombre</label><input id="perfil-nombre" value="'+esc(perfilNombre||'')+'" placeholder="Tu nombre"></div>'
+    +'<button class="bcnl" style="width:100%;margin:2px 0 8px;display:flex;align-items:center;gap:8px;text-align:left" onclick="openTipoIngreso()">'+icon('dollar',16)
+    +'<span style="flex:1;min-width:0"><span style="display:block">Tipo de ingreso</span><span style="display:block;font-size:11.5px;color:var(--mut);font-weight:600">'+esc(TIPO_INGRESO_INFO[normalizarTipoIngreso(perfilTipoIngreso)].titulo)+'</span></span>'+icon('chevronRight',15)+'</button>'
+    +'<button class="bcnl" style="width:100%;margin:2px 0 12px;display:flex;align-items:center;gap:8px;text-align:left" onclick="openDiasPago()">'+icon('cal',16)
+    +'<span style="flex:1;min-width:0"><span style="display:block">Días de pago</span><span style="display:block;font-size:11.5px;color:var(--mut);font-weight:600">'+esc(textoDiasPago())+'</span></span>'+icon('chevronRight',15)+'</button>'
     +(typeof backupNubeSectionHtml==='function'?backupNubeSectionHtml():'')
     +'<div style="margin-top:14px"><button class="bcnl" style="width:100%;color:var(--red)" onclick="lockNow()">'+btnIcon('lock')+'Cerrar sesión</button></div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="guardarPerfilNombre()">Guardar</button></div>');
+}
+// ── Tipo de ingreso (ver perfilTipoIngreso en state.js, tieneNomina en nomina-calc.js) ──
+const TIPO_INGRESO_INFO={
+  empleado:{titulo:'Empleado', desc:'Recibo salario por nómina, con prima y cesantías.'},
+  pensionado:{titulo:'Pensionado', desc:'Recibo una mesada. Sin prima ni cesantías.'},
+  independiente:{titulo:'Independiente', desc:'No tengo nómina: mi plata entra por la pestaña Ingresos.'}
+};
+function tipoIngresoOpcionesHtml(sel,onclickFn){
+  return TIPOS_INGRESO.map(function(t){
+    const on=t===sel, info=TIPO_INGRESO_INFO[t];
+    return '<button type="button" onclick="'+onclickFn+'(\''+t+'\')" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:11px 14px;border-radius:12px;cursor:pointer;font-family:inherit;margin-bottom:8px;'
+      +'background:'+(on?'var(--acc-d)':'var(--surf)')+';border:1.5px solid '+(on?'var(--acc)':'var(--brd2)')+'">'
+      +'<span style="font-size:14px;font-weight:800;color:'+(on?'var(--acc)':'var(--txt)')+'">'+info.titulo+'</span>'
+      +'<span style="font-size:12px;color:var(--mut)">'+info.desc+'</span></button>';
+  }).join('');
+}
+function openTipoIngreso(){
+  openModal('<div class="mtitle">Tipo de ingreso</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:12px">Define cómo calcula la app tu plata disponible. Tus datos no se borran al cambiarlo.</p>'
+    +tipoIngresoOpcionesHtml(normalizarTipoIngreso(perfilTipoIngreso),'guardarTipoIngreso')
+    +'<div class="macts" style="margin-top:6px"><button class="bcnl" style="grid-column:1/-1" onclick="openSecurityMenu()">Volver</button></div>');
+}
+function guardarTipoIngreso(t){
+  perfilTipoIngreso=normalizarTipoIngreso(t);
+  if(!tieneNomina() && curTab===3) curTab=0;
+  save(); render(); openSecurityMenu();
+  toast('Tipo de ingreso: '+TIPO_INGRESO_INFO[perfilTipoIngreso].titulo);
+}
+
+// ── Días de pago de la nómina (ver getPago en format-utils.js) ────────────────
+function textoDiasPago(){
+  const p=normalizarPerfilPago(perfilPago);
+  return 'Q1 el '+p.diaQ1+' · Q2 '+(p.diaQ2?('el '+p.diaQ2):'el último día')+' · festivo: hábil '+p.ajuste;
+}
+function openDiasPago(){
+  const p=normalizarPerfilPago(perfilPago);
+  const opts=function(desde,hasta,sel){
+    var h='';
+    for(var d=desde;d<=hasta;d++) h+='<option value="'+d+'"'+(d===sel?' selected':'')+'>'+d+'</option>';
+    return h;
+  };
+  window._diasPagoAjuste=p.ajuste;
+  openModal('<div class="mtitle">Días de pago</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:14px">Qué día te pagan cada quincena. Se usa para las fechas de pago de Inicio, Nómina y la Agenda, en todos los meses.</p>'
+    +'<div class="field"><label>Pago de la Q1</label><select id="dp-q1">'+opts(1,15,p.diaQ1)+'</select></div>'
+    +'<div class="field"><label>Pago de la Q2</label><select id="dp-q2"><option value="0"'+(p.diaQ2?'':' selected')+'>Último día del mes</option>'+opts(16,31,p.diaQ2)+'</select></div>'
+    +'<div class="field"><label>Si cae en fin de semana o festivo</label>'
+    +'<div class="trow2">'
+    +'<button class="topt'+(p.ajuste==='anterior'?' sa':'')+'" id="dp-ant" onclick="setAjusteDiasPago(\'anterior\')">Día hábil anterior</button>'
+    +'<button class="topt'+(p.ajuste==='siguiente'?' sa':'')+'" id="dp-sig" onclick="setAjusteDiasPago(\'siguiente\')">Día hábil siguiente</button>'
+    +'</div></div>'
+    +'<p style="font-size:11.5px;color:var(--mut);line-height:1.5;margin-bottom:4px">Si eliges un día que el mes no tiene (por ejemplo 31 en un mes de 30), se toma el último día de ese mes.</p>'
+    +'<div class="macts" style="margin-top:12px"><button class="bcnl" onclick="openSecurityMenu()">Cancelar</button>'
+    +'<button class="bpri" onclick="guardarDiasPago()">Guardar</button></div>');
+}
+function setAjusteDiasPago(v){
+  window._diasPagoAjuste=v;
+  document.getElementById('dp-ant').className='topt'+(v==='anterior'?' sa':'');
+  document.getElementById('dp-sig').className='topt'+(v==='siguiente'?' sa':'');
+}
+function guardarDiasPago(){
+  perfilPago=normalizarPerfilPago({
+    diaQ1:document.getElementById('dp-q1').value,
+    diaQ2:document.getElementById('dp-q2').value,
+    ajuste:window._diasPagoAjuste
+  });
+  save(); render(); openSecurityMenu();
+  toast('Días de pago actualizados ✓');
 }
 function guardarPerfilNombre(){
   perfilNombre=(document.getElementById('perfil-nombre').value||'').trim();
@@ -762,7 +866,7 @@ function migrateMonth(m) {
       if (Array.isArray(m.nomina[key])) m.nomina[key] = m.nomina[key].filter(function(d){return !d.ingresoId;});
     });
   }
-  ['q1','q2'].forEach(function(which){ syncIngresosDed(m, which); });
+  limpiarDedIngresosLegacy(m); // los ingresos ya no viven como deducción en Nómina
 
   // ── Migración a múltiples tarjetas ────────────────────────────────────────
   if (!m.tarjetas) {
@@ -830,7 +934,7 @@ function loadLegacyPlaintext(){
     catMetodos = parseLegacyJSON('fin26_cat_metodos', [], 'métodos de pago');
   } else {
     // Migrar valores por defecto la primera vez
-    const defaults=['Nequi','BBVA','PSE','Tarjeta','Retiro','Cuenta','Otro'];
+    const defaults=METODOS_PAGO_INICIALES;
     catMetodos = defaults.map(function(n){ return {id:uid(), nombre:n}; });
   }
   catTipos = parseLegacyJSON('fin26_cat_tipos', [], 'tipos de gasto');
@@ -906,7 +1010,7 @@ async function decryptPayloadTexto(envelope){
 // Lo que se cifra en fin26_enc — compartido entre save() y la comparación de loadAppData(),
 // para que ambos generen exactamente el mismo JSON (mismo orden de campos).
 function datosParaGuardar(){
-  return {db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos};
+  return {db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos, pago:perfilPago, tipoIngreso:perfilTipoIngreso};
 }
 
 // Carga db/creditos/catálogos ya descifrados con sessionDataKey (o migra datos legacy en
@@ -917,7 +1021,7 @@ async function loadAppData(){
   if(encRaw){
     textoOriginal = await decryptPayloadTexto(JSON.parse(encRaw)); // lanza si la clave no coincide
     const payload = JSON.parse(textoOriginal);
-    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||''; perfilQ2DiasFijos = !!payload.q2DiasFijos;
+    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||''; perfilQ2DiasFijos = !!payload.q2DiasFijos; perfilPago = normalizarPerfilPago(payload.pago); perfilTipoIngreso = normalizarTipoIngreso(payload.tipoIngreso);
   } else {
     loadLegacyPlaintext();
   }

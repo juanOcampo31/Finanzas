@@ -3,8 +3,8 @@
 // gastos PLANEADOS de la quincena (q1_gastos/q2_gastos) pero que sí sacan plata: se registran
 // aparte, en m.hormiga.q1 / m.hormiga.q2, con {id, monto, nota, metodo, fecha}. La quincena
 // sale de la fecha (1–15 → Q1, 16–fin de mes → Q2, mismo rango que muestran las tarjetas de
-// Inicio). Restan del disponible (ver calcHormigaQuincena/calcDisponibleQuincena en
-// nomina-calc.js). Viven dentro del mes, así que viajan solas en el respaldo y en la nube.
+// Inicio). NO restan del disponible: solo se
+// muestra cuánto se ha gastado (calcHormigaQuincena en nomina-calc.js). Viven dentro del mes, así que viajan solas en el respaldo y en la nube.
 
 const HORMIGA_MAX_CHIPS=6;      // sugerencias de nota en el formulario
 const HORMIGA_MAX_TOP=5;        // conceptos en "En qué se va"

@@ -168,6 +168,9 @@ function buildDraftMonth(){
   // Los gastos hormiga son compras ya hechas en el mes que se cierra — el mes nuevo arranca
   // sin ninguna (si no, la copia profunda las duplicaba y restaban del disponible nuevo).
   nm.hormiga = {q1:[], q2:[]};
+  // Ingresos: solo pasan los marcados "Repetir cada mes", con la fecha movida a este mes (antes
+  // la copia profunda los pasaba TODOS, incluso los de una sola vez, con la fecha del mes viejo).
+  nm.ingresos = ingresosParaMesNuevo(lm.ingresos, nm.año, Math.max(0, MESES.indexOf(nm.nombre)));
 
   var prevLinkedGroups=(lm.q2_gastos||[]).filter(function(g){return g.esGrupo&&g.tcCardId;});
   prevLinkedGroups.forEach(function(prevG){
@@ -177,7 +180,7 @@ function buildDraftMonth(){
         id:uid(),
         nombre:prevG.nombre,
         presupuesto:0,
-        metodo:prevG.metodo||'BBVA',
+        metodo:prevG.metodo||'',
         pagado_real:null,
         estado:null,
         pagado_flag:false,

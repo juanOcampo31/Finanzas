@@ -9,11 +9,11 @@
 // un service worker — ninguno de esos caminos aplica corriendo por fuera del navegador.
 //
 // app.js se dividió en varios archivos bajo js/ (uno por dominio) que se cargan como <script>
-// separados en index.html/tests.html, en el mismo orden relativo en que vivían dentro del
+// separados en index.html/docs/tests.html, en el mismo orden relativo en que vivían dentro del
 // app.js original (necesario: código de nivel superior de un archivo puede depender de que uno
 // anterior ya haya corrido). Ese orden vive en un único lugar — js/manifest.json — y tanto
-// index.html/tests.html como este sandbox deben usar exactamente ese orden. Si cambias el orden
-// acá, cámbialo también en js/manifest.json y en los <script> de index.html/tests.html.
+// index.html/docs/tests.html como este sandbox deben usar exactamente ese orden. Si cambias el orden
+// acá, cámbialo también en js/manifest.json y en los <script> de index.html/docs/tests.html.
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -108,7 +108,7 @@ export function loadApp(){
   // script corre en el MISMO contexto (misma cadena de scopes) que app.js, así que sí puede
   // referenciar esos bindings directamente — como si fuera la siguiente etiqueta <script> de la
   // misma página — y expone getters/setters reales sobre ellos.
-  // INIT/FE también son `const` de nivel superior (mismo problema que db/creditos/etc. — no
+  // INIT/METODOS_PAGO_INICIALES también son `const` de nivel superior (mismo problema que db/creditos/etc. — no
   // quedan como propiedad del objeto global), pero nunca se reasignan, así que solo hacen
   // falta como getters (no como setters) acá.
   vm.runInContext(
@@ -117,8 +117,10 @@ export function loadApp(){
     '  get creditos(){ return creditos; }, set creditos(v){ creditos = v; },' +
     '  get catTipos(){ return catTipos; }, set catTipos(v){ catTipos = v; },' +
     '  get catMetodos(){ return catMetodos; }, set catMetodos(v){ catMetodos = v; },' +
+    '  get perfilPago(){ return perfilPago; }, set perfilPago(v){ perfilPago = v; },' +
+    '  get perfilTipoIngreso(){ return perfilTipoIngreso; }, set perfilTipoIngreso(v){ perfilTipoIngreso = v; },' +
     '  get INIT(){ return INIT; },' +
-    '  get FE(){ return FE; }' +
+    '  get METODOS_PAGO_INICIALES(){ return METODOS_PAGO_INICIALES; }' +
     '};',
     sandbox,
     { filename: 'app-test-bridge.js' }

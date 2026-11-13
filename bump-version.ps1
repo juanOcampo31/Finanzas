@@ -51,7 +51,7 @@ $swContent = $swContent -replace "const CACHE_VERSION = '[\d.]+';", "const CACHE
 Set-Content -Path $swPath -Value $swContent -Encoding UTF8 -NoNewline
 
 $indexContent = Get-Content -Raw -Encoding UTF8 $indexPath
-$indexContent = $indexContent -replace 'V [\d.]+ &bull; Powered by Felipe Ocampo', "V $Version &bull; Powered by Felipe Ocampo"
+$indexContent = $indexContent -replace 'id="lockVersion">V [\d.]+', "id=`"lockVersion`">V $Version"
 # manifest.json y el ícono de iOS (apple-touch-icon) no pasan por el service worker cuando el
 # propio sistema operativo revisa si hay un ícono nuevo (Android/iOS los piden directo por red) —
 # sin un ?v= que cambie en cada release, GitHub Pages/el navegador podría seguirlos sirviendo

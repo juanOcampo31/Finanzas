@@ -17,6 +17,8 @@
 //   perfilTelefono     → auth.js, sync.js
 //   perfilNombre       → auth.js, sync.js
 //   perfilQ2DiasFijos  → auth.js, catalogos.js, export-main.js, sync.js
+//   perfilPago         → auth.js, export-main.js, sync.js, format-utils.js (getPago)
+//   perfilTipoIngreso  → auth.js, export-main.js, sync.js, nomina-calc.js
 //   curM               → auth.js, catalogos.js, export-main.js, sync.js
 //   sessionDataKey     → auth.js, sync.js
 // El resto (gFiltro, curTC, homeQ, etc.) solo se reasigna hoy desde el mismo archivo dueño de la
@@ -32,6 +34,14 @@ let perfilNombre='';   // nombre del perfil (solo informativo); viaja cifrado ju
 // si fueran 15 días fijos, sin importar el mes. Editable en Perfil; viaja cifrado como los demás
 // datos del perfil, así que aplica igual en todos los dispositivos sincronizados.
 let perfilQ2DiasFijos=false;
+// Días de pago de la nómina (ver getPago en format-utils.js y openDiasPago en auth.js):
+// diaQ1 1–15, diaQ2 16–31 o 0 = último día del mes; ajuste = a dónde se corre si cae en fin de
+// semana o festivo ("anterior" = día hábil anterior, "siguiente" = día hábil siguiente).
+let perfilPago={diaQ1:15, diaQ2:0, ajuste:"anterior"};
+// Tipo de ingreso principal (ver tieneNomina/tienePrestaciones en nomina-calc.js):
+// "empleado" (nómina + prima/cesantías), "pensionado" (mesada, sin prima/cesantías) o
+// "independiente" (sin nómina: el disponible sale solo de la pestaña Ingresos).
+let perfilTipoIngreso="empleado";
 let db=null; // se puebla en loadAppData() (auth.js), después de desbloquear con el PIN — nunca antes
 let sessionDataKey=null; // CryptoKey AES-256 en memoria; nunca se persiste. Cifra/descifra fin26_enc.
 let saveChain=Promise.resolve(); // serializa los guardados para no pisar escrituras si save() se llama varias veces seguidas

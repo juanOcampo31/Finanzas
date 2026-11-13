@@ -30,7 +30,7 @@ function backupNubeSectionHtml(){
 }
 async function exportJSON(){
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre,q2DiasFijos:perfilQ2DiasFijos});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre,q2DiasFijos:perfilQ2DiasFijos,pago:perfilPago,tipoIngreso:perfilTipoIngreso});
   let pin=sessionPIN;
   if(!pin){
     pin=await promptPINModal('Confirma tu PIN para cifrar el backup');
@@ -188,7 +188,9 @@ async function procesarBackupParseado(parsed, origenLabel){
       catTipos: importedPayload.catTipos||null,
       telefono: importedPayload.telefono||null,
       nombre: importedPayload.nombre||null,
-      q2DiasFijos: !!importedPayload.q2DiasFijos
+      q2DiasFijos: !!importedPayload.q2DiasFijos,
+      pago: importedPayload.pago||null,
+      tipoIngreso: importedPayload.tipoIngreso||null
     };
     const cambios=compararBackupsDb(db, importedDb);
     openModal('<div class="mtitle">Importar backup</div>'
@@ -243,6 +245,8 @@ function confirmImport(){
     // compatibilidad con backups viejos que no traían el campo), acá SIEMPRE se aplica: es un
     // booleano con default false, no hay forma de distinguir "no venía" de "venía en false".
     perfilQ2DiasFijos=!!window._importedExtra.q2DiasFijos;
+    perfilPago=normalizarPerfilPago(window._importedExtra.pago);
+    perfilTipoIngreso=normalizarTipoIngreso(window._importedExtra.tipoIngreso);
   }
   // Reset navigation
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});
@@ -319,7 +323,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', function(e){
     if(e.data && e.data.type==='VERSION'){
       var el=document.getElementById('lockVersion');
-      if(el) el.textContent='V '+e.data.version+' • Powered by Felipe Ocampo';
+      if(el) el.textContent='V '+e.data.version+(APP_FIRMA?' • '+APP_FIRMA:'');
     }
   });
   navigator.serviceWorker.ready.then(function(reg){

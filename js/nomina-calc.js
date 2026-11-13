@@ -62,8 +62,16 @@ function calcNeto(bq, deds) {
   }
   return base + ajuste;
 }
-function netoQ1(m) { return calcNeto(basicoQ1(m), getNom(m).ded_q1) + auxTransporteQ1(m); }
-function netoQ2(m) { return calcNeto(basicoQ2(m), getNom(m).ded_q2) + auxTransporteQ2(m); }
+// ── Tipo de ingreso (Mi perfil → Tipo de ingreso, ver perfilTipoIngreso en state.js) ──
+// Independiente: no hay nómina — el neto es 0 y el disponible sale solo de los Ingresos (la
+// pestaña Nómina se oculta). Pensionado: hay nómina (la mesada), pero no prima ni cesantías.
+const TIPOS_INGRESO=['empleado','pensionado','independiente'];
+function normalizarTipoIngreso(t){ return TIPOS_INGRESO.indexOf(t)>=0?t:'empleado'; }
+function tieneNomina(){ return typeof perfilTipoIngreso==='undefined' || perfilTipoIngreso!=='independiente'; }
+function tienePrestaciones(){ return typeof perfilTipoIngreso==='undefined' || perfilTipoIngreso==='empleado'; }
+
+function netoQ1(m) { if(!tieneNomina()) return 0; return calcNeto(basicoQ1(m), getNom(m).ded_q1) + auxTransporteQ1(m); }
+function netoQ2(m) { if(!tieneNomina()) return 0; return calcNeto(basicoQ2(m), getNom(m).ded_q2) + auxTransporteQ2(m); }
 
 // Total de gastos activos (no "sin pagar") de una quincena, consciente de grupos: si el grupo
 // tiene base propia (vinculado a tarjeta o monto manual) se usa esa; si no, se suman sus subgastos.
@@ -102,10 +110,9 @@ function calcTotalQuincena(m, which){
   return calcTotalGrupoAware(activos, subMap, which==='q1');
 }
 // Total de ingresos adicionales (aparte de la nómina) registrados en la pestaña Ingresos
-// para una quincena dada. El total vive también como UNA sola deducción tipo "Suma" bloqueada
-// en ded_q1/ded_q2 (ver syncIngresosDed), agrupando todos los ingresos de esa quincena en un
-// único renglón — así ya está incluido en netoQ1()/netoQ2() y no se vuelve a sumar en
-// calcDisponibleQuincena (evitaría contarlo dos veces).
+// para una quincena dada. Se suman DIRECTO al disponible (ver calcDisponibleQuincena) — antes
+// se disfrazaban de deducción tipo "Suma" dentro de Nómina para entrar al neto, lo que
+// mezclaba el salario con la plata extra y confundía (ver limpiarDedIngresosLegacy).
 function calcIngresosQuincena(m, which){
   const lista=(m.ingresos&&m.ingresos[which])||[];
   return lista.reduce(function(a,x){return a+Math.abs(x.valor||0);},0);
@@ -117,12 +124,11 @@ function calcHormigaQuincena(m, which){
   const lista=(m.hormiga&&m.hormiga[which])||[];
   return lista.reduce(function(a,x){return a+Math.abs(x.monto||0);},0);
 }
-// Disponible de una quincena = neto de nómina (ya incluye los ingresos adicionales vía su
-// deducción tipo Suma) menos el total de gastos activos y menos los gastos hormiga (plata que
-// sí salió, aunque no esté en la lista de gastos planeados).
+// Disponible de una quincena = neto de nómina + ingresos adicionales − gastos activos −
+// gastos hormiga (plata que sí salió, aunque no esté en la lista de gastos planeados).
 function calcDisponibleQuincena(m, which){
   const netoQ=which==='q1'?netoQ1(m):netoQ2(m);
-  return netoQ-calcTotalQuincena(m,which)-calcHormigaQuincena(m,which);
+  return netoQ+calcIngresosQuincena(m,which)-calcTotalQuincena(m,which);
 }
 // Cuotas de crédito vencidas dentro de una quincena: gastos ligados a un crédito, sin
 // marcar como pagados ni "sin pagar" (movidos a la otra quincena), cuya propia fecha de
@@ -144,21 +150,14 @@ function calcVencidosQuincena(m, which){
   });
   return out;
 }
-// Crea, actualiza o elimina la ÚNICA deducción tipo "Suma" en Nómina que agrupa el total de
-// todos los ingresos de una quincena (en vez de una deducción por cada ingreso). Se llama
-// cada vez que se guarda o borra un ingreso.
-function syncIngresosDed(m, which){
+// Antes, el total de ingresos de cada quincena vivía como una deducción tipo "Suma" bloqueada
+// (esIngresos) dentro de Nómina. Ahora los ingresos suman directo al disponible, así que esa
+// deducción se quita (migrateMonth la limpia en cada carga; si quedara, se contaría dos veces).
+function limpiarDedIngresosLegacy(m){
   const nom=getNom(m);
-  const key=which==='q1'?'ded_q1':'ded_q2';
-  const list=nom[key]||(nom[key]=[]);
-  const idx=list.findIndex(function(d){return d.esIngresos;});
-  const total=calcIngresosQuincena(m,which);
-  if(total>0){
-    const entry={nombre:'Ingresos',porcentaje:null,valor_fijo:total,tipo:'suma',esIngresos:true};
-    if(idx>=0) list[idx]=entry; else list.push(entry);
-  } else if(idx>=0){
-    list.splice(idx,1);
-  }
+  ['ded_q1','ded_q2'].forEach(function(key){
+    if(Array.isArray(nom[key])) nom[key]=nom[key].filter(function(d){return !d.esIngresos;});
+  });
 }
 
 // Fase 2 de la migración a una arquitectura más modular: calcPrimaMes vivía antes en
@@ -168,6 +167,7 @@ function calcPrimaMes(m){
   // Si el mes actual es Junio o Diciembre, calcula la prima del semestre correspondiente
   const mi=MESES.indexOf(m.nombre);
   if(mi!==5 && mi!==11) return 0; // solo Junio(5) o Diciembre(11)
+  if(!tienePrestaciones()) return 0; // pensionado o independiente: no hay prima
   const año=m.año;
   const mesesDelAño={};
   const auxDelAño={};

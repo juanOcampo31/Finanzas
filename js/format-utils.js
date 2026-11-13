@@ -301,18 +301,81 @@ function toast(msg, ms) {
 }
 
 // ── Fechas de pago ────────────────────────────────────────────────────────────
-function isFest(d) { return FE.has(d.toISOString().slice(0,10)); }
+// Festivos de Colombia calculados para CUALQUIER año (antes era una lista fija solo de 2026, así
+// que desde 2027 las fechas de pago dejaban de correrse por festivo). Reglas (Ley 51 de 1983,
+// "Ley Emiliani"):
+//  - Fijos (no se mueven): 1 ene, 1 may, 20 jul, 7 ago, 8 dic, 25 dic.
+//  - Se trasladan al lunes siguiente (si no caen lunes): 6 ene, 19 mar, 29 jun, 15 ago,
+//    12 oct, 1 nov, 11 nov.
+//  - Según la Pascua: Jueves y Viernes Santo (no se mueven); Ascensión (+43 días), Corpus
+//    Christi (+64) y Sagrado Corazón (+71), que ya caen en lunes.
+const _festivosPorAño={};
+function fechaClaveLocal(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// Domingo de Pascua (algoritmo de Meeus/Jones/Butcher, calendario gregoriano).
+function domingoDePascua(año){
+  const a=año%19, b=Math.floor(año/100), c=año%100, d=Math.floor(b/4), e=b%4;
+  const f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m=Math.floor((a+11*h+22*l)/451);
+  const mes=Math.floor((h+l-7*m+114)/31), dia=((h+l-7*m+114)%31)+1;
+  return new Date(año,mes-1,dia);
+}
+function festivosColombia(año){
+  if(_festivosPorAño[año]) return _festivosPorAño[año];
+  const set=new Set();
+  const fijo=function(mes,dia){ set.add(fechaClaveLocal(new Date(año,mes-1,dia))); };
+  const alLunes=function(mes,dia){
+    const d=new Date(año,mes-1,dia);
+    while(d.getDay()!==1) d.setDate(d.getDate()+1);
+    set.add(fechaClaveLocal(d));
+  };
+  const desdePascua=function(dias){
+    const d=domingoDePascua(año);
+    d.setDate(d.getDate()+dias);
+    set.add(fechaClaveLocal(d));
+  };
+  fijo(1,1); fijo(5,1); fijo(7,20); fijo(8,7); fijo(12,8); fijo(12,25);
+  alLunes(1,6); alLunes(3,19); alLunes(6,29); alLunes(8,15); alLunes(10,12); alLunes(11,1); alLunes(11,11);
+  desdePascua(-3); desdePascua(-2); desdePascua(43); desdePascua(64); desdePascua(71);
+  _festivosPorAño[año]=set;
+  return set;
+}
+function isFest(d) { return festivosColombia(d.getFullYear()).has(fechaClaveLocal(d)); }
 function isWknd(d) { return d.getDay()===0||d.getDay()===6; }
 function prevBiz(d) {
   let x=new Date(d); x.setDate(x.getDate()-1);
   while(isWknd(x)||isFest(x)) x.setDate(x.getDate()-1);
   return x;
 }
+function nextBiz(d) {
+  let x=new Date(d); x.setDate(x.getDate()+1);
+  while(isWknd(x)||isFest(x)) x.setDate(x.getDate()+1);
+  return x;
+}
+// Lo que venga guardado (o nada, en datos/respaldos de antes de esta opción) → configuración
+// válida. Por defecto, el comportamiento de siempre: 15, último día y día hábil anterior.
+function normalizarPerfilPago(p){
+  p=p||{};
+  const d1=parseInt(p.diaQ1,10), d2=parseInt(p.diaQ2,10);
+  return {
+    diaQ1:(d1>=1&&d1<=15)?d1:15,
+    diaQ2:(d2>=16&&d2<=31)?d2:0, // 0 = último día del mes
+    ajuste:p.ajuste==='siguiente'?'siguiente':'anterior'
+  };
+}
+// Fechas de pago de la nómina del mes: el día configurado (Mi perfil → Días de pago, ver
+// perfilPago en state.js). Si cae en fin de semana o festivo, se corre al día hábil anterior o
+// al siguiente, según la configuración. Un día 31 en un mes de 30 días = último día del mes.
 function getPago(año,mi) {
-  let q1=new Date(año,mi,15);
-  if(isWknd(q1)||isFest(q1)) { q1=prevBiz(q1); }
-  let q2=new Date(año,mi+1,0);
-  while(isWknd(q2)||isFest(q2)) q2=prevBiz(q2);
+  const cfg=normalizarPerfilPago(typeof perfilPago!=='undefined'?perfilPago:null);
+  const ultimo=new Date(año,mi+1,0).getDate();
+  const correr=function(d){
+    if(!(isWknd(d)||isFest(d))) return d;
+    return cfg.ajuste==='siguiente'?nextBiz(d):prevBiz(d);
+  };
+  const q1=correr(new Date(año,mi,Math.min(cfg.diaQ1,ultimo)));
+  const q2=correr(new Date(año,mi,cfg.diaQ2?Math.min(cfg.diaQ2,ultimo):ultimo));
   return {q1,q2};
 }
 function diasHasta(dt) {

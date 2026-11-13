@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pruebas - Finanzas Personales</title>
+<style>
+  *{box-sizing:border-box}
+  body{background:#0F172A;color:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:20px 24px 60px;font-size:14px}
+  h1{font-size:19px;margin:0 0 4px}
+  .subt{color:#94A3B8;font-size:12px;margin:0 0 16px}
+  .summary{font-size:15px;font-weight:700;margin-bottom:18px;padding:12px 16px;border-radius:10px}
+  .summary.ok{background:rgba(52,211,153,.12);color:#34D399}
+  .summary.fail{background:rgba(248,113,113,.12);color:#F87171}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;background:#1E293B;border-radius:10px;overflow:hidden}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid rgba(148,163,184,.12);vertical-align:top}
+  th{color:#94A3B8;text-transform:uppercase;font-size:10px;letter-spacing:.04em;background:#253347}
+  tr:last-child td{border-bottom:none}
+  .pass{color:#34D399;font-weight:700;white-space:nowrap}
+  .fail{color:#F87171;font-weight:700;white-space:nowrap}
+</style>
+</head>
+<body>
+<h1>🧪 Pruebas de lógica financiera</h1>
+<p class="subt">Finanzas Personales — corre contra el código REAL de la app (no una copia pegada aparte: los mismos <code>&lt;script src="js/..."&gt;</code> que usa <code>index.html</code>, en el mismo orden, con <code>__SKIP_AUTOSTART__</code>, ver el guard al final de <code>js/export-main.js</code>), así esta página nunca se desactualiza en silencio. La misma cobertura corre también sin navegador con <code>node test/run-tests.mjs</code>.</p>
+<div id="summary" class="summary">Ejecutando pruebas…</div>
+<table>
+<thead><tr><th>Función</th><th>Caso</th><th>Esperado</th><th>Obtenido</th><th>Resultado</th></tr></thead>
+<tbody id="results"></tbody>
+</table>
+
+<script>
+// app.js (ahora dividido en js/*.js, ver index.html) hace initApp() + registra el service worker
+// al final de sí mismo — ninguno de los dos aplica acá (no hay PIN que desbloquear, no hay nada
+// que instalar), así que se saltan por completo con este flag (debe quedar puesto ANTES de
+// cargar los scripts de abajo).
+window.__SKIP_AUTOSTART__ = true;
+</script>
+<!-- Mismo orden relativo que index.html y que js/manifest.json (usado por test/sandbox.mjs) —
+     ver el comentario en index.html. -->
+<script src="../js/core.js"></script>
+<script src="../js/state.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/bio.js"></script>
+<script src="../js/creditos-calculo.js"></script>
+<script src="../js/creditos-ui.js"></script>
+<script src="../js/creditos-abonos.js"></script>
+<script src="../js/creditos-congelar.js"></script>
+<script src="../js/creditos-refinanciar.js"></script>
+<script src="../js/format-utils.js"></script>
+<script src="../js/nomina-calc.js"></script>
+<script src="../js/render.js"></script>
+<script src="../js/render-inicio.js"></script>
+<script src="../js/render-gastos.js"></script>
+<script src="../js/render-tarjeta.js"></script>
+<script src="../js/render-ingresos.js"></script>
+<script src="../js/nomina.js"></script>
+<script src="../js/ui-core.js"></script>
+<script src="../js/gasto-pickers.js"></script>
+<script src="../js/gasto-form.js"></script>
+<script src="../js/gasto-drag.js"></script>
+<script src="../js/gasto-pago.js"></script>
+<script src="../js/tarjeta.js"></script>
+<script src="../js/nomina-deducciones.js"></script>
+<script src="../js/catalogos.js"></script>
+<script src="../js/gasto-estado.js"></script>
+<script src="../js/hormiga.js"></script>
+<script src="../js/export-main.js"></script>
+<script src="../js/sync.js"></script>
+<script>
+function approx(a,b,eps){ eps=(eps==null)?1:eps; return Math.abs(a-b)<=eps; }
+var TESTS=[];
+function t(grupo,caso,esperado,obtenido,ok){ TESTS.push({grupo:grupo,caso:caso,esperado:esperado,obtenido:obtenido,ok:!!ok}); }
+
+try{
+
+// ── calcCuotaPMT ─────────────────────────────────────────────
+t('calcCuotaPMT','Tasa 0% reparte en partes iguales (1,200,000 / 12)',
+  100000, calcCuotaPMT(1200000,0,12), calcCuotaPMT(1200000,0,12)===100000);
+
+var pmt1=calcCuotaPMT(1000000,0.02,12);
+t('calcCuotaPMT','P=1,000,000 · i=2% · n=12', 94559.60, pmt1, approx(pmt1,94559.60,0.5));
+
+var pmt2=calcCuotaPMT(5000000,0.015,24);
+t('calcCuotaPMT','P=5,000,000 · i=1.5% · n=24', 249620.51, pmt2, approx(pmt2,249620.51,0.5));
+
+// ── calcAmortizacion: integridad de la tabla completa ───────────
+var cred={valorPrestamo:1000000,pctAval:2,cuotas:12,tasa:2,fechaInicio:'2026-01-15',frecuencia:'mensual'};
+var amort=calcAmortizacion(cred);
+var sumaCapital=amort.rows.reduce(function(a,r){return a+r.capital;},0);
+t('calcAmortizacion','Suma de capital de las 12 cuotas = total financiado',
+  amort.total, Math.round(sumaCapital), Math.abs(amort.total-sumaCapital)<2);
+t('calcAmortizacion','Saldo de la última cuota queda en 0',
+  0, amort.rows[amort.rows.length-1].saldo, amort.rows[amort.rows.length-1].saldo===0);
+t('calcAmortizacion','Genera exactamente 12 filas (una por cuota)',
+  12, amort.rows.length, amort.rows.length===12);
+
+// ── generarFechasCredito ─────────────────────────────────────
+var fechasM=generarFechasCredito('2026-01-15',3,'mensual');
+t('generarFechasCredito','Mensual desde 15-ene, 3 cuotas',
+  '2026-01-15,2026-02-15,2026-03-15', fechasM.join(','),
+  fechasM.join(',')==='2026-01-15,2026-02-15,2026-03-15');
+
+var fechasQ=generarFechasCredito('2026-01-05',3,'quincenal');
+t('generarFechasCredito','Quincenal desde 05-ene (1ra quincena), 3 cuotas',
+  '2026-01-05,2026-01-31,2026-02-15', fechasQ.join(','),
+  fechasQ.join(',')==='2026-01-05,2026-01-31,2026-02-15');
+
+// ── diasQ2 ────────────────────────────────────────────────────
+t('diasQ2','Enero 2026 (31 días) -> Q2 = 16 días', 16, diasQ2(2026,0), diasQ2(2026,0)===16);
+t('diasQ2','Febrero 2026 no bisiesto (28 días) -> Q2 = 13 días', 13, diasQ2(2026,1), diasQ2(2026,1)===13);
+t('diasQ2','Abril 2026 (30 días) -> Q2 = 15 días', 15, diasQ2(2026,3), diasQ2(2026,3)===15);
+
+// ── basicoQ1 / basicoQ2 (usando datos de ejemplo de Enero) ───
+var mEnero={nombre:'Enero',año:2026,nomina:{basico_total:5000000}};
+t('basicoQ1','Enero: básico total 5,000,000 / 2', 2500000, basicoQ1(mEnero), basicoQ1(mEnero)===2500000);
+t('basicoQ2','Enero: 5,000,000 / 30 x 16 días', 2666667, basicoQ2(mEnero), basicoQ2(mEnero)===2666667);
+
+// ── calcNeto ──────────────────────────────────────────────────
+var neto=calcNeto(1000000,[{nombre:'Salud',porcentaje:0.04},{nombre:'Bono',valor_fijo:50000,tipo:'suma'}]);
+t('calcNeto','Base 1,000,000 - 4% salud + 50,000 bono', 1010000, neto, neto===1010000);
+
+// ── getPago: fechas de pago con ajuste por fin de semana / festivo ──
+var p1=getPago(2026,0); // Enero: sin ajuste
+t('getPago','Enero 2026 Q1 (15 cae en día hábil, sin ajuste)',
+  '2026-01-15', p1.q1.toISOString().slice(0,10), p1.q1.toISOString().slice(0,10)==='2026-01-15');
+t('getPago','Enero 2026 Q2 (fin de mes, sin ajuste)',
+  '2026-01-30', p1.q2.toISOString().slice(0,10), p1.q2.toISOString().slice(0,10)==='2026-01-30');
+
+var p2=getPago(2026,1); // Febrero: 15 cae domingo -> se corre a viernes 13
+t('getPago','Febrero 2026 Q1 (15 cae domingo -> ajusta a 13, viernes)',
+  '2026-02-13', p2.q1.toISOString().slice(0,10), p2.q1.toISOString().slice(0,10)==='2026-02-13');
+
+var p3=getPago(2026,5); // Junio: 15 es festivo (FE) -> se corre a 12
+t('getPago','Junio 2026 Q1 (15 es festivo -> ajusta a 12)',
+  '2026-06-12', p3.q1.toISOString().slice(0,10), p3.q1.toISOString().slice(0,10)==='2026-06-12');
+
+// ── calcPrimaMes (usa una copia de INIT, para no depender de si algo más ya tocó `db`) ──
+var dbPrueba=JSON.parse(JSON.stringify(INIT));
+var primaJunio=calcPrimaMes(dbPrueba[5]); // mes índice 5 = Junio
+t('calcPrimaMes','Junio: 6 meses x (5,000,000 x 30/360)', 2500000, primaJunio, primaJunio===2500000);
+
+var primaEnero=calcPrimaMes(dbPrueba[0]); // Enero no aplica prima
+t('calcPrimaMes','Enero no genera prima (solo aplica en Jun/Dic)', 0, primaEnero, primaEnero===0);
+
+// ── migrateMonth: integridad estructural tras migrar un mes viejo/incompleto ──
+var migrado=migrateMonth({nombre:'Prueba',año:2026});
+t('migrateMonth','Crea nomina con valores por defecto',
+  'objeto con basico_total=0', typeof migrado.nomina==='object'&&migrado.nomina.basico_total===0,
+  typeof migrado.nomina==='object'&&migrado.nomina.basico_total===0);
+t('migrateMonth','Crea al menos una tarjeta (tc1) por defecto',
+  true, !!(migrado.tarjetas&&migrado.tarjetas.tc1), !!(migrado.tarjetas&&migrado.tarjetas.tc1));
+t('migrateMonth','Inicializa q1_gastos y q2_gastos como arreglos vacíos',
+  true, Array.isArray(migrado.q1_gastos)&&Array.isArray(migrado.q2_gastos),
+  Array.isArray(migrado.q1_gastos)&&Array.isArray(migrado.q2_gastos));
+
+// ── cop (formato moneda) ────────────────────────────────────
+t('cop','Formatea 1,234,567 con separador de miles es-CO',
+  '$1.234.567', cop(1234567), cop(1234567)==='$1.234.567');
+t('cop','Valores nulos/no numéricos devuelven $0',
+  '$0', cop(null), cop(null)==='$0');
+
+// ── esc (seguridad al mostrar texto de usuario) ──────────────
+t('esc','Escapa comillas y símbolos HTML',
+  '&lt;script&gt;', esc('<script>'), esc('<script>')==='&lt;script&gt;');
+
+// ── nombreGasto (integridad catálogo <-> gasto vinculado) ────
+var catBackup=catTipos.slice();
+catTipos.length=0; catTipos.push({id:'catX',nombre:'Arriendo actualizado'});
+var gastoVinculado={nombre:'Arriendo viejo',catTipoId:'catX'};
+var gastoLibre={nombre:'Gasto libre'};
+t('nombreGasto','Gasto vinculado muestra el nombre ACTUAL del catálogo',
+  'Arriendo actualizado', nombreGasto(gastoVinculado), nombreGasto(gastoVinculado)==='Arriendo actualizado');
+t('nombreGasto','Gasto de libre ingreso conserva su propio nombre',
+  'Gasto libre', nombreGasto(gastoLibre), nombreGasto(gastoLibre)==='Gasto libre');
+catTipos.length=0; Array.prototype.push.apply(catTipos,catBackup);
+
+// ── validarEsquemaDb (import de backups) ─────────────────────
+t('validarEsquemaDb','Acepta un db válido (INIT)', null, validarEsquemaDb(INIT), validarEsquemaDb(INIT)===null);
+t('validarEsquemaDb','Rechaza un db vacío', 'mensaje de error', validarEsquemaDb({}), /ningún mes/.test(validarEsquemaDb({})));
+t('validarEsquemaDb','Rechaza un mes sin nombre', 'mensaje de error', validarEsquemaDb({0:{año:2026}}), /nombre válido/.test(validarEsquemaDb({0:{año:2026}})));
+t('validarEsquemaDb','Rechaza q1_gastos corrupto (no es lista)', 'mensaje de error',
+  validarEsquemaDb({0:{nombre:'Enero',q1_gastos:'no soy una lista'}}),
+  /q1_gastos.*corrupto/.test(validarEsquemaDb({0:{nombre:'Enero',q1_gastos:'no soy una lista'}})));
+
+// ── gastoEstado / setGastoEstado (campo único pagado|sinpagar|null, ver openGasto) ──
+(function(){
+  var g={};
+  setGastoEstado(g,'pagado');
+  t('setGastoEstado','pagado -> pagado_flag=true, sinpagar=false','pagado/true/false',
+    gastoEstado(g)+'/'+g.pagado_flag+'/'+g.sinpagar, gastoEstado(g)==='pagado'&&g.pagado_flag===true&&g.sinpagar===false);
+  setGastoEstado(g,'sinpagar');
+  t('setGastoEstado','sinpagar -> pagado_flag=false, sinpagar=true','sinpagar/false/true',
+    gastoEstado(g)+'/'+g.pagado_flag+'/'+g.sinpagar, gastoEstado(g)==='sinpagar'&&g.pagado_flag===false&&g.sinpagar===true);
+  setGastoEstado(g,null);
+  t('setGastoEstado','null -> ambos flags en false','null/false/false',
+    gastoEstado(g)+'/'+g.pagado_flag+'/'+g.sinpagar, gastoEstado(g)===null&&g.pagado_flag===false&&g.sinpagar===false);
+})();
+t('gastoEstado','Sin campo `estado` (legacy), pagado_flag=true cae a "pagado"',
+  'pagado', gastoEstado({pagado_flag:true,sinpagar:false}), gastoEstado({pagado_flag:true,sinpagar:false})==='pagado');
+t('gastoEstado','Estado imposible legacy (ambos flags true) resuelve a "pagado"',
+  'pagado', gastoEstado({pagado_flag:true,sinpagar:true}), gastoEstado({pagado_flag:true,sinpagar:true})==='pagado');
+
+// ── migrarEstadoGastos (migración única e idempotente) ───────
+(function(){
+  var legacyPagado={pagado_flag:true,sinpagar:false};
+  var legacyNinguno={pagado_flag:false,sinpagar:false};
+  var yaMigrado={estado:'sinpagar',pagado_flag:true,sinpagar:false}; // inconsistente a propósito
+  var dbBackup=db;
+  db={0:{nombre:'Enero',q1_gastos:[legacyPagado,legacyNinguno,yaMigrado],q2_gastos:[]}};
+  migrarEstadoGastos();
+  t('migrarEstadoGastos','Gasto legacy pagado_flag=true recibe estado="pagado"',
+    'pagado', legacyPagado.estado, legacyPagado.estado==='pagado');
+  t('migrarEstadoGastos','Gasto legacy sin flags recibe estado=null',
+    'null', String(legacyNinguno.estado), legacyNinguno.estado===null);
+  t('migrarEstadoGastos','Uno que YA tenía estado no se vuelve a tocar (idempotente)',
+    'sinpagar', yaMigrado.estado, yaMigrado.estado==='sinpagar');
+  db=dbBackup;
+})();
+
+// ── sincronizarCreditoDesdeGasto (sincroniza cr.pagos/pagoDetalle con el estado del
+// gasto, y bloquea pagar una cuota si la anterior sigue pendiente) ──────────────────
+(function(){
+  var creditosBackup=creditos, dbBackup=db;
+  creditos={cr1:{id:'cr1',valorPrestamo:1200000,cuotas:12,tasa:0,fechaInicio:'2026-01-15',frecuencia:'mensual',pagos:[]}};
+  db={};
+  var g1={creditoId:'cr1',numCuota:1,pagado_flag:true,presupuesto:100000};
+  var ok1=sincronizarCreditoDesdeGasto(g1,null);
+  t('sincronizarCreditoDesdeGasto','Marcar pagada la cuota 1 sincroniza cr.pagos[0]',
+    'true/true', ok1+'/'+creditos.cr1.pagos[0], ok1===true&&creditos.cr1.pagos[0]===true);
+
+  var g2={creditoId:'cr1',numCuota:2,pagado_flag:true,presupuesto:100000};
+  var ok2=sincronizarCreditoDesdeGasto(g2,null);
+  t('sincronizarCreditoDesdeGasto','Bloquea pagar la cuota 2 si la 1 sigue pendiente',
+    'false/false', ok2+'/'+g2.pagado_flag, ok2===false&&g2.pagado_flag===false);
+
+  creditos.cr1.pagos=[true]; creditos.cr1.pagoDetalle={0:{montoPagado:100000}};
+  var g3={creditoId:'cr1',numCuota:1,pagado_flag:false,pagado_real:100000};
+  var ok3=sincronizarCreditoDesdeGasto(g3,'pagado');
+  t('sincronizarCreditoDesdeGasto','Desmarcar limpia cr.pagos y pagado_real del gasto',
+    'true/false/null', ok3+'/'+creditos.cr1.pagos[0]+'/'+g3.pagado_real,
+    ok3===true&&creditos.cr1.pagos[0]===false&&g3.pagado_real===null);
+
+  creditos=creditosBackup; db=dbBackup;
+})();
+
+} catch(errGlobal){
+  t('ERROR FATAL','Una prueba lanzó una excepción inesperada', 'sin excepción', String(errGlobal), false);
+}
+
+// ── Render de resultados ──────────────────────────────────────
+(function(){
+  var tbody=document.getElementById('results');
+  var pass=0, fail=0;
+  var rows='';
+  TESTS.forEach(function(r){
+    if(r.ok) pass++; else fail++;
+    rows+='<tr>'
+      +'<td>'+r.grupo+'</td>'
+      +'<td>'+r.caso+'</td>'
+      +'<td>'+String(r.esperado)+'</td>'
+      +'<td>'+String(r.obtenido)+'</td>'
+      +'<td class="'+(r.ok?'pass':'fail')+'">'+(r.ok?'✓ PASS':'✗ FAIL')+'</td>'
+      +'</tr>';
+  });
+  tbody.innerHTML=rows;
+  var summary=document.getElementById('summary');
+  var total=pass+fail;
+  summary.className='summary '+(fail===0?'ok':'fail');
+  summary.textContent=(fail===0?'✓ Todas las pruebas pasaron':'✗ Hay pruebas fallando')+' — '+pass+'/'+total+' OK'+(fail>0?(' · '+fail+' fallando'):'');
+})();
+</script>
+</body>
+</html>

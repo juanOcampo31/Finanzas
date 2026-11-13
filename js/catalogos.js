@@ -261,7 +261,9 @@ function openInfoGeneral(añoSel,mesAbrirIdx){
       +'<span style="font-size:9px;color:'+IG.txt6+';line-height:1.2;word-break:break-word">est. '+cop(valorEstimado)+'</span>'
       +'</div>';
   }
-  var resumenStripHtml='<div style="padding:12px 14px 10px;display:flex;gap:6px">'
+  // Prima y cesantías solo aplican a un empleado (ver tienePrestaciones) — un pensionado no las
+  // recibe, así que la tira completa (y sus fórmulas) se omite.
+  var resumenStripHtml=!tienePrestaciones()?'':'<div style="padding:12px 14px 10px;display:flex;gap:6px">'
     +stripCard('fx-primaj',IG.accBg,IG.accBg3,'PRIMA JUN',primaS1Actual,primaS1)
     +stripCard('fx-primad',IG.accBg,IG.accBg3,'PRIMA DIC',primaS2Actual,primaS2)
     +stripCard('fx-cesantias',IG.bg5,IG.bd1,'CESANTÍAS',cesantiasActual,cesantias)
@@ -649,6 +651,20 @@ function creditoManejadoPorNomina(crId){
   });
 }
 
+// Forma de pago para el gasto de una cuota nueva: la misma de la cuota más reciente de ese
+// crédito que ya tenga una (así respeta cómo la pagas tú), o vacía si todavía no hay ninguna —
+// antes se ponía siempre "Nequi" fijo.
+function metodoCuotaCredito(crId){
+  var mejor=null;
+  Object.keys(db).forEach(function(k){
+    var mes=db[k];
+    (mes.q1_gastos||[]).concat(mes.q2_gastos||[]).forEach(function(g){
+      if(g.creditoId===crId && g.metodo && (!mejor || (g.numCuota||0)>(mejor.numCuota||0))) mejor=g;
+    });
+  });
+  return mejor?mejor.metodo:'';
+}
+
 // Al CREAR un crédito: antes sus gastos solo aparecían al crear el mes siguiente
 // (generarGastosCredito), así que en los meses que ya existían no se veía ninguna cuota. Ahora
 // se agregan de una vez en cada mes ya creado donde caiga una cuota sin pagar — solo desde el
@@ -673,7 +689,7 @@ function crearGastosCreditoNuevo(crId){
     if(!key) return; // ese mes aún no existe: generarGastosCredito lo agrega al crearlo
     const lista=db[key][bucket.which+'_gastos']=db[key][bucket.which+'_gastos']||[];
     lista.push({
-      id:uid(), nombre:prefijoCredito(cr)+cr.nombre, presupuesto:row.valorCuota, metodo:'Nequi',
+      id:uid(), nombre:prefijoCredito(cr)+cr.nombre, presupuesto:row.valorCuota, metodo:metodoCuotaCredito(crId),
       pagado_real:null, estado:null, pagado_flag:false, sinpagar:false, parentId:null, esGrupo:false,
       cuotas_total:cr.cuotas, cuota_actual:row.numero, creditoId:crId, numCuota:row.numero,
       fecha_pago:null, comprobante:null
@@ -715,7 +731,7 @@ function generarGastosCredito(nm){
               id:uid(),
               nombre:prefijoCredito(cr)+cr.nombre,
               presupuesto:row.valorCuota,
-              metodo:'Nequi',
+              metodo:metodoCuotaCredito(crId),
               pagado_real:null,
               estado:(cr.pagos&&cr.pagos[idx])?'pagado':null,
               pagado_flag:!!(cr.pagos&&cr.pagos[idx]),

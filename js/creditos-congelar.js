@@ -80,7 +80,7 @@ function resincronizarGastosCredito(crId){
       if(keyDestino){
         var listaNueva=db[keyDestino][bucket.which+'_gastos']=db[keyDestino][bucket.which+'_gastos']||[];
         listaNueva.push({
-          id:uid(), nombre:prefijoCredito(cr)+cr.nombre, presupuesto:row.valorCuota, metodo:'Nequi',
+          id:uid(), nombre:prefijoCredito(cr)+cr.nombre, presupuesto:row.valorCuota, metodo:metodoCuotaCredito(crId),
           pagado_real:null, estado:null, pagado_flag:false, sinpagar:false, parentId:null, esGrupo:false,
           cuotas_total:cr.cuotas, cuota_actual:row.numero, creditoId:crId, numCuota:row.numero,
           fecha_pago:null, comprobante:null

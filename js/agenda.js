@@ -73,8 +73,8 @@ function agEntradasAutomaticas(m){
   if(mi<0) return out;
   var pagos=getPago(m.año,mi);
   var fQ1=pagos.q1.toISOString().slice(0,10), fQ2=pagos.q2.toISOString().slice(0,10);
-  out.push({id:'auto-pago-q1',origen:'automatico',tipo:'pago',concepto:'Pago de nómina Q1',fecha:fQ1,monto:netoQ1(m),esIngreso:true,gastoPagado:false,which:'q1',color:AG.cian});
-  out.push({id:'auto-pago-q2',origen:'automatico',tipo:'pago',concepto:'Pago de nómina Q2',fecha:fQ2,monto:netoQ2(m),esIngreso:true,gastoPagado:false,which:'q2',color:AG.cian});
+  if(tieneNomina()) out.push({id:'auto-pago-q1',origen:'automatico',tipo:'pago',concepto:'Pago de nómina Q1',fecha:fQ1,monto:netoQ1(m),esIngreso:true,gastoPagado:false,which:'q1',color:AG.cian});
+  if(tieneNomina()) out.push({id:'auto-pago-q2',origen:'automatico',tipo:'pago',concepto:'Pago de nómina Q2',fecha:fQ2,monto:netoQ2(m),esIngreso:true,gastoPagado:false,which:'q2',color:AG.cian});
   (typeof listTCIdsReales==='function'?listTCIdsReales(m):[]).forEach(function(tid){
     var t=m.tarjetas[tid];
     if(t.info&&t.info.fechaPago){
