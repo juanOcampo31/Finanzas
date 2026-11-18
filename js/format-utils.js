@@ -87,7 +87,7 @@ function stdPillPopupOptHtml(label,active,onclickAttr,checkbox){
   var mark;
   if(checkbox){
     mark=active
-      ?'<span style="width:14px;height:14px;border-radius:4px;background:var(--acc);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#0F172A">'+icon('check',10)+'</span>'
+      ?'<span style="width:14px;height:14px;border-radius:4px;background:var(--acc);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#0B111C">'+icon('check',10)+'</span>'
       :'<span style="width:14px;height:14px;border-radius:4px;border:1.5px solid var(--brd2);flex-shrink:0"></span>';
   } else {
     mark=active?icon('check',12):'<span style="width:12px;display:inline-block;flex-shrink:0"></span>';
@@ -232,9 +232,9 @@ function seleccionarEstadoGasto(valor,wh,eid,pid){
   if(nuevo==='sinpagar' && wh==='q1') saveG(eid,wh,pid);
 }
 function pintarEstadoGasto(valor,wh){
-  const BASE={background:'#0B1526',borderColor:'#22304F',titulo:'#94A3B8'};
-  const ON_SINPAGAR={background:'#2A1D06',borderColor:'#F59E0B',titulo:'#FBBF24'};
-  const ON_PAGADO={background:'#062B33',borderColor:'#22D3EE',titulo:'#67E8F9'};
+  const BASE={background:'#0B1526',borderColor:'#22304F',titulo:'#8B97A8'};
+  const ON_SINPAGAR={background:'#2A1D06',borderColor:'#C08F45',titulo:'#C9A25E'};
+  const ON_PAGADO={background:'#17233A',borderColor:'#6E9BEA',titulo:'#9DBBF0'};
   const cardSP=document.getElementById('g-card-sinpagar'), tituloSP=document.getElementById('g-card-sinpagar-titulo');
   const cardPD=document.getElementById('g-card-pagado'), tituloPD=document.getElementById('g-card-pagado-titulo');
   // Los íconos (✓/→) viven en spans propios, separados del texto — así pintarEstadoGasto puede
@@ -484,14 +484,14 @@ function buildMonthCal(q1dt, q2dt){
     const fechaActual=new Date(año,mes,d);
     const esFestivo=isFest(fechaActual);
     var bg='transparent', color=isPast?'rgba(148,163,184,.3)':'var(--mut)', fw='400', border='none', br='3px', dotColor=null;
-    if(esFestivo && !isP1 && !isP2){ color=isPast?'rgba(248,113,113,.4)':'var(--red)'; dotColor='var(--red)'; }
+    if(esFestivo && !isP1 && !isP2){ color=isPast?'rgba(224,123,123,.4)':'var(--red)'; dotColor='var(--red)'; }
     if(isP1&&isP2){
       color='var(--pur)'; fw='700'; dotColor='var(--pur)';
     } else if(isP1){
       // Q1 always cyan regardless of past
       color='var(--acc)'; fw='700'; dotColor='var(--acc)';
     } else if(isP2){
-      color=isPast?'rgba(52,211,153,.5)':'var(--grn)'; fw='700'; dotColor=isPast?'rgba(52,211,153,.5)':'var(--grn)';
+      color=isPast?'rgba(93,187,138,.5)':'var(--grn)'; fw='700'; dotColor=isPast?'rgba(93,187,138,.5)':'var(--grn)';
     } else if(isToday){
       border='1px solid var(--acc)'; color='var(--acc)'; fw='600'; br='50%';
     }

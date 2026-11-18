@@ -5,7 +5,7 @@ function buildKeypadHTML(){
   // debajo del 7 ahora lo ocupa el acceso directo con Google.
   const keys=['1','2','3','4','5','6','7','8','9','google','0','⌫'];
   // Mismo lenguaje visual en ambos íconos: trazo 1.7, extremos redondeados, sin relleno,
-  // color #CBD5E1 (un poco más tenue que los dígitos en #F1F5F9, para leerse como acción).
+  // color #CBD5E1 (un poco más tenue que los dígitos en #E5E9F0, para leerse como acción).
   const bsIcon='<svg viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5.5h10.2a1.8 1.8 0 0 1 1.8 1.8v9.4a1.8 1.8 0 0 1-1.8 1.8H9L3.2 12z"/><path d="m11.6 9.4 5.2 5.2M16.8 9.4l-5.2 5.2"/></svg>';
   const googleIcon='<svg viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.66 6.34A8 8 0 1 0 20 12h-8"/></svg>';
   let h='<div class="lock-keys">';

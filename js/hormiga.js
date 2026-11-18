@@ -253,7 +253,7 @@ function delHormiga(id,which){
 // Encabezado con el total, una fila compacta de comparaciones y las compras agrupadas por
 // categoría en grupos desplegables (mismo patrón que los grupos de la lista de Gastos): cerrados
 // muestran nombre, cantidad, total, % y barra; al tocarlos se ven sus compras.
-const HORMIGA_COLORES=['#A78BFA','#22D3EE','#34D399','#FBBF24','#F87171','#60A5FA','#F472B6','#FB923C'];
+const HORMIGA_COLORES=['#A493D6','#6E9BEA','#5DBB8A','#C9A25E','#E07B7B','#7FA8D9','#D48BB0','#D99A6C'];
 let _hormigaGruposAbiertos={}; // clave de categoría ('_' = sin categoría) → abierto; se conserva al volver de editar
 
 function hormigaColorCat(catId){

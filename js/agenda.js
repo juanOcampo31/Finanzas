@@ -8,12 +8,12 @@
 // variables CSS globales, así ningún otro modal se ve afectado.
 var AG={
   bg1:'#0B1220',bg2:'#0D1729',bg3:'#0B1526',bg4:'#101A2E',bg5:'#111C2E',bg6:'#131E33',
-  accBg:'#0E2233',accBg2:'#0E3742',accBg3:'#164E63',
+  accBg:'#0E2233',accBg2:'#0E3742',accBg3:'#26385C',
   bd1:'#22304F',bd2:'#26344F',bd3:'#1E2B45',bd4:'#16334A',
-  cian:'#22D3EE',cian2:'#67E8F9',
-  amb1:'#F59E0B',amb2:'#FBBF24',amb3:'#FCD34D',amb4:'#FEF3C7',amb5:'#78350F',amb6:'#2A1D06',
-  indigo:'#A5B4FC',rojo:'#F87171',
-  txt1:'#F8FAFC',txt2:'#F1F5F9',txt3:'#E2E8F0',txt4:'#CBD5E1',txt5:'#94A3B8'
+  cian:'#6E9BEA',cian2:'#9DBBF0',
+  amb1:'#C08F45',amb2:'#C9A25E',amb3:'#D9B66F',amb4:'#EFE3C8',amb5:'#78350F',amb6:'#2A1D06',
+  indigo:'#A9B8E8',rojo:'#E07B7B',
+  txt1:'#F8FAFC',txt2:'#E5E9F0',txt3:'#E2E8F0',txt4:'#CBD5E1',txt5:'#8B97A8'
 };
 
 // Estado de la pantalla (transitorio, no se guarda)

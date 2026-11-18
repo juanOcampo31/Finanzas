@@ -110,7 +110,7 @@ function renderTC(m) {
         +'<span>'+esc(y.descripcion||'Abono')+' ('+fmtD(y.fecha)+')</span>'
         +'<span style="display:flex;align-items:center;gap:6px">'
         +'<span style="color:'+color+';font-weight:600">'+cop(Math.abs(y.valor||0))+'</span>'
-        +'<button onclick="event.stopPropagation();confirmarEliminarAbonoTC(\''+y.id+'\')" style="background:none;border:1px solid rgba(248,113,113,.4);border-radius:var(--r2);padding:3px 7px;font-size:9px;color:var(--red);cursor:pointer">Eliminar</button>'
+        +'<button onclick="event.stopPropagation();confirmarEliminarAbonoTC(\''+y.id+'\')" style="background:none;border:1px solid rgba(224,123,123,.4);border-radius:var(--r2);padding:3px 7px;font-size:9px;color:var(--red);cursor:pointer">Eliminar</button>'
         +'</span></div>';
     }).join('');
     return '<div style="padding:8px 10px;background:var(--surf2);border-radius:var(--r2);font-size:11px;color:var(--mut)">'
