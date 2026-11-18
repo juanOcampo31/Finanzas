@@ -308,14 +308,14 @@ function render() {
   }
   const basicoBreakdownHtml=breakdownRow('Básico Q1',cop(bas1),'var(--grn)',true)+breakdownRow('Básico Q2',cop(bas2),'var(--grn)',false);
   const ingresosBreakdownHtml=breakdownRow('Ingresos Q1',cop(ingQ1),'var(--grn)',true)+breakdownRow('Ingresos Q2',cop(ingQ2),'var(--grn)',false);
-  const gastosBreakdownHtml=breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',false);
+  const gastosBreakdownHtml=breakdownRow('Gastos Q1',cop(gastosQ1),'var(--txt)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--txt)',false);
   function vencidosRowsHtml(venc){
     return venc.map(function(v,i){
       return breakdownRow('<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">'+icon('alertTriangle',12)+esc(v.nombre)+'</span> · cuota '+v.numCuota+'/'+v.cuotasTotal,cop(v.valorCuota),'var(--red)',i<venc.length-1);
     }).join('');
   }
-  const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--red)',vencQ1.length>0)+vencidosRowsHtml(vencQ1);
-  const dispQ2BreakdownHtml=breakdownRow('Neto Q2',cop(n2),'var(--grn)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--red)',vencQ2.length>0)+vencidosRowsHtml(vencQ2);
+  const dispQ1BreakdownHtml=breakdownRow('Neto Q1',cop(n1),'var(--grn)',true)+breakdownRow('Gastos Q1',cop(gastosQ1),'var(--txt)',vencQ1.length>0)+vencidosRowsHtml(vencQ1);
+  const dispQ2BreakdownHtml=breakdownRow('Neto Q2',cop(n2),'var(--grn)',true)+breakdownRow('Gastos Q2',cop(gastosQ2),'var(--txt)',vencQ2.length>0)+vencidosRowsHtml(vencQ2);
   [['basico',basicoBreakdownHtml],['ingresos',ingresosBreakdownHtml],['gastos',gastosBreakdownHtml],['dispQ1',dispQ1BreakdownHtml],['dispQ2',dispQ2BreakdownHtml]].forEach(function(pair){
     var key=pair[0], html=pair[1];
     var el=document.getElementById(STAT_BREAKDOWN_DOM_IDS[key]);
@@ -340,7 +340,7 @@ function render() {
       var showDisp=!!cupo;
       var lbl=showDisp?'Disponible':'Pendiente';
       var val=showDisp?dispTc:saldoTc;
-      var valColor=showDisp?(val>=0?'var(--grn)':'var(--red)'):'var(--red)';
+      var valColor=showDisp?(val>=0?'var(--grn)':'var(--red)'):'var(--txt)';
       return '<div onclick="event.stopPropagation();goToTarjeta(\''+tid+'\')" style="flex-shrink:0;width:136px;background:var(--surf2);border-radius:12px;padding:10px 12px;border-left:3px solid '+tcBrandColor(marca)+';cursor:pointer">'
         +'<div style="min-height:16px;margin-bottom:12px">'+tcBrandBadgeHtml(marca)+'</div>'
         +'<div style="font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px">'+esc(card.nombre)+'</div>'

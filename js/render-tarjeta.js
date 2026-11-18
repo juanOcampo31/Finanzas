@@ -152,7 +152,7 @@ function renderTC(m) {
     var extraInfo='', abonarBtn='', abonadoChip='';
     if(!ab){
       if(saldoMov>0){
-        abonarBtn='<button onclick="event.stopPropagation();abrirAbonoMovimiento(\''+x.id+'\')" style="background:var(--acc-d);color:var(--acc);border:1px solid var(--acc);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap">Abonar</button>';
+        abonarBtn='<button onclick="event.stopPropagation();abrirAbonoMovimiento(\''+x.id+'\')" class="btn-sutil">Abonar</button>';
       }
       if(ligados&&totalAbonado>0){
         abonadoChip='<span class="tc-abonado-chip" onclick="event.stopPropagation();toggleTCAbono(\''+x.id+'\')">'+icon('check',9)+cop(totalAbonado)+'</span>';
@@ -194,14 +194,14 @@ function renderTC(m) {
   const comprasDeg=periodoTotal>0?(compras/periodoTotal)*360:0;
   const icSwap='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
   const resumenRow='<div style="display:flex;align-items:center;gap:12px;padding:14px;border-top:1px solid var(--brd)">'
-    +'<div style="width:34px;height:34px;border-radius:10px;background:var(--acc-d);color:var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icSwap+'</div>'
+    +'<div style="width:34px;height:34px;border-radius:10px;background:var(--surf2);color:var(--mut);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+icSwap+'</div>'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-size:11px;color:var(--mut);margin-bottom:3px">Resumen del periodo</div>'
-    +'<div style="font-size:13px"><span style="color:var(--mut)">Compras</span> <span style="font-weight:600;color:var(--red)">'+cop(compras)+'</span>'
+    +'<div style="font-size:13px"><span style="color:var(--mut)">Compras</span> <span style="font-weight:600;color:var(--txt)">'+cop(compras)+'</span>'
     +'<span style="color:var(--mut);margin:0 5px">|</span><span style="color:var(--mut)">Abonos</span> <span style="font-weight:600;color:var(--grn)">- '+cop(abonos)+'</span></div>'
     +'</div>'
     +(periodoTotal>0?('<div style="position:relative;width:44px;height:44px;flex-shrink:0">'
-      +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--red) '+comprasDeg+'deg,var(--grn) 0deg)"></div>'
+      +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(var(--mut) '+comprasDeg+'deg,var(--grn) 0deg)"></div>'
       +'<div style="position:absolute;inset:8px;border-radius:50%;background:var(--surf)"></div>'
       +'</div>'):'')
     +'</div>';

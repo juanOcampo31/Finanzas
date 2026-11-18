@@ -101,7 +101,7 @@ function renderNom(m) {
     +'<div class="nom-bar"><div class="nom-bar-dev" style="width:'+pctDevBarra+'%"></div><div class="nom-bar-ded" style="width:'+pctDedBarra+'%"></div></div>'
     +'<div class="nom-legend">'
     +'<span><span class="nom-legend-dot" style="background:var(--grn)"></span>Devengado <b style="color:var(--grn)">'+cop(mesDev)+'</b></span>'
-    +'<span><span class="nom-legend-dot" style="background:var(--red)"></span>Deducciones <b style="color:var(--red)">'+cop(mesDed)+'</b> · '+pctDedTextoMes+'%</span>'
+    +'<span><span class="nom-legend-dot" style="background:var(--mut)"></span>Deducciones <b style="color:var(--txt)">'+cop(mesDed)+'</b> · '+pctDedTextoMes+'%</span>'
     +'</div>'
     +'<div class="nom-resumen-edit" onclick="editBasico()">'+btnIcon('edit',12)+'Editar básico y bonos</div>'
     +'</div>'
@@ -144,13 +144,13 @@ function renderNom(m) {
   const cardHtml='<div class="nom-panel">'
     +'<div class="nom-card-hero">'
     +'<div><div class="nom-card-hero-lbl">Neto a recibir · '+which.toUpperCase()+'</div>'
-    +'<div class="nom-card-hero-due" style="color:'+(diasPago<0?'var(--mut)':'var(--acc)')+'">Pago '+pagoHero.fecha+' <span style="color:'+(pagoHero.sub==='pagado'?'var(--red)':'var(--mut)')+'">'+pagoHero.sub+'</span></div>'
+    +'<div class="nom-card-hero-due" style="color:'+(diasPago<0?'var(--mut)':'var(--acc)')+'">Pago '+pagoHero.fecha+' <span style="color:'+'var(--mut)'+'">'+pagoHero.sub+'</span></div>'
     +'</div>'
     +'<div class="nom-card-hero-val"'+(diasPago<0?' style="color:var(--mut)"':'')+'>'+cop(netoQ)+'</div>'
     +'</div>'
     +'<div class="nom-sec-head dev"><span class="nom-sec-title"><span class="nom-legend-dot" style="background:var(--grn)"></span>Devengados</span><span class="nom-sec-val">'+cop(devQ)+'</span></div>'
     +devRows
-    +'<div class="nom-sec-head ded"><span class="nom-sec-title"><span class="nom-legend-dot" style="background:var(--red)"></span>Deducciones</span><span class="nom-sec-val">-'+cop(dedQ)+'</span></div>'
+    +'<div class="nom-sec-head ded"><span class="nom-sec-title"><span class="nom-legend-dot" style="background:var(--mut)"></span>Deducciones</span><span class="nom-sec-val">-'+cop(dedQ)+'</span></div>'
     +dedRows
     +'<div class="glist-add nom-add-dashed" onclick="addDed(\''+lbl+'\')">+ Agregar deducción o devengado</div>'
     +'</div>';

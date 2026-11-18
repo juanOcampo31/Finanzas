@@ -112,7 +112,7 @@ function buildTcPickerHtml(m,tcIds,activeTid,showNew){
     var t=m.tarjetas[tid];
     var active=tid===activeTid;
     var cardSaldo=calcTCSaldo(m,tid);
-    return '<button onclick="event.stopPropagation();selectTC(\''+tid+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc)':'var(--surf2)')+';color:'+(active?'#06202B':'var(--mut)')+'">'+esc(t.nombre)+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
+    return '<button onclick="event.stopPropagation();selectTC(\''+tid+'\')" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;background:'+(active?'var(--acc-d)':'var(--surf2)')+';color:'+(active?'var(--acc)':'var(--mut)')+'">'+esc(t.nombre)+' <span style="opacity:.75">'+cop(cardSaldo)+'</span></button>';
   }).join('');
   const newBtn=showNew?'<button onclick="event.stopPropagation();abrirNuevaTarjeta()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px dashed var(--brd2);background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--acc)">＋ Nueva</button>':'';
   return '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch">'+pillsHtml+newBtn+'</div>';

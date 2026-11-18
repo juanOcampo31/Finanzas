@@ -9,9 +9,9 @@
 // armaba a mano 3 veces con el mismo estilo; ahora con un tercer estado ("Refinanciado") más que
 // solo "Activo"/"Pagado", mejor tenerlo en un solo lugar.
 function creditoEstadoPillHtml(cr,activo){
-  var style=cr.refinanciado?'background:var(--pur-d);color:var(--pur)'
-    :activo?'background:var(--grn-d);color:var(--grn)'
-    :'background:var(--brd2);color:var(--mut)';
+  var style=cr.refinanciado?'border:1px solid var(--brd2);color:var(--pur)'
+    :activo?'border:1px solid var(--brd2);color:var(--grn)'
+    :'border:1px solid var(--brd2);color:var(--mut)';
   var label=cr.refinanciado?'Refinanciado':(activo?'Activo':'Pagado');
   return '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:8px;'+style+'">'+label+'</div>';
 }
@@ -115,12 +115,12 @@ function renderCreditos(m){
   var heroHtml='<div class="nom-resumen">'
     +'<div class="nom-resumen-lbl">Saldo total que debo</div>'
     +'<div class="nom-resumen-val"><span class="nom-resumen-cur">$</span>'+Math.round(saldoTotal).toLocaleString('es-CO')+'</div>'
-    +'<div class="glist-totals" style="padding:6px 0 0;margin-top:6px;border-top:1px solid var(--brd)">'
-    +'<div class="glist-tot"><div class="glist-tot-lbl" style="color:var(--red)">CUOTAS DEL MES</div><div class="glist-tot-val" style="color:var(--red)">'+cop(cuotasMes)+'</div></div>'
+    +'<div class="glist-totals t3" style="padding:6px 0 0;margin-top:6px;border-top:1px solid var(--brd)">'
+    +'<div class="glist-tot"><div class="glist-tot-lbl">CUOTAS DEL MES</div><div class="glist-tot-val">'+cop(cuotasMes)+'</div></div>'
     +'<div class="glist-div"></div>'
     +'<div class="glist-tot"><div class="glist-tot-lbl">CRÉDITOS ACTIVOS</div><div class="glist-tot-val">'+activosCount+'</div></div>'
     +'<div class="glist-div"></div>'
-    +'<div class="glist-tot" style="cursor:pointer" onclick="toggleCredProxPago()"><div class="glist-tot-lbl" style="color:var(--acc)">PRÓXIMO PAGO</div><div class="glist-tot-val" style="color:var(--acc)">'+proximoFmt+'</div>'
+    +'<div class="glist-tot" style="cursor:pointer" onclick="toggleCredProxPago()"><div class="glist-tot-lbl">PRÓXIMO PAGO</div><div class="glist-tot-val" style="color:var(--acc)">'+proximoFmt+'</div>'
     +(activos.length?'<div style="font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+activos.length+(activos.length===1?' crédito ▾':' créditos ▾')+'</div>':'')
     +'</div>'
     +'</div>'
@@ -132,7 +132,7 @@ function renderCreditos(m){
     var proximaFecha=x.proximaIdx!==-1?new Date(amort.rows[x.proximaIdx].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
     var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
     var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
-    var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
+    var mensPill=cr.esMensualidad?'<span class="gtag">Mensualidad</span>':'';
     return '<div onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+x.id+'\')" style="cursor:pointer;background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin:0 14px 10px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
       +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
@@ -258,7 +258,7 @@ function openCreditosMenu(){
     var proximaFecha=x.proximaIdx!==-1?new Date(amort.rows[x.proximaIdx].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
     var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
     var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
-    var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
+    var mensPill=cr.esMensualidad?'<span class="gtag">Mensualidad</span>':'';
     return '<div onclick="creditoDetalleDesdeModal=true;openCreditoDetalle(\''+x.id+'\')" style="cursor:pointer;background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin-bottom:10px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
       +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
@@ -867,15 +867,15 @@ function openCreditoDetalle(id){
     // — tocarla ofrece deshacerlo, igual que un abono a capital se puede eliminar.
     var congeladaAqui=(cr.congelamientos||[]).find(function(c){return c.idx===i;});
     var congeladaBadge=congeladaAqui
-      ?'<span onclick="event.stopPropagation();confirmarQuitarCongelamiento(\''+id+'\',\''+congeladaAqui.id+'\')" style="font-size:9px;font-weight:700;background:var(--acc-d);color:var(--acc);padding:1px 6px;border-radius:10px;margin-left:5px;vertical-align:middle;cursor:pointer">'+icon('snowflake',9)+' +'+congeladaAqui.periodos+'</span>'
+      ?'<span onclick="event.stopPropagation();confirmarQuitarCongelamiento(\''+id+'\',\''+congeladaAqui.id+'\')" style="font-size:10.5px;font-weight:600;color:var(--acc);margin-left:6px;vertical-align:middle;cursor:pointer;display:inline-flex;align-items:center;gap:3px">'+icon('snowflake',9)+' +'+congeladaAqui.periodos+'</span>'
       :'';
 
-    return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'background:var(--acc-d)':'')+'">'
+    return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'box-shadow:inset 3px 0 0 var(--acc)':'')+'">'
       +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:22px;height:22px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;display:flex">'+icon('check',12)+'</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:12px;font-weight:600;color:var(--txt)">Cuota '+r.numero+' de '+totalCuotas+congeladaBadge+'</div>'
       +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+fechaFmt+' · saldo '+cop(r.saldo)+'</div>'
-      +'<div style="font-size:10px;margin-top:1px"><span style="color:var(--grn)">Capital '+cop(r.capital)+'</span> · <span style="color:var(--red)">Interés '+cop(r.intereses)+'</span></div>'
+      +'<div style="font-size:10px;margin-top:1px"><span style="color:var(--mut)">Capital '+cop(r.capital)+' · Interés '+cop(r.intereses)+'</span></div>'
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:6px">'
       +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(r.valorCuota)+'</div>'
@@ -896,7 +896,7 @@ function openCreditoDetalle(id){
   const tcVincNombre=(cr.tcVinculada && mActual.tarjetas && mActual.tarjetas[cr.tcVinculada])?mActual.tarjetas[cr.tcVinculada].nombre:null;
   const tcVincBadge=tcVincNombre?'<div style="font-size:11px;color:var(--mut);margin-bottom:6px">Vinculado a tarjeta: <b style="color:var(--txt)">'+esc(tcVincNombre)+'</b></div>':'';
   var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
-  var mensPill=cr.esMensualidad?'<span style="font-size:9px;font-weight:700;background:var(--pur-d);color:var(--pur);padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">MENSUALIDAD</span>':'';
+  var mensPill=cr.esMensualidad?'<span class="gtag">Mensualidad</span>':'';
   var creditoHeaderHtml='<div style="background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin-bottom:8px">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
     +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'

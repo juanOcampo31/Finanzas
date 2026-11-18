@@ -228,7 +228,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .glist-head{display:flex;justify-content:space-between;align-items:center;padding:8px 14px 4px}
 .glist-title{font-size:13px;font-weight:800;color:var(--txt)}
 .glist-sub{font-size:10.5px;color:var(--mut)}
-.glist-totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) ;padding:1px 14px 7px}
+.glist-totals{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);padding:1px 14px 7px}
 .glist-tot{min-width:0;padding:0 5px}
 .glist-tot:first-child{padding-left:0}
 .glist-tot+.glist-div+.glist-tot{border-left:1px solid var(--brd)}
@@ -264,7 +264,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
    ya sumaban ahí) y antes se repetía sin aportar nada nuevo. */
 .nom-bar{height:6px;border-radius:4px;background:var(--bg-2);overflow:hidden;display:flex;margin-top:10px}
 .nom-bar-dev{background:var(--grn)}
-.nom-bar-ded{background:var(--red)}
+.nom-bar-ded{background:var(--mut);opacity:.6}
 .nom-legend{display:flex;justify-content:space-between;margin-top:6px;font-size:10.5px;font-weight:700;color:var(--mut)}
 .nom-legend b{font-weight:800}
 .nom-legend-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
@@ -451,3 +451,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font
 .gst-alerta{display:inline-flex;align-items:center;gap:4px;color:var(--red);font-weight:600;vertical-align:middle}
 .gst-alerta::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--red)}
 .gtag{font-size:10.5px;font-weight:600;color:var(--mut);margin-left:6px;vertical-align:middle}
+.glist-totals.t3 .glist-tot-val{font-size:13px}
+/* Fila destacada sin fondo de color: una línea de acento a la izquierda (cuota próxima, etc.). */
+.row-marca{box-shadow:inset 3px 0 0 var(--acc)}
+/* Botón secundario discreto (contorno gris, texto de acento). */
+.btn-sutil{background:none;color:var(--acc);border:1px solid var(--brd2);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap}
