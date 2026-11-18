@@ -335,6 +335,24 @@ test('gastos hormiga: se suman por quincena y no afectan el disponible', () => {
   const r = ctx.hormigaResumen(m.hormiga.q1);
   assert.equal(r.conceptos.length, 1, '"Café" y "cafe" se agrupan como el mismo concepto');
 });
+test('gastos hormiga: categorías del catálogo (iniciales, resumen y borradas)', () => {
+  const ctx = freshApp();
+  const cats = ctx.normalizarCatHormiga(undefined);
+  assert.ok(cats.length > 0, 'sin el campo → categorías iniciales');
+  assert.deepEqual(ctx.normalizarCatHormiga([]), [], 'vacío a propósito se respeta');
+  ctx.__internals.catHormiga = [{ id: 'c1', nombre: 'Comida' }, { id: 'c2', nombre: 'Transporte' }];
+  const lista = [
+    { id: 'a', monto: 10000, nota: 'Almuerzo', catId: 'c1', fecha: '2026-01-03' },
+    { id: 'b', monto: 5000, nota: 'Bus', catId: 'c2', fecha: '2026-01-04' },
+    { id: 'c', monto: 2000, nota: 'Chicle', catId: 'borrada', fecha: '2026-01-05' },
+    { id: 'd', monto: 3000, nota: 'Viejo', metodo: 'Efectivo', fecha: '2026-01-06' },
+  ];
+  const r = ctx.hormigaResumen(lista);
+  assert.equal(r.categorias[0].nombre, 'Comida');
+  const sin = r.categorias.find(c => c.nombre === 'Sin categoría');
+  assert.equal(sin.total, 5000, 'categoría borrada y registros viejos sin categoría se agrupan');
+  assert.equal(ctx.hormigaCatNombre('c2'), 'Transporte');
+});
 test('gastos hormiga: el mes nuevo arranca sin registros', () => {
   const ctx = freshApp();
   const db = ctx.__internals.db;

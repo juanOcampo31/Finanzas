@@ -14,6 +14,7 @@
 //   creditos           → auth.js, sync.js
 //   catTipos           → auth.js, sync.js
 //   catMetodos         → auth.js, sync.js
+//   catHormiga         → auth.js, export-main.js, sync.js
 //   perfilTelefono     → auth.js, sync.js
 //   perfilNombre       → auth.js, sync.js
 //   perfilQ2DiasFijos  → auth.js, catalogos.js, export-main.js, sync.js
@@ -27,6 +28,7 @@
 let creditos={}; // {id: {nombre, valorPrestamo, pctAval, cuotas, tasa, fechaInicio, frecuencia}}
 let catTipos=[]; // [{id, nombre}] catálogo de tipos/nombres de gasto
 let catMetodos=[]; // [{id, nombre}] catálogo de formas de pago
+let catHormiga=[]; // [{id, nombre}] categorías de gastos hormiga (los registros guardan catId)
 let perfilTelefono=''; // número de celular para recuperación (ver Seguridad); viaja cifrado junto al resto de los datos
 let perfilNombre='';   // nombre del perfil (solo informativo); viaja cifrado junto al resto de los datos, igual que perfilTelefono
 // Regla de cálculo de la quincena 2 (ver diasQ2 en nomina-calc.js): por defecto se paga según

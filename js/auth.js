@@ -294,6 +294,7 @@ async function confirmarPrimeraConfiguracion(){
   creditos={};
   catMetodos=METODOS_PAGO_INICIALES.map(function(n){return {id:uid(),nombre:n};});
   catTipos=[];
+  catHormiga=normalizarCatHormiga(null);
   Object.keys(db).forEach(function(k){ db[k]=migrateMonth(db[k]); });
   migrarEstadoGastos();
   repararGastosHuerfanosDeGrupo();
@@ -493,6 +494,7 @@ function lockImportBackup(input){
       perfilQ2DiasFijos=!!importedPayload.q2DiasFijos;
       perfilPago=normalizarPerfilPago(importedPayload.pago);
       perfilTipoIngreso=normalizarTipoIngreso(importedPayload.tipoIngreso);
+      catHormiga=normalizarCatHormiga(importedPayload.catHormiga);
       // Esta ruta genera una data key COMPLETAMENTE NUEVA (la anterior se da por perdida), así
       // que cualquier número de recuperación configurado con la data key vieja ya no sirve.
       // Si el backup traía un teléfono, se reconstruye el envelope de recuperación bajo la
@@ -938,6 +940,7 @@ function loadLegacyPlaintext(){
     catMetodos = defaults.map(function(n){ return {id:uid(), nombre:n}; });
   }
   catTipos = parseLegacyJSON('fin26_cat_tipos', [], 'tipos de gasto');
+  catHormiga = normalizarCatHormiga(null);
 }
 
 // Genera la clave AES-256 que cifra los datos financieros en reposo (fin26_enc).
@@ -1010,7 +1013,7 @@ async function decryptPayloadTexto(envelope){
 // Lo que se cifra en fin26_enc — compartido entre save() y la comparación de loadAppData(),
 // para que ambos generen exactamente el mismo JSON (mismo orden de campos).
 function datosParaGuardar(){
-  return {db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos, pago:perfilPago, tipoIngreso:perfilTipoIngreso};
+  return {db:db, creditos:creditos, catMetodos:catMetodos, catTipos:catTipos, telefono:perfilTelefono, nombre:perfilNombre, q2DiasFijos:perfilQ2DiasFijos, pago:perfilPago, tipoIngreso:perfilTipoIngreso, catHormiga:catHormiga};
 }
 
 // Carga db/creditos/catálogos ya descifrados con sessionDataKey (o migra datos legacy en
@@ -1021,7 +1024,7 @@ async function loadAppData(){
   if(encRaw){
     textoOriginal = await decryptPayloadTexto(JSON.parse(encRaw)); // lanza si la clave no coincide
     const payload = JSON.parse(textoOriginal);
-    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||''; perfilQ2DiasFijos = !!payload.q2DiasFijos; perfilPago = normalizarPerfilPago(payload.pago); perfilTipoIngreso = normalizarTipoIngreso(payload.tipoIngreso);
+    db = payload.db; creditos = payload.creditos||{}; catMetodos = payload.catMetodos||[]; catTipos = payload.catTipos||[]; perfilTelefono = payload.telefono||''; perfilNombre = payload.nombre||''; perfilQ2DiasFijos = !!payload.q2DiasFijos; perfilPago = normalizarPerfilPago(payload.pago); perfilTipoIngreso = normalizarTipoIngreso(payload.tipoIngreso); catHormiga = normalizarCatHormiga(payload.catHormiga);
   } else {
     loadLegacyPlaintext();
   }

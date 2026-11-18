@@ -30,7 +30,7 @@ function backupNubeSectionHtml(){
 }
 async function exportJSON(){
   const hoy=new Date().toISOString().slice(0,10);
-  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre,q2DiasFijos:perfilQ2DiasFijos,pago:perfilPago,tipoIngreso:perfilTipoIngreso});
+  const payload=JSON.stringify({version:2,fecha:hoy,data:db,creditos:creditos,catMetodos:catMetodos,catTipos:catTipos,telefono:perfilTelefono,nombre:perfilNombre,q2DiasFijos:perfilQ2DiasFijos,pago:perfilPago,tipoIngreso:perfilTipoIngreso,catHormiga:catHormiga});
   let pin=sessionPIN;
   if(!pin){
     pin=await promptPINModal('Confirma tu PIN para cifrar el backup');
@@ -190,6 +190,7 @@ async function procesarBackupParseado(parsed, origenLabel){
       nombre: importedPayload.nombre||null,
       q2DiasFijos: !!importedPayload.q2DiasFijos,
       pago: importedPayload.pago||null,
+      catHormiga: importedPayload.catHormiga||null,
       tipoIngreso: importedPayload.tipoIngreso||null
     };
     const cambios=compararBackupsDb(db, importedDb);
@@ -247,6 +248,7 @@ function confirmImport(){
     perfilQ2DiasFijos=!!window._importedExtra.q2DiasFijos;
     perfilPago=normalizarPerfilPago(window._importedExtra.pago);
     perfilTipoIngreso=normalizarTipoIngreso(window._importedExtra.tipoIngreso);
+    if(window._importedExtra.catHormiga) catHormiga=normalizarCatHormiga(window._importedExtra.catHormiga);
   }
   // Reset navigation
   const keys=Object.keys(db).map(Number).sort(function(a,b){return a-b;});

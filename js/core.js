@@ -16,6 +16,8 @@ const INIT = (function(){
 // a propósito — antes eran bancos/billeteras propios (Nequi, BBVA…). Quien ya usa la app conserva
 // su propio catálogo: esto solo aplica cuando todavía no hay ninguno guardado.
 const METODOS_PAGO_INICIALES=['Efectivo','Débito','Transferencia','Tarjeta de crédito','Otro'];
+// Categorías con las que arranca el catálogo de gastos hormiga (editables en Catálogos).
+const CATS_HORMIGA_INICIALES=['Café y snacks','Comida','Domicilios','Transporte','Antojos','Otros'];
 // Firma que se muestra junto a la versión en la pantalla de bloqueo ("V 3.01 • Powered by …").
 // Vacía ('') = solo la versión. Si la cambias, cambia también el texto de respaldo de
 // #lockVersion en index.html (lo que se ve antes de que responda el service worker).

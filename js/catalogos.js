@@ -1,17 +1,22 @@
-// ── CATÁLOGOS: Tipos de gasto y Formas de pago ────────────────────────────────
+// ── CATÁLOGOS: Tipos de gasto, Formas de pago y Categorías hormiga ─────────────
 function openCatalogosMenu(){
   openModal('<div class="mtitle">Catálogos</div>'
     +'<div style="display:flex;flex-direction:column">'
     +'<div onclick="openCatList(\'metodos\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer">'
     +'<span style="font-size:14px;color:var(--txt)">Formas de pago</span>'
     +'<span style="font-size:11px;color:var(--mut);display:inline-flex;align-items:center;gap:4px">'+catMetodos.length+' ítem(s)'+icon('chevronRight',12)+'</span></div>'
+    +'<div onclick="openCatList(\'hormiga\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px;cursor:pointer;border-top:1px solid var(--brd)">'
+    +'<span style="font-size:14px;color:var(--txt)">Categorías hormiga</span>'
+    +'<span style="font-size:11px;color:var(--mut);display:inline-flex;align-items:center;gap:4px">'+catHormiga.length+' ítem(s)'+icon('chevronRight',12)+'</span></div>'
     +'</div>'
     +'<div class="macts" style="margin-top:14px"><button class="bcnl" style="grid-column:1/-1" onclick="closeModal()">Cerrar</button></div>');
 }
 
-function getCat(tipo){ return tipo==='tipos'?catTipos:catMetodos; }
-function setCat(tipo,arr){ if(tipo==='tipos') catTipos=arr; else catMetodos=arr; }
-function catLabel(tipo){ return tipo==='tipos'?'Gasto':'Forma de pago'; }
+function getCat(tipo){ return tipo==='tipos'?catTipos:(tipo==='hormiga'?catHormiga:catMetodos); }
+function setCat(tipo,arr){ if(tipo==='tipos') catTipos=arr; else if(tipo==='hormiga') catHormiga=arr; else catMetodos=arr; }
+function catLabel(tipo){ return tipo==='tipos'?'Gasto':(tipo==='hormiga'?'Categoría hormiga':'Forma de pago'); }
+function catTitulo(tipo){ return tipo==='hormiga'?'Categorías hormiga':catLabel(tipo)+'s'; }
+function catEjemplo(tipo){ return tipo==='hormiga'?'Ej: Café, Mascotas, Parqueadero...':'Ej: Daviplata, Efectivo...'; }
 
 // ── Catálogo de Formas de pago (simple: solo nombre) ──────────────────────────
 function openCatList(tipo){
@@ -25,7 +30,7 @@ function openCatList(tipo){
       +'</div></div>';
   }).join(''):'<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Sin elementos. Agrega el primero.</div>';
 
-  openModal('<div class="mtitle">'+catLabel(tipo)+'s</div>'
+  openModal('<div class="mtitle">'+catTitulo(tipo)+'</div>'
     +'<div style="max-height:320px;overflow-y:auto;border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:14px">'+rowsHtml+'</div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCatalogosMenu()">Volver</button>'
@@ -35,7 +40,7 @@ function openCatList(tipo){
 
 function openNewCatItem(tipo){
   openModal('<div class="mtitle">Nueva: '+catLabel(tipo)+'</div>'
-    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="Ej: Daviplata, Efectivo..."></div>'
+    +'<div class="field"><label>Nombre</label><input id="cat-nombre" placeholder="'+catEjemplo(tipo)+'"></div>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="openCatList(\''+tipo+'\')">Cancelar</button>'
     +'<button class="bpri" onclick="saveNewCatItem(\''+tipo+'\')">Guardar</button>'
@@ -85,13 +90,16 @@ function saveEditCatItem(tipo,id){
       });
     });
   }
-  // 'tipos' se referencia por id (catTipoId), así que renombrar el catálogo no requiere
+  // 'tipos' y 'hormiga' se referencian por id (catTipoId / catId), así que renombrar el catálogo no requiere
   // tocar los gastos existentes.
   save();render();openCatList(tipo);toast('Actualizado');
 }
 
 function deleteCatItem(tipo,id){
-  showConfirm('¿Eliminar este ítem del catálogo? Los gastos ya creados quedan desvinculados, conservando su último nombre.',function(){
+  const msgDel=tipo==='hormiga'
+    ?'¿Eliminar esta categoría? Los gastos hormiga que la usaban quedan como "Sin categoría".'
+    :'¿Eliminar este ítem del catálogo? Los gastos ya creados quedan desvinculados, conservando su último nombre.';
+  showConfirm(msgDel,function(){
     const arr=getCat(tipo).filter(function(i){return i.id!==id;});
     setCat(tipo,arr);
     save();openCatList(tipo);toast('Eliminado');

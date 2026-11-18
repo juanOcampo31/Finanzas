@@ -117,6 +117,7 @@ export function loadApp(){
     '  get creditos(){ return creditos; }, set creditos(v){ creditos = v; },' +
     '  get catTipos(){ return catTipos; }, set catTipos(v){ catTipos = v; },' +
     '  get catMetodos(){ return catMetodos; }, set catMetodos(v){ catMetodos = v; },' +
+    '  get catHormiga(){ return catHormiga; }, set catHormiga(v){ catHormiga = v; },' +
     '  get perfilPago(){ return perfilPago; }, set perfilPago(v){ perfilPago = v; },' +
     '  get perfilTipoIngreso(){ return perfilTipoIngreso; }, set perfilTipoIngreso(v){ perfilTipoIngreso = v; },' +
     '  get INIT(){ return INIT; },' +
