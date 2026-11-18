@@ -263,7 +263,7 @@ function openMonthReview(){
         +'<div style="font-size:10px;color:var(--mut)">'+cop(g.presupuesto)+'</div>'
         +'</div>'
         +'<button onclick="moveDraftGasto(\''+g.id+'\',\''+which+'\',\''+otraQ+'\')" title="Mover a '+otraQ.toUpperCase()+'" style="background:var(--surf2);border:1px solid var(--brd2);border-radius:50%;width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--acc);cursor:pointer;padding:0">'+icon('arrowRight',13)+'</button>'
-        +'<button onclick="deleteDraftGasto(\''+g.id+'\',\''+which+'\')" title="Eliminar de esta carga" style="background:var(--red-d);border:1px solid rgba(248,113,113,.35);border-radius:50%;width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--red);cursor:pointer;padding:0">'+icon('trash',13)+'</button>'
+        +'<button onclick="deleteDraftGasto(\''+g.id+'\',\''+which+'\')" title="Eliminar de esta carga" style="background:var(--red-d);border:1px solid rgba(224,123,123,.35);border-radius:50%;width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--red);cursor:pointer;padding:0">'+icon('trash',13)+'</button>'
         +'</div>';
     }).join('');
   }

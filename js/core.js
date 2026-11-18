@@ -33,7 +33,7 @@ const APP_FIRMA='Powered by Felipe Ocampo';
       if(!el){
         el=document.createElement('div');
         el.id='boot-error';
-        el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#F87171;color:#450a0a;font-size:12px;line-height:1.5;padding:10px 14px;font-family:monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
+        el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#E07B7B;color:#450a0a;font-size:12px;line-height:1.5;padding:10px 14px;font-family:monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
         document.body.appendChild(el);
       }
       el.textContent='⚠️ Error al cargar la app: '+msg+'\n\nToca para copiar y compartir este mensaje.';

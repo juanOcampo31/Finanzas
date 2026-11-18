@@ -115,10 +115,10 @@ function deleteCatItem(tipo,id){
 // (--surf, --acc, etc.) para no afectar ningún otro modal.
 var IG={
   bg1:'#0F1A2E',bg2:'#0D1729',bg3:'#0B1526',bg4:'#101A2E',bg5:'#111C2E',bg6:'#131E33',bg7:'#132038',
-  accBg:'#0E2233',accBg2:'#0E3742',accBg3:'#164E63',
+  accBg:'#0E2233',accBg2:'#0E3742',accBg3:'#26385C',
   bd1:'#22304F',bd2:'#26344F',bd3:'#1E2B45',bd4:'#2E3E5C',
-  cian:'#22D3EE',cian2:'#67E8F9',amber:'#F59E0B',red:'#F87171',green:'#34D399',
-  txt1:'#F8FAFC',txt2:'#F1F5F9',txt3:'#E2E8F0',txt4:'#CBD5E1',txt5:'#94A3B8',txt6:'#64748B',txt7:'#475569'
+  cian:'#6E9BEA',cian2:'#9DBBF0',amber:'#C08F45',red:'#E07B7B',green:'#5DBB8A',
+  txt1:'#F8FAFC',txt2:'#E5E9F0',txt3:'#E2E8F0',txt4:'#CBD5E1',txt5:'#8B97A8',txt6:'#64748B',txt7:'#475569'
 };
 function igCapFirst(s){return s.charAt(0).toUpperCase()+s.slice(1);}
 // Cierra cualquier editor de mes abierto en Información general (uno solo a la vez) y le quita

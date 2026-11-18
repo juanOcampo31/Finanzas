@@ -796,7 +796,7 @@ function openCreditoDetalle(id){
         +'<span>'+c.etiqueta+'</span>'
         +'<span style="display:flex;align-items:center;gap:6px">'
         +'<span style="color:'+color+';font-weight:600">'+cop(c.monto)+'</span>'
-        +'<button onclick="confirmarEliminarComponenteAbono(\''+id+'\','+ev.idx+','+(c.abId?"'"+c.abId+"'":'null')+')" style="background:none;border:1px solid rgba(248,113,113,.4);border-radius:var(--r2);padding:3px 7px;font-size:9px;color:var(--red);cursor:pointer">Eliminar</button>'
+        +'<button onclick="confirmarEliminarComponenteAbono(\''+id+'\','+ev.idx+','+(c.abId?"'"+c.abId+"'":'null')+')" style="background:none;border:1px solid rgba(224,123,123,.4);border-radius:var(--r2);padding:3px 7px;font-size:9px;color:var(--red);cursor:pointer">Eliminar</button>'
         +'</span></div>';
     }).join('');
     return '<details style="padding:9px 12px;border-bottom:1px solid var(--brd);background:rgba(0,0,0,.12)" onclick="event.stopPropagation()">'

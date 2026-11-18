@@ -219,11 +219,11 @@ function openGasto(g,which,parentId,skipFocus){
   // 11px) — por eso padding vertical chico + altura fija con contenido centrado, en vez del
   // padding amplio de antes (pensado para dos líneas de texto en ambas tarjetas).
   const CARD_ESTADO_BASE='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#0B1526;border:1px solid #22304F;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
-  const CARD_SINPAGAR_ON='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#2A1D06;border:1px solid #F59E0B;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
-  const CARD_PAGADO_ON='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#062B33;border:1px solid #22D3EE;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
+  const CARD_SINPAGAR_ON='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#2A1D06;border:1px solid #C08F45;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
+  const CARD_PAGADO_ON='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#17233A;border:1px solid #6E9BEA;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
   const estadoInicial=gastoEstado(e);
-  const tituloPagadoColor=estadoInicial==='pagado'?'#67E8F9':'#94A3B8';
-  const tituloSinPagarColor=estadoInicial==='sinpagar'?'#FBBF24':'#94A3B8';
+  const tituloPagadoColor=estadoInicial==='pagado'?'#9DBBF0':'#8B97A8';
+  const tituloSinPagarColor=estadoInicial==='sinpagar'?'#C9A25E':'#8B97A8';
   // La tarjeta "Sin pagar" muestra un solo rótulo (sin subtítulo aparte): en Q1 dice "Mover a
   // Q2" (la acción que en verdad va a pasar), en Q2 dice "Sin pagar" (no hay adónde moverlo,
   // queda como recordatorio). La primera tarjeta dice "Pagar" cuando todavía no está marcada

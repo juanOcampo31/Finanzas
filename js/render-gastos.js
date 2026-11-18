@@ -130,7 +130,7 @@ function renderGastos(gastos,which) {
       var mp2=g.mensualidad.split('-');
       var mNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       var mLabel=mNames[parseInt(mp2[1])-1];
-      mensBadge='<span style="font-size:10px;font-weight:600;background:var(--pur-d);color:var(--pur);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+mLabel+'</span>';
+      mensBadge='<span class="gtag">'+mLabel+'</span>';
     }
     compBadge=g.comprobante&&g.pagado_flag?'<span style="font-size:10px;color:var(--mut);margin-left:4px;display:inline-flex;align-items:center;gap:3px;vertical-align:middle">'+icon('paperclip',11)+esc(g.comprobante)+'</span>':'';
     if(g.cuotas_total>0&&g.cuota_actual>0){
@@ -153,7 +153,7 @@ function renderGastos(gastos,which) {
           if(!g.pagado_flag && !g.sinpagar){
             var diasCuota=diasHasta(rowRef.fecha+'T12:00:00');
             if(diasCuota<0){
-              vencidoBadge='<span style="font-size:9px;font-weight:700;background:var(--red-d);color:var(--red);padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">Vencido</span>';
+              vencidoBadge='<span class="gst-alerta">Vencido</span>';
               hoyFlag=true;
             } else if(diasCuota===0){
               hoyFlag=true;
@@ -161,7 +161,7 @@ function renderGastos(gastos,which) {
           }
         }
       }
-      cuotaBadge='<span style="font-size:10px;font-weight:600;background:var(--surf2);color:'+cuotaColor+';padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle">'+cuotaLbl+'</span>';
+      cuotaBadge='<span class="gtag">'+cuotaLbl+'</span>';
     }
     return {cuotaBadge:cuotaBadge,mensBadge:mensBadge,vencidoBadge:vencidoBadge,compBadge:compBadge,hoyFlag:hoyFlag};
   }
@@ -177,7 +177,7 @@ function renderGastos(gastos,which) {
     // La forma de pago ya no va acá debajo del nombre (queda solo debajo del valor, ver
     // subRealLine) — este renglón ahora es para "Pagado"/"Sin pagar"/"Vencido"/"Vence hoy". "Sin
     // pagar" y "Vencido" son mutuamente excluyentes (ver buildGastoBadges), uno reemplaza al otro.
-    var subMeta=sp?'Pagado':st?'<span class="nopag-badge">Sin pagar</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span style="color:var(--red);font-weight:700">Vence hoy</span>':''));
+    var subMeta=sp?'Pagado':st?'<span class="nopag-badge">Sin pagar</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
     var chkTxt=sp?icon('check',11):st?icon('arrowRight',11):'';
     // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va debajo del monto;
     // si no hay pago parcial, cae a "Real: $X" (pagó distinto a lo presupuestado) y si tampoco,
@@ -270,7 +270,7 @@ function renderGastos(gastos,which) {
     // ubicados, con más aire. "Sin pagar" y "Vencido" son mutuamente excluyentes (ver
     // buildGastoBadges: vencidoBadge nunca se calcula si sinpagar ya es true), así que uno
     // reemplaza al otro en vez de competir por el mismo renglón.
-    var metaBase=p?'Pagado':tras?'<span class="nopag-badge">Sin pagar</span>':(vencidoBadge||(hoyFlag?'<span style="color:var(--red);font-weight:700">Vence hoy</span>':''));
+    var metaBase=p?'Pagado':tras?'<span class="nopag-badge">Sin pagar</span>':(vencidoBadge||(hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
     // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va en la misma
     // posición que "Pag: $X" en un grupo (segunda línea chica, debajo del monto, a la
     // derecha) — no como badge junto al nombre, para no competir con cuotaBadge/vencidoBadge ahí.
@@ -341,10 +341,11 @@ function renderGastos(gastos,which) {
     +'<div class="glist-div"></div>'
     +'<div class="glist-tot"><div class="glist-tot-lbl">PAGADO</div><div class="glist-tot-val" style="color:var(--grn)">'+cop(pagado)+'</div></div>'
     +'<div class="glist-div"></div>'
-    +'<div class="glist-tot"><div class="glist-tot-lbl">POR PAGAR</div><div class="glist-tot-val" style="color:var(--red)">'+cop(pendienteQ)+'</div></div>'
+    +'<div class="glist-tot"><div class="glist-tot-lbl">POR PAGAR</div><div class="glist-tot-val">'+cop(pendienteQ)+'</div></div>'
+    +'<div class="glist-div"></div>'
+    +'<div class="glist-tot"><div class="glist-tot-lbl">APLAZADO</div><div class="glist-tot-val" style="color:'+(sinPagarTotal>0?'var(--amb)':'var(--mut)')+'">'+cop(sinPagarTotal)+'</div></div>'
     +'</div>'
     +'<div class="pw"><div class="pb '+bc+'" style="width:'+pct+'%"></div></div>'
-    +noteFilterRow
     +'<div style="height:1px;background:var(--brd);margin:0 0 4px"></div>'
     +'<div id="glist-rows-'+which+'">'+rows+'</div>'
     +'</div>';
