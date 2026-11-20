@@ -117,7 +117,7 @@ var IG={
   bg1:'#0F1A2E',bg2:'#0D1729',bg3:'#0B1526',bg4:'#101A2E',bg5:'#111C2E',bg6:'#131E33',bg7:'#132038',
   accBg:'#142036',accBg2:'#1A2A47',accBg3:'#26385C',
   bd1:'#22304F',bd2:'#26344F',bd3:'#1E2B45',bd4:'#2E3E5C',
-  cian:'#6E9BEA',cian2:'#9DBBF0',amber:'#C08F45',red:'#E07B7B',green:'#5DBB8A',
+  cian:'#528BCE',cian2:'#9DBBF0',amber:'#C08F45',red:'#E07B7B',green:'#5DBB8A',
   txt1:'#F8FAFC',txt2:'#E5E9F0',txt3:'#E2E8F0',txt4:'#CBD5E1',txt5:'#8B97A8',txt6:'#64748B',txt7:'#475569'
 };
 function igCapFirst(s){return s.charAt(0).toUpperCase()+s.slice(1);}

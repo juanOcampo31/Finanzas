@@ -10,7 +10,7 @@ var AG={
   bg1:'#0B1220',bg2:'#0D1729',bg3:'#0B1526',bg4:'#101A2E',bg5:'#111C2E',bg6:'#131E33',
   accBg:'#142036',accBg2:'#1A2A47',accBg3:'#26385C',
   bd1:'#22304F',bd2:'#26344F',bd3:'#1E2B45',bd4:'#22314C',
-  cian:'#6E9BEA',cian2:'#9DBBF0',
+  cian:'#528BCE',cian2:'#9DBBF0',
   amb1:'#C08F45',amb2:'#C9A25E',amb3:'#D9B66F',amb4:'#EFE3C8',amb5:'#78350F',amb6:'#2A1D06',
   indigo:'#A9B8E8',rojo:'#E07B7B',
   txt1:'#F8FAFC',txt2:'#E5E9F0',txt3:'#E2E8F0',txt4:'#CBD5E1',txt5:'#8B97A8'
@@ -372,7 +372,7 @@ function agAbrirDetalleGastoVencido(gastoId,which){
   var m=getM();
   var gasto=agBuscarGasto(m,gastoId,which);
   if(!gasto) return;
-  openModal('<div class="mtitle">Gasto sin pagar</div>'
+  openModal('<div class="mtitle">Gasto aplazado</div>'
     +'<p style="font-size:14px;color:var(--txt);font-weight:600;margin-bottom:6px">'+esc(nombreGasto(gasto))+'</p>'
     +'<p style="font-size:12px;color:var(--mut);margin-bottom:16px">'+cop(Math.abs(gasto.presupuesto||0))+' · vencido</p>'
     +'<div class="macts"><button class="bcnl" onclick="closeModal()">Cerrar</button>'

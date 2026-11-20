@@ -87,7 +87,7 @@ function stdPillPopupOptHtml(label,active,onclickAttr,checkbox){
   var mark;
   if(checkbox){
     mark=active
-      ?'<span style="width:14px;height:14px;border-radius:4px;background:var(--acc);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#0B111C">'+icon('check',10)+'</span>'
+      ?'<span style="width:14px;height:14px;border-radius:4px;background:var(--acc2);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">'+icon('check',10)+'</span>'
       :'<span style="width:14px;height:14px;border-radius:4px;border:1.5px solid var(--brd2);flex-shrink:0"></span>';
   } else {
     mark=active?icon('check',12):'<span style="width:12px;display:inline-block;flex-shrink:0"></span>';
@@ -234,7 +234,7 @@ function seleccionarEstadoGasto(valor,wh,eid,pid){
 function pintarEstadoGasto(valor,wh){
   const BASE={background:'#0B1526',borderColor:'#22304F',titulo:'#8B97A8'};
   const ON_SINPAGAR={background:'#2A1D06',borderColor:'#C08F45',titulo:'#C9A25E'};
-  const ON_PAGADO={background:'#17233A',borderColor:'#6E9BEA',titulo:'#9DBBF0'};
+  const ON_PAGADO={background:'#17233A',borderColor:'#528BCE',titulo:'#9DBBF0'};
   const cardSP=document.getElementById('g-card-sinpagar'), tituloSP=document.getElementById('g-card-sinpagar-titulo');
   const cardPD=document.getElementById('g-card-pagado'), tituloPD=document.getElementById('g-card-pagado-titulo');
   // Los íconos (✓/→) viven en spans propios, separados del texto — así pintarEstadoGasto puede

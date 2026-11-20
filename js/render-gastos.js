@@ -177,7 +177,7 @@ function renderGastos(gastos,which) {
     // La forma de pago ya no va acá debajo del nombre (queda solo debajo del valor, ver
     // subRealLine) — este renglón ahora es para "Pagado"/"Sin pagar"/"Vencido"/"Vence hoy". "Sin
     // pagar" y "Vencido" son mutuamente excluyentes (ver buildGastoBadges), uno reemplaza al otro.
-    var subMeta=sp?'Pagado':st?'<span class="nopag-badge">Sin pagar</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
+    var subMeta=sp?'Pagado':st?'<span class="nopag-badge">Aplazado</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
     var chkTxt=sp?icon('check',11):st?icon('arrowRight',11):'';
     // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va debajo del monto;
     // si no hay pago parcial, cae a "Real: $X" (pagó distinto a lo presupuestado) y si tampoco,
@@ -237,17 +237,20 @@ function renderGastos(gastos,which) {
       var trasGrupo=!!g.sinpagar;
       var grpChk=trasGrupo?'nopag':(allPaid?'paid':'');
       var grpTxt=trasGrupo?icon('arrowRight',11):(allPaid?icon('check',11):'');
-      var grpNopagBadge=trasGrupo?'<span class="nopag-badge">Sin pagar</span>':'';
+      var grpNopagBadge=trasGrupo?'<span class="nopag-badge">Aplazado</span>':'';
       // Mostrar lo pagado si hay subgastos pagados
-      var pendienteHtml=subsPagados>0
+      // Grupo totalmente pagado: mismo aspecto que un gasto suelto pagado (nombre y valor en
+      // gris, "Pagado" debajo del nombre) en vez de quedar en blanco con solo el check verde.
+      var grpPagado=allPaid&&!trasGrupo;
+      var pendienteHtml=(subsPagados>0&&!grpPagado)
         ?'<div style="font-size:10px;color:var(--grn);margin-top:1px">Pag: '+cop(subsPagados)+'</div>'
         :'';
       return '<div class="g-group g-drag-item'+(trasGrupo?' grow-nopag':'')+'" data-gid="'+g.id+'" onpointerdown="startDragGasto(event,\''+g.id+'\',\''+which+'\')">'
         +'<div class="g-group-head" onclick="toggleGG(\''+g.id+'\',\'gg-'+gi+'\',\'gc-'+gi+'\')">'
         +'<div class="gchk '+grpChk+'" onclick="toggleGrupoPagado(event,\''+g.id+'\',\''+which+'\')">'+grpTxt+'</div>'
-        +'<div class="ginfo"><div class="gname'+(trasGrupo?' np':'')+'">'+esc(nombreGasto(g))+countBadge+(g.tcLinked?'<span style="display:inline-flex;vertical-align:middle;color:var(--acc);margin-left:5px">'+icon('refresh',11)+'</span>':'')+grpNopagBadge+' </div><div class="gmeta">'+esc(g.metodo||'')+'</div></div>'
+        +'<div class="ginfo"><div class="gname'+(trasGrupo?' np':grpPagado?' pd':'')+'">'+esc(nombreGasto(g))+countBadge+(g.tcLinked?'<span style="display:inline-flex;vertical-align:middle;color:var(--acc);margin-left:5px">'+icon('refresh',11)+'</span>':'')+grpNopagBadge+' </div><div class="gmeta">'+(grpPagado?'Pagado':esc(g.metodo||''))+'</div></div>'
         +'<div style="text-align:right;display:flex;align-items:center;gap:6px">'
-        +'<div><div class="gamt '+(g.tcLinked&&totalGrupo<0?'a':'')+'">'+(g.tcLinked&&totalGrupo<0?'-':'')+cop(Math.abs(totalGrupo))+'</div>'+pendienteHtml+'</div>'
+        +'<div><div class="gamt '+(g.tcLinked&&totalGrupo<0?'a':grpPagado?'pa':'')+'">'+(g.tcLinked&&totalGrupo<0?'-':'')+cop(Math.abs(totalGrupo))+'</div>'+pendienteHtml+'</div>'
         +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);padding:4px 6px;cursor:pointer;flex-shrink:0;display:flex;align-items:center">'+icon('edit',15)+'</button>'
         +'<div class="g-chevron" id="gc-'+gi+'" style="display:flex">'+icon('chevronRight',16)+'</div></div>'
         +'</div>'
@@ -270,7 +273,7 @@ function renderGastos(gastos,which) {
     // ubicados, con más aire. "Sin pagar" y "Vencido" son mutuamente excluyentes (ver
     // buildGastoBadges: vencidoBadge nunca se calcula si sinpagar ya es true), así que uno
     // reemplaza al otro en vez de competir por el mismo renglón.
-    var metaBase=p?'Pagado':tras?'<span class="nopag-badge">Sin pagar</span>':(vencidoBadge||(hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
+    var metaBase=p?'Pagado':tras?'<span class="nopag-badge">Aplazado</span>':(vencidoBadge||(hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
     // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va en la misma
     // posición que "Pag: $X" en un grupo (segunda línea chica, debajo del monto, a la
     // derecha) — no como badge junto al nombre, para no competir con cuotaBadge/vencidoBadge ahí.
@@ -293,7 +296,7 @@ function renderGastos(gastos,which) {
   var rows=topGastos.map(function(g){ return buildGastoRowHtml(g); }).join('');
 
   var pendienteQ=Math.max(total-pagado,0);
-  var spNote=sinPagarTotal>0?'<span style="color:var(--amb);font-size:11px;font-weight:500;margin-left:6px">· '+cop(sinPagarTotal)+' sin pagar</span>':'';
+  var spNote=sinPagarTotal>0?'<span style="color:var(--amb);font-size:11px;font-weight:500;margin-left:6px">· '+cop(sinPagarTotal)+' aplazado</span>':'';
   var dispColor=disp>=0?'grn':'red';
   var dispTxt=(disp<0?'-':'')+cop(disp);
   var qLabel=which==='q1'?'1':'2';
@@ -325,7 +328,7 @@ function renderGastos(gastos,which) {
   );
 
   var noteFilterRow=sinPagarCount>0
-    ?'<div class="glist-note-row has-note"><span class="glist-note-txt">'+sinPagarCount+' sin pagar · '+cop(sinPagarTotal)+'</span></div>'
+    ?'<div class="glist-note-row has-note"><span class="glist-note-txt">'+sinPagarCount+' aplazado'+(sinPagarCount===1?'':'s')+' · '+cop(sinPagarTotal)+'</span></div>'
     :'';
 
   // overflow:visible (en vez del overflow:hidden normal de .glist-card): si no, los popups de

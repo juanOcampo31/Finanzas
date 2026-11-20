@@ -935,7 +935,7 @@ function openCreditoDetalle(id){
     +(cuotasPendientes>0?'<span>Termina '+fechaFinFmt+'</span>':'')
     +'</div>'
     +'<div style="height:5px;background:var(--brd);border-radius:4px;overflow:hidden">'
-    +'<div style="height:100%;width:'+pctProgreso+'%;background:var(--acc);border-radius:4px"></div>'
+    +'<div style="height:100%;width:'+pctProgreso+'%;background:var(--acc2);border-radius:4px"></div>'
     +'</div>'
     +'</div>'
     +'<div style="display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-bottom:4px;position:relative">'

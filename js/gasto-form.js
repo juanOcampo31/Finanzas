@@ -220,7 +220,7 @@ function openGasto(g,which,parentId,skipFocus){
   // padding amplio de antes (pensado para dos líneas de texto en ambas tarjetas).
   const CARD_ESTADO_BASE='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#0B1526;border:1px solid #22304F;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
   const CARD_SINPAGAR_ON='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#2A1D06;border:1px solid #C08F45;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
-  const CARD_PAGADO_ON='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#17233A;border:1px solid #6E9BEA;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
+  const CARD_PAGADO_ON='flex:1;height:44px;padding:0 10px;border-radius:12px;background:#17233A;border:1px solid #528BCE;display:flex;flex-direction:row;justify-content:center;gap:6px;align-items:center;cursor:pointer;transition:all 140ms ease;box-sizing:border-box';
   const estadoInicial=gastoEstado(e);
   const tituloPagadoColor=estadoInicial==='pagado'?'#9DBBF0':'#8B97A8';
   const tituloSinPagarColor=estadoInicial==='sinpagar'?'#C9A25E':'#8B97A8';
@@ -229,7 +229,7 @@ function openGasto(g,which,parentId,skipFocus){
   // queda como recordatorio). La primera tarjeta dice "Pagar" cuando todavía no está marcada
   // (invita a la acción) y "Pagado" cuando ya lo está (describe el hecho) — mismo criterio en
   // vivo al seleccionarla/deseleccionarla, ver pintarEstadoGasto().
-  const labelSinPagar=wh==='q1'?'Mover a Q2':'Sin pagar';
+  const labelSinPagar=wh==='q1'?'Mover a Q2':'Aplazado';
   const labelPagado=estadoInicial==='pagado'?'Pagado':'Pagar';
   const estadoSectionHtml='<div style="padding:4px 0 0">'
     +'<input type="hidden" id="g-estado" value="'+(estadoInicial||'')+'">'
@@ -512,7 +512,7 @@ function ofrecerCopiarQ2(g) {
   const detalleGrupo=g.esGrupo?' (con todos sus gastos asociados)':'';
   openModal('<div class="mtitle">¿Mover a Q2?</div>'
     +'<p style="font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:16px">'
-    +etiqueta+' <b style="color:var(--txt)">'+esc(nombreGasto(g))+'</b> se marcó como sin pagar.<br>'
+    +etiqueta+' <b style="color:var(--txt)">'+esc(nombreGasto(g))+'</b> se marcó como aplazado.<br>'
     +'¿Deseas crearlo'+detalleGrupo+' también en la quincena 2 para recordar que quedó pendiente?</p>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal();toast(\'Gasto guardado\')">No, solo Q1</button>'
