@@ -35,8 +35,33 @@ function ordenarTabsPorUso(){
   fijas.concat(resto).forEach(function(b){ bar.appendChild(b); });
 }
 
+// ── Paneles del header (menú de usuario / selector de mes) ───────────────────
+// Se minimizan solos en cuanto el usuario hace cualquier otra cosa en la app: tocar fuera de
+// ellos (incluido el botón "+", las pestañas, un modal o un elemento que corta el burbujeo con
+// stopPropagation — por eso va en fase de captura y no en el onclick de .scroll) o abrir un
+// modal desde código. Solo se ocultan los paneles (sin re-render inmediato) para no destruir el
+// elemento que se está tocando; el render diferido actualiza las flechas del header.
+function minimizarPanelesHeader(){
+  var visibles=['userMenuPanel','monthPanel'].map(function(id){return document.getElementById(id);})
+    .filter(function(el){return el&&el.style&&el.style.display!=='none';});
+  if(!headerUserMenuOpen&&!headerMonthPanelOpen&&!visibles.length) return;
+  headerUserMenuOpen=false; headerMonthPanelOpen=false;
+  visibles.forEach(function(el){el.style.display='none';});
+  setTimeout(function(){ if(typeof render==='function') render(); },0);
+}
+if(typeof document!=='undefined'&&document.addEventListener){
+  document.addEventListener('click',function(ev){
+    if(!headerUserMenuOpen&&!headerMonthPanelOpen) return;
+    var t=ev.target;
+    var dentro=['headerRow','userMenuPanel','monthPanel'].some(function(id){
+      var el=document.getElementById(id); return el&&t&&el.contains&&el.contains(t);
+    });
+    if(!dentro) minimizarPanelesHeader();
+  },true);
+}
+
 // ── Modal ─────────────────────────────────────────────────────────────────────
-function openModal(h){document.getElementById('mc').innerHTML=h;document.getElementById('mbg').classList.add('open');}
+function openModal(h){minimizarPanelesHeader();document.getElementById('mc').innerHTML=h;document.getElementById('mbg').classList.add('open');}
 // Número de recuperación obligatorio (ver exigirNumeroRecuperacion en auth.js): mientras falte,
 // cerrar cualquier modal vuelve a mostrar el que lo pide, y tocar el fondo no lo cierra. Si un
 // flujo cierra y abre otro modal enseguida (p.ej. showConfirm → acción), ese nuevo lo tapa y al

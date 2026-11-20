@@ -133,26 +133,26 @@ function renderCreditos(m){
     var proximaCuotaVal=x.proximaIdx!==-1?amort.rows[x.proximaIdx].valorCuota:0;
     var frecLbl=(cr.frecuencia==='mensual')?'Mensual':'Quincenal';
     var mensPill=cr.esMensualidad?'<span class="gtag">Mensualidad</span>':'';
-    return '<div onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+x.id+'\')" style="cursor:pointer;background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin:0 14px 10px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
+    return '<div onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+x.id+'\')" style="cursor:pointer;background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:8px 10px;margin:0 14px 6px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
       +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
-      +'<span style="font-size:14px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
+      +'<span style="font-size:13px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
       +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
       +creditoEstadoPillHtml(cr,x.activo)
       +'</div>'
       +refinanciadoLinkHtml(cr)
       +'<div style="display:flex;align-items:center;gap:12px">'
-      +'<div style="position:relative;width:64px;height:64px;flex-shrink:0">'
+      +'<div style="position:relative;width:46px;height:46px;flex-shrink:0">'
       +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+x.color+' '+(x.pct*3.6)+'deg,var(--brd) 0deg)"></div>'
-      +'<div style="position:absolute;inset:6px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
-      +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
-      +'<div style="font-size:9px;color:var(--mut)">'+x.pagadas+'/'+amort.rows.length+'</div>'
+      +'<div style="position:absolute;inset:5px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05">'
+      +'<div style="font-size:11px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
+      +'<div style="font-size:8px;color:var(--mut)">'+x.pagadas+'/'+amort.rows.length+'</div>'
       +'</div></div>'
-      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;min-width:0;line-height:1.25">'
       +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(x.saldoActual)+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:2px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
       +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Próximo pago</div><div style="font-size:13px;font-weight:700;color:'+x.color+'">'+proximaFecha+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:2px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
       +'</div>'
       +'</div>'
       +'</div>';
@@ -262,23 +262,23 @@ function openCreditosMenu(){
     return '<div onclick="creditoDetalleDesdeModal=true;openCreditoDetalle(\''+x.id+'\')" style="cursor:pointer;background:var(--surf2);border:1px solid var(--brd2);border-radius:var(--r);padding:11px;margin-bottom:10px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">'
       +'<div style="display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden">'
-      +'<span style="font-size:14px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
+      +'<span style="font-size:13px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(cr.nombre)+'</span>'+mensPill
       +'<span style="font-size:11px;color:var(--mut);flex-shrink:0">'+frecLbl+'</span></div>'
       +creditoEstadoPillHtml(cr,x.activo)
       +'</div>'
       +refinanciadoLinkHtml(cr)
       +'<div style="display:flex;align-items:center;gap:12px">'
-      +'<div style="position:relative;width:64px;height:64px;flex-shrink:0">'
+      +'<div style="position:relative;width:46px;height:46px;flex-shrink:0">'
       +'<div style="width:100%;height:100%;border-radius:50%;background:conic-gradient('+x.color+' '+(x.pct*3.6)+'deg,var(--brd) 0deg)"></div>'
-      +'<div style="position:absolute;inset:6px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center">'
-      +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
-      +'<div style="font-size:9px;color:var(--mut)">'+x.pagadas+'/'+amort.rows.length+'</div>'
+      +'<div style="position:absolute;inset:5px;border-radius:50%;background:var(--surf2);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05">'
+      +'<div style="font-size:11px;font-weight:800;color:var(--txt)">'+x.pct+'%</div>'
+      +'<div style="font-size:8px;color:var(--mut)">'+x.pagadas+'/'+amort.rows.length+'</div>'
       +'</div></div>'
-      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+      +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;min-width:0;line-height:1.25">'
       +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(x.saldoActual)+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:2px">Deuda inicial</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
       +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Próximo pago</div><div style="font-size:13px;font-weight:700;color:'+x.color+'">'+proximaFecha+'</div>'
-      +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
+      +'<div style="font-size:9px;color:var(--mut);margin-top:2px">Valor cuota</div><div style="font-size:12px;color:var(--mut)">'+cop(proximaCuotaVal)+'</div></div>'
       +'</div>'
       +'</div>'
       +'</div>';
@@ -870,7 +870,7 @@ function openCreditoDetalle(id){
       ?'<span onclick="event.stopPropagation();confirmarQuitarCongelamiento(\''+id+'\',\''+congeladaAqui.id+'\')" style="font-size:10.5px;font-weight:600;color:var(--acc);margin-left:6px;vertical-align:middle;cursor:pointer;display:inline-flex;align-items:center;gap:3px">'+icon('snowflake',9)+' +'+congeladaAqui.periodos+'</span>'
       :'';
 
-    return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'box-shadow:inset 3px 0 0 var(--acc)':'')+'">'
+    return '<div id="cr-row-'+i+'" style="display:flex;align-items:center;gap:9px;padding:5px 12px;border-bottom:1px solid var(--brd);'+(esProxima?'box-shadow:inset 3px 0 0 var(--acc)':'')+'">'
       +'<div onclick="toggleCuotaPago(\''+id+'\','+i+')" style="width:22px;height:22px;border-radius:50%;border:2px solid '+(pagado?'var(--grn)':'var(--mut)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(pagado?'var(--grn)':'transparent')+';flex-shrink:0">'+(pagado?'<span style="color:#fff;display:flex">'+icon('check',12)+'</span>':'<span style="font-size:10px;color:var(--mut)">'+r.numero+'</span>')+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:12px;font-weight:600;color:var(--txt)">Cuota '+r.numero+' de '+totalCuotas+congeladaBadge+'</div>'
@@ -912,7 +912,7 @@ function openCreditoDetalle(id){
     +'<div style="font-size:14px;font-weight:800;color:var(--txt)">'+pctProgreso+'%</div>'
     +'<div style="font-size:9px;color:var(--mut)">'+pagadas+'/'+totalCuotas+'</div>'
     +'</div></div>'
-    +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+    +'<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;min-width:0;line-height:1.25">'
     +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">Saldo actual</div><div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(saldoActual)+'</div>'
     +'<div style="font-size:9px;color:var(--mut);margin-top:4px">Valor total del crédito</div><div style="font-size:12px;color:var(--mut)">'+cop(amort.total)+'</div></div>'
     +'<div><div style="font-size:9px;color:var(--mut);text-transform:uppercase">'+(activoCr?'Próximo pago':'Cuota')+'</div><div style="font-size:13px;font-weight:700;color:var(--acc)">'+proximaFechaHdr+'</div>'

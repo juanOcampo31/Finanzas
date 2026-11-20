@@ -75,7 +75,7 @@ function renderTC(m) {
     var filas=creditosVinculados.map(function(cid){
       var cr=creditos[cid];
       var estado=calcEstadoCredito(cr);
-      return '<div onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+cid+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--brd);cursor:pointer">'
+      return '<div onclick="creditoDetalleDesdeModal=false;openCreditoDetalle(\''+cid+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:5px 12px;border-bottom:1px solid var(--brd);cursor:pointer">'
         +'<div><div style="font-size:12px;font-weight:600;color:var(--txt)">'+esc(cr.nombre)+'</div>'
         +'<div style="font-size:10px;color:var(--mut);margin-top:1px">'+estado.pagadasVisual+'/'+estado.amort.rows.length+' cuotas pagadas</div></div>'
         +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+cop(estado.saldoActual)+'</div>'

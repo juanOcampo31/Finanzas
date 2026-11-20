@@ -287,7 +287,7 @@ function agFilaHtml(e){
 
   var subTxt=(dias===0?'Hoy':dias<0?('hace '+Math.abs(dias)+' día'+(Math.abs(dias)===1?'':'s')):('en '+dias+' día'+(dias===1?'':'s')))+(e.hora?(' · '+e.hora):'');
 
-  var tituloHtml='<div style="font-size:13.5px;font-weight:700;color:'+tituloColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(tildada?';text-decoration:line-through':'')+'">'+esc(e.concepto)+'</div>';
+  var tituloHtml='<div style="font-size:13px;line-height:1.3;font-weight:700;color:'+tituloColor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(tildada?';text-decoration:line-through':'')+'">'+esc(e.concepto)+'</div>';
 
   var slotDerecho;
   if(e.tipo==='pago'){
@@ -298,11 +298,11 @@ function agFilaHtml(e){
     else if(e.repetir&&e.repetir!=='nunca'){ etiquetaTxt='RECURRENTE'; etiquetaBg=AG.bd3; etiquetaColor=AG.txt5; }
     else if(e.origen==='manual'){ etiquetaTxt='MANUAL'; etiquetaBg=AG.bd3; etiquetaColor=AG.txt5; }
     slotDerecho='<div style="text-align:right;flex-shrink:0">'
-      +'<div style="font-size:13.5px;font-weight:800;font-variant-numeric:tabular-nums;color:'+montoColor+'">'+(e.monto?cop(e.monto):'')+'</div>'
-      +(etiquetaTxt?'<div style="display:inline-block;margin-top:3px;font-size:9.5px;font-weight:800;letter-spacing:.05em;padding:2px 6px;border-radius:5px;background:'+etiquetaBg+';color:'+etiquetaColor+'">'+etiquetaTxt+'</div>':'')
+      +'<div style="font-size:13px;line-height:1.3;font-weight:800;font-variant-numeric:tabular-nums;color:'+montoColor+'">'+(e.monto?cop(e.monto):'')+'</div>'
+      +(etiquetaTxt?'<div style="display:inline-block;margin-top:1px;font-size:9px;font-weight:800;letter-spacing:.05em;padding:1px 5px;border-radius:5px;background:'+etiquetaBg+';color:'+etiquetaColor+'">'+etiquetaTxt+'</div>':'')
       +'</div>';
   } else {
-    slotDerecho='<div onclick="event.stopPropagation();agToggleTarea(\''+e.id+'\')" style="width:24px;height:24px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;min-height:24px;'
+    slotDerecho='<div onclick="event.stopPropagation();agToggleTarea(\''+e.id+'\')" style="width:20px;height:20px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;min-height:20px;'
       +(tildada?('background:'+AG.cian+';border:1.5px solid '+AG.cian):('background:transparent;border:1.5px solid #64748B'))+'">'
       +(tildada?'<span style="font-size:12px;font-weight:800;color:#052B33">✓</span>':'')
       +'</div>';
@@ -316,13 +316,13 @@ function agFilaHtml(e){
     ?(' onclick="agAbrirDetalleGastoVencido(\''+e.gastoId+'\',\''+e.which+'\')"')
     :(' onclick="agAbrirDetalle(\''+e.id+'\')"'));
 
-  return '<div'+onclickRow+' style="padding:8px 12px 8px 0;background:'+bg+';border:1px solid '+bd+';border-radius:13px;display:flex;align-items:center;gap:11px;overflow:hidden;margin-bottom:6px;min-height:40px'+(clickable?';cursor:pointer':'')+'">'
+  return '<div'+onclickRow+' style="padding:4px 12px 4px 0;background:'+bg+';border:1px solid '+bd+';border-radius:11px;display:flex;align-items:center;gap:10px;overflow:hidden;margin-bottom:4px;min-height:34px'+(clickable?';cursor:pointer':'')+'">'
     +'<div style="width:3px;align-self:stretch;border-radius:0 2px 2px 0;background:'+barra+';flex-shrink:0"></div>'
-    +'<div style="flex:0 0 34px;text-align:center">'
-    +'<div style="font-size:16px;font-weight:800;color:'+numColor+';font-variant-numeric:tabular-nums;line-height:1.1">'+d.getDate()+'</div>'
-    +'<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:'+dowColor+'">'+DOW_ABBR[d.getDay()]+'</div>'
+    +'<div style="flex:0 0 30px;text-align:center">'
+    +'<div style="font-size:14px;font-weight:800;color:'+numColor+';font-variant-numeric:tabular-nums;line-height:1.1">'+d.getDate()+'</div>'
+    +'<div style="font-size:9px;line-height:1.1;font-weight:700;text-transform:uppercase;color:'+dowColor+'">'+DOW_ABBR[d.getDay()]+'</div>'
     +'</div>'
-    +'<div style="flex:1 1 auto;min-width:0">'+tituloHtml+'<div style="font-size:11px;color:'+subColor+'">'+subTxt+'</div></div>'
+    +'<div style="flex:1 1 auto;min-width:0">'+tituloHtml+'<div style="font-size:10.5px;line-height:1.25;color:'+subColor+'">'+subTxt+'</div></div>'
     +slotDerecho
     +'</div>';
 }

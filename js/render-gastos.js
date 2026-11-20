@@ -251,7 +251,7 @@ function renderGastos(gastos,which) {
         +'<div class="ginfo"><div class="gname'+(trasGrupo?' np':grpPagado?' pd':'')+'">'+esc(nombreGasto(g))+countBadge+(g.tcLinked?'<span style="display:inline-flex;vertical-align:middle;color:var(--acc);margin-left:5px">'+icon('refresh',11)+'</span>':'')+grpNopagBadge+' </div><div class="gmeta">'+(grpPagado?'Pagado':esc(g.metodo||''))+'</div></div>'
         +'<div style="text-align:right;display:flex;align-items:center;gap:6px">'
         +'<div><div class="gamt '+(g.tcLinked&&totalGrupo<0?'a':grpPagado?'pa':'')+'">'+(g.tcLinked&&totalGrupo<0?'-':'')+cop(Math.abs(totalGrupo))+'</div>'+pendienteHtml+'</div>'
-        +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);padding:4px 6px;cursor:pointer;flex-shrink:0;display:flex;align-items:center">'+icon('edit',15)+'</button>'
+        +'<button onclick="event.stopPropagation();editGasto(\''+g.id+'\',' +'\''+which+'\');" style="background:none;border:none;color:var(--mut);padding:2px 5px;cursor:pointer;flex-shrink:0;display:flex;align-items:center">'+icon('edit',14)+'</button>'
         +'<div class="g-chevron" id="gc-'+gi+'" style="display:flex">'+icon('chevronRight',16)+'</div></div>'
         +'</div>'
         +'<div id="gg-'+gi+'" style="display:'+(gGroupOpen[g.id]?'block':'none')+'"><div class="g-sub-wrap">'+subRowsHtml+deudaRow+addBtn+'</div></div>'
