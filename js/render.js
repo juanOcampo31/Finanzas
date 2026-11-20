@@ -66,6 +66,38 @@ function homeQParaMes(mes){
   }
   return 'q1';
 }
+// Mes y quincena con los que abre la app: la quincena MÁS ANTIGUA que todavía tiene gastos
+// pendientes por pagar (ver calcPctPagadoMes: los "aplazados" no cuentan como pendientes),
+// siempre que no sea posterior a la quincena de hoy — así, si ya está creado diciembre pero
+// noviembre Q2 quedó con pagos sin hacer, la app abre en noviembre Q2. Si no hay nada pendiente,
+// abre en el mes y la quincena de HOY (para registrar ahí los gastos hormiga del día), nunca en
+// el último mes que se estaba viendo. Si el mes de hoy aún no existe, el más reciente anterior.
+// Devuelve null solo si todos los meses son futuros (se respeta el mes guardado, ver state.js).
+function periodoInicialArranque(){
+  const hoy=new Date();
+  const idxHoy=(hoy.getFullYear()*12+hoy.getMonth())*2+(hoy.getDate()<=15?0:1);
+  let mejor=null, actual=null, ultimoPasado=null;
+  Object.keys(db).forEach(function(key){
+    const k=Number(key), mes=db[k];
+    if(!mes) return;
+    const mi=MESES.indexOf(mes.nombre);
+    if(mi<0||!mes.año) return;
+    const base=(mes.año*12+mi)*2;
+    if(base===idxHoy||base+1===idxHoy) actual={k:k,q:base===idxHoy?'q1':'q2'};
+    else if(base<idxHoy&&(!ultimoPasado||base>ultimoPasado.base)) ultimoPasado={base:base,k:k,q:'q2'};
+    const pend=calcPctPagadoMes(mes).pendientes;
+    ['Q1','Q2'].forEach(function(W,i){
+      const idx=base+i;
+      if(idx>idxHoy) return;
+      if(!pend.some(function(p){return p.which===W;})) return;
+      if(!mejor||idx<mejor.idx) mejor={idx:idx,k:k,q:W.toLowerCase()};
+    });
+  });
+  if(mejor) return {k:mejor.k,q:mejor.q};
+  if(actual) return actual;
+  // El mes de hoy todavía no está creado: el más reciente que no sea futuro, en su Q2.
+  return ultimoPasado?{k:ultimoPasado.k,q:ultimoPasado.q}:null;
+}
 // ── Header: identidad del perfil + selector de mes ──────────────────────────────
 // Reemplaza las antiguas pestañas de mes (ventana de 3) y el botón "⋮": una sola fila con
 // el bloque de identidad (avatar/nombre/quincena seleccionada, pulsable → menú de usuario) a
@@ -225,6 +257,12 @@ function render() {
   // de asumir siempre Q1 — después de este arranque, la selección manual del usuario manda.
   if(!homeQAutoDone){
     homeQAutoDone=true;
+    const inicio=periodoInicialArranque();
+    if(inicio){
+      curM=inicio.k; homeQ=inicio.q;
+      curNomQAutoDone=true; curNomQ=inicio.q;
+      return render();
+    }
     homeQ=homeQParaMes(m);
   }
   // Misma lógica que Inicio (ver homeQParaMes arriba), aplicada a la pestaña Nómina: arranca
