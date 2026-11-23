@@ -177,7 +177,7 @@ function renderGastos(gastos,which) {
     // La forma de pago ya no va acá debajo del nombre (queda solo debajo del valor, ver
     // subRealLine) — este renglón ahora es para "Pagado"/"Sin pagar"/"Vencido"/"Vence hoy". "Sin
     // pagar" y "Vencido" son mutuamente excluyentes (ver buildGastoBadges), uno reemplaza al otro.
-    var subMeta=sp?'Pagado':st?'<span class="nopag-badge">Aplazado</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
+    var subMeta=sp?('Pagado'+(s.tcRestoInfo?' · resto '+cop(s.tcRestoInfo.monto)+' a la Q1 siguiente':'')):st?'<span class="nopag-badge">Aplazado</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
     var chkTxt=sp?icon('check',11):st?icon('arrowRight',11):'';
     // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va debajo del monto;
     // si no hay pago parcial, cae a "Real: $X" (pagó distinto a lo presupuestado) y si tampoco,
@@ -262,6 +262,8 @@ function renderGastos(gastos,which) {
     var dh=diff!==null?' · <span style="color:var(--'+(diff>0?'grn':'red')+')\">'+(diff>0?'Sobró':'Faltó')+' '+cop(Math.abs(diff))+'</span>':'';
     var gCls=(tras?'grow-nopag':'')+(g.id===lastCreatedId?' gnew':'');
     var badgesG=buildGastoBadges(g);
+    // "Resto <tarjeta>" (ver pasarRestoAbonoTC): muestra hasta cuándo hay plazo real de pago.
+    if(g.tcResto&&g.tcResto.fechaLimite&&!p) badgesG.cuotaBadge+='<span class="gtag">Límite '+fmtD(g.tcResto.fechaLimite)+'</span>';
     var cuotaBadge=badgesG.cuotaBadge, mensBadge=badgesG.mensBadge, vencidoBadge=badgesG.vencidoBadge, compBadge=badgesG.compBadge, hoyFlag=badgesG.hoyFlag;
     var chkCls=p?'paid':tras?'nopag':(hoyFlag?'hoy':'');
     var namCls=p?'pd':tras?'np':'';

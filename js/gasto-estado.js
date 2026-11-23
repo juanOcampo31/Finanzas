@@ -89,7 +89,9 @@ function buildDraftMonth(){
     t.info={
       fechaCorte: advanceDate(t.info?.fechaCorte),
       fechaPago:  advanceDate(t.info?.fechaPago),
-      cupo:       t.info?.cupo||null
+      cupo:       t.info?.cupo||null,
+      marca:      t.info?.marca||null,
+      ultimos4:   t.info?.ultimos4||null
     };
   });
 
@@ -105,6 +107,9 @@ function buildDraftMonth(){
     return gastos
       .filter(function(g){
         if(g.creditoId) return false;
+        // Un "Resto <tarjeta>" (ver pasarRestoAbonoTC) es deuda de un solo mes: pagado, no se
+        // repite; sin pagar, sigue pasando al mes siguiente hasta que se pague.
+        if(g.tcResto&&g.pagado_flag) return false;
         if(g.cuotas_total>0&&g.cuota_actual>=g.cuotas_total&&g.pagado_flag) return false;
         return true;
       })
@@ -139,7 +144,9 @@ function buildDraftMonth(){
           // abajo, nm.agenda se vacía) — sin limpiar esto, el gasto del mes nuevo parecía "ya
           // tener un recordatorio" (agGastosDisponiblesParaAsociar lo excluía) aunque ese
           // recordatorio real seguía siendo el de hace un mes, con su fecha vieja.
-          agendaId: null
+          agendaId: null,
+          // El traslado de resto es del Abono TC del mes que se cierra, no del nuevo.
+          tcRestoInfo: undefined
         });
       });
   }
@@ -156,6 +163,14 @@ function buildDraftMonth(){
   const q2Copiado = copyGastosIds(nm.q2_gastos);
   nm.q1_gastos = remapParents(q1Copiado);
   nm.q2_gastos = remapParents(q2Copiado);
+  // Restos de la tarjeta que se pasaron a la Q1 de este mes cuando todavía no existía (ver
+  // pasarRestoAbonoTC en gasto-pago.js). Se borran del mes anterior en confirmCreateMonth.
+  delete nm.tcRestosPendientes;
+  (lm.tcRestosPendientes||[]).forEach(function(r){
+    const copia=JSON.parse(JSON.stringify(r));
+    nm.q1_gastos.push(copia);
+    if(typeof agregarRefRestoTC==='function') agregarRefRestoTC(nm,copia,lm);
+  });
 
   // Los recordatorios manuales de Agenda son del mes que se está cerrando, no del que empieza
   // (ver comentario en agenda.js: "Vive per-mes en m.agenda... solo entradas MANUALES") — sin
@@ -347,6 +362,12 @@ function confirmCreateMonth(){
   const nm=window._draftMonth, nk=window._draftKey;
   if(!nm||nk==null) return;
   moverCuotasVencidasAlMesSiguiente(db[nk-1],nm);
+  if(db[nk-1]){
+    // Los restos de tarjeta pendientes ya quedaron en la Q1 del mes nuevo (ver buildDraftMonth):
+    // el Abono TC que los generó ahora debe encontrarlos ahí (ver buscarRestoTC).
+    (db[nk-1].q2_gastos||[]).forEach(function(g){ if(g.tcRestoInfo&&g.tcRestoInfo.mesKey==null) g.tcRestoInfo.mesKey=nk; });
+    delete db[nk-1].tcRestosPendientes;
+  }
   db[nk]=nm;
   save();curM=nk;curTab=0;homeQ=homeQParaMes(nm);curNomQ=homeQ;
   gFiltro={q1:'todos',q2:'todos'};

@@ -477,3 +477,53 @@ test('ingresos al crear mes: solo los que se repiten, con la fecha del mes nuevo
   assert.equal(nm.ingresos.q1.map(x => x.nombre + '@' + x.fecha).join(','), 'Arriendo@2026-07-05');
   assert.equal(nm.ingresos.q2.map(x => x.nombre + '@' + x.fecha).join(','), 'Legado (sin campo)@2026-07-30');
 });
+
+// ── Abono TC con resto para la Q1 siguiente ──────────────────────────────────
+test('abono TC parcial: el resto pasa a la Q1 siguiente sin contarse dos veces; su abono en la tarjeta va y viene con su pago', () => {
+  const ctx = loadApp(); const I = ctx.__internals;
+  const grp = {id:'G',nombre:'Visa',presupuesto:0,metodo:'Débito',esGrupo:true,tcLinked:true,tcCardId:'tc1',pagado_flag:false,sinpagar:false,estado:null,parentId:null};
+  I.db = {0:{nombre:'Noviembre',año:2026,q1_gastos:[],q2_gastos:[grp],nomina:{},
+    tarjetas:{tc1:{id:'tc1',nombre:'Visa',movimientos:[{id:'c1',tipo:'Compra',valor:1000000,descripcion:'Compras'}],info:{fechaPago:'2026-12-15'}}}}};
+  const m = I.db[0];
+  ctx.syncTCGrupo(m);
+  const ab = m.q2_gastos.find(x => x.nombre === 'Abono TC');
+  assert.equal(ab.presupuesto, 1000000);
+  // Diciembre todavía no existe: el resto queda pendiente en noviembre
+  ctx.pasarRestoAbonoTC(ab, m, 600000, 400000);
+  assert.equal(ab.pagado_flag, true);
+  assert.equal(ab.presupuesto, 600000);
+  // La tarjeta sigue debiendo el resto (no se ha pagado), pero no suma en la Q2 de noviembre
+  assert.equal(ctx.calcTCSaldo(m, 'tc1'), 400000);
+  assert.equal(ctx.calcTotalQuincena(m, 'q2'), 600000);
+  assert.equal(m.tcRestosPendientes.length, 1);
+  assert.equal(m.tcRestosPendientes[0].tcResto.fechaLimite, '2026-12-15');
+  // Al crear diciembre, el resto aparece en su Q1 y el Abono TC copiado no hereda el traslado
+  const d = ctx.buildDraftMonth();
+  ctx.window._draftMonth = d.nm; ctx.window._draftKey = d.nk;
+  ctx.confirmCreateMonth();
+  const dic = I.db[1];
+  assert.deepEqual(dic.q1_gastos.map(g => [g.nombre, g.presupuesto]), [['Resto Visa', 400000]]);
+  assert.equal(m.tcRestosPendientes, undefined);
+  assert.equal(dic.q2_gastos.find(x => x.nombre === 'Abono TC').tcRestoInfo, undefined);
+  // Pagar el resto en diciembre registra su abono en la tarjeta de noviembre; desmarcarlo lo quita
+  const resto = dic.q1_gastos[0];
+  // La tarjeta de diciembre lleva la referencia "Saldo pendiente de Noviembre" (no suma a su saldo)
+  const ref = () => dic.tarjetas.tc1.movimientos.find(x => x.tipo === 'SaldoAnterior');
+  assert.equal(ref().valor, 400000);
+  assert.equal(ref().pagado, false);
+  assert.equal(ctx.calcTCSaldo(dic, 'tc1'), 0);
+  ctx.marcarGastoPagado(resto, dic);
+  assert.equal(ref().pagado, true);
+  assert.equal(ctx.calcTCSaldo(m, 'tc1'), 0);
+  assert.equal(ctx.calcTotalQuincena(m, 'q2'), 600000);
+  ctx.desmarcarGastoPagado(resto, dic);
+  assert.equal(ref().pagado, false);
+  assert.equal(ctx.calcTCSaldo(m, 'tc1'), 400000);
+  assert.equal(m.tarjetas.tc1.movimientos.length, 2);
+  // Desmarcar el Abono TC deshace el traslado y quita el resto de diciembre
+  ctx.desmarcarGastoPagado(ab, m);
+  assert.equal(ctx.calcTCSaldo(m, 'tc1'), 1000000);
+  assert.equal(ab.presupuesto, 1000000);
+  assert.equal(dic.q1_gastos.length, 0);
+  assert.equal(ref(), undefined);
+});

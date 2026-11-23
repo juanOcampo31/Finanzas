@@ -53,7 +53,8 @@ function renderTC(m) {
     +'<div class="nrow" style="background:rgba(0,0,0,.15)"><span class="nlbl">Fecha sugerida de pago</span>'
     +'<span class="nval" style="color:var(--acc)">'+(sugerida?fmtInfoDate(sugerida):'<span style="color:var(--mut);font-style:italic">Define fecha de pago</span>')+'</span></div>';
   const infoBody=tcOpen?(cupoRows+fechaRows
-    +'<div class="trow" style="justify-content:flex-end;border-top:1px solid var(--brd)">'
+    +'<div class="trow" style="justify-content:space-between;border-top:1px solid var(--brd)">'
+    +'<button class="btn-sutil" onclick="editTCInfo()" style="display:inline-flex;align-items:center;gap:5px">'+icon('edit',12)+'Editar información</button>'
     +'<button class="nedit" style="padding:4px 12px;font-size:12px;color:var(--red)" onclick="confirmDeleteCard(\''+curTC+'\')">Eliminar tarjeta</button>'
     +'</div>'):'';
 
@@ -141,6 +142,21 @@ function renderTC(m) {
   var topMovs=tc.filter(function(x){ return !idsAgrupados[x.id]; });
   var sorted=[...topMovs].sort(function(a,b){return a.fecha>b.fecha?-1:a.fecha<b.fecha?1:0;});
   var grupoRows=sorted.map(function(x){
+    // Saldo que viene del mes anterior (ver agregarRefRestoTC en gasto-pago.js): solo
+    // referencia, no suma al saldo de este mes. "Pendiente" hasta pagar su Resto, luego "Pagado".
+    if(x.tipo==='SaldoAnterior'){
+      return '<div class="tc-group"><div class="tc-group-head" style="cursor:default">'
+        +'<div class="tcic" style="background:var(--surf2);color:'+(x.pagado?'var(--grn)':'var(--amb)')+'">'+icon(x.pagado?'check':'refresh',13)+'</div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div class="tcdesc">'+esc(x.descripcion||'Saldo pendiente')+'</div>'
+        +'<div class="tcdate">'+(x.pagado?'Pagado en la Q1':'Pendiente · se paga en la Q1')+'</div>'
+        +'</div>'
+        +'<div style="text-align:right">'+(x.pagado
+          ?'<div class="tcval" style="color:var(--mut);text-decoration:line-through;font-size:11px">'+cop(Math.abs(x.valor||0))+'</div><div class="tcval a">Pagado</div>'
+          :'<div class="tcval" style="color:var(--amb)">'+cop(Math.abs(x.valor||0))+'</div>')
+        +'</div>'
+        +'</div></div>';
+    }
     var ab=x.tipo==='Abono';
     var ligados=(!ab&&abonosPorCompra[x.id])?abonosPorCompra[x.id]:null;
     var totalAbonado=ligados?ligados.reduce(function(a,y){return a+Math.abs(y.valor||0);},0):0;

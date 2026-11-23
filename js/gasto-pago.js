@@ -84,6 +84,7 @@ function sincronizarCreditoDesdeGasto(gasto,estadoAntes){
 function marcarGastoPagado(g,m,opts){
   opts=opts||{};
   setGastoEstado(g,'pagado');
+  if(g.tcResto&&!g.tcMovimientoId) restoTCAlPagar(g,null,m);
   // Si este gasto (o grupo) se había "movido" a Q2 (ver copiarGastoQ2 en gasto-form.js) y se
   // paga directamente acá en su Q original, la copia de Q2 queda duplicando algo ya resuelto —
   // se borra sola.
@@ -143,6 +144,8 @@ function marcarGastoPagado(g,m,opts){
   if(g.agendaId && typeof agSincronizarDesdeGasto==='function') agSincronizarDesdeGasto(g,m,true);
 }
 function desmarcarGastoPagado(g,m){
+  if(g.tcRestoInfo) deshacerRestoTC(g,m);
+  if(g.tcResto) restoTCAlDesmarcar(g,m);
   setGastoEstado(g,null);
   if(g.creditoId && creditos[g.creditoId]){
     var cr=creditos[g.creditoId];
@@ -181,6 +184,208 @@ function desmarcarGastoPagado(g,m){
   }
   if(g.agendaId && typeof agSincronizarDesdeGasto==='function') agSincronizarDesdeGasto(g,m,false);
 }
+// ── Abono TC con resto para la quincena siguiente ───────────────────────────────────────────
+// La fecha sugerida de pago de la tarjeta es la Q2 (ver calcFechaSugerida), pero la fecha
+// límite real suele caer en la Q1 del mes siguiente (ej. el 15). Si en la Q2 no alcanza para
+// pagar todo el "Abono TC", se paga una parte y el resto pasa como gasto a la Q1 siguiente:
+//  · El Abono TC queda pagado por lo que sí se pagó (su valor pasa a ese monto).
+//  · El resto pasa como gasto suelto "Resto <tarjeta>" (con su fecha límite) a la Q1 siguiente.
+//    Mientras no se pague, la tarjeta de ESTE mes sigue mostrando ese saldo pendiente, pero no
+//    suma en el valor del grupo de esta quincena (ver tcRestoPendienteMes), para no contarlo
+//    dos veces. Al pagar el resto se registra su abono en la tarjeta de este mes; al
+//    desmarcarlo, se quita (ver restoTCAlPagar / restoTCAlDesmarcar).
+//  · Si el mes siguiente aún no existe, el resto queda guardado en m.tcRestosPendientes y se
+//    agrega a su Q1 al crearlo (ver buildDraftMonth / confirmCreateMonth en gasto-estado.js).
+// Desmarcar el Abono TC deshace todo (ver deshacerRestoTC), salvo que el resto ya se haya pagado.
+function esAbonoTC(g,m){
+  return !!(g&&!g.esGrupo&&g.nombre==='Abono TC'&&tcCardIdDeGasto(g,m));
+}
+function tcFechaLimitePago(m,tcCardId){
+  const t=(m.tarjetas||{})[tcCardId];
+  const fp=t&&t.info&&t.info.fechaPago;
+  if(!fp) return null;
+  const dia=new Date(fp+'T12:00:00').getDate();
+  const mi=MESES.indexOf(m.nombre);
+  if(mi<0||!m.año) return null;
+  const ultimo=new Date(m.año,mi+2,0).getDate();
+  const d=new Date(m.año,mi+1,Math.min(dia,ultimo),12);
+  return d.toISOString().slice(0,10);
+}
+function nombreMesSiguiente(m){
+  const mi=MESES.indexOf(m.nombre);
+  return mi<0?'el mes siguiente':MESES[(mi+1)%12];
+}
+function abrirPagoAbonoTC(g,which){
+  const m=getM();
+  const tcCardId=tcCardIdDeGasto(g,m);
+  const limite=tcFechaLimitePago(m,tcCardId);
+  const destino='Q1 de '+nombreMesSiguiente(m);
+  openModal('<div class="mtitle">Pagar tarjeta</div>'
+    +'<p style="font-size:13px;color:var(--mut);margin-bottom:10px">'+esc(nombreGasto(g))+' · '+cop(g.presupuesto)+'</p>'
+    +'<div class="field"><label>Valor pagado</label>'
+    +'<input id="pgtc-val" type="text" inputmode="numeric" value="'+moneyInputFmt(g.presupuesto)+'" oninput="maskMoneyInput(this);pagoAbonoTCActualizarNota('+Math.abs(g.presupuesto||0)+',\''+destino+'\')"></div>'
+    +'<p id="pgtc-nota" style="font-size:12px;color:var(--mut);line-height:1.5;margin:-4px 0 14px">'
+    +'Si pagas menos, el resto pasa a la <b style="color:var(--txt)">'+destino+'</b>'+(limite?(' (fecha límite '+fmtD(limite)+')'):'')+'.</p>'
+    +'<div class="macts">'
+    +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
+    +'<button class="bpri" onclick="confirmarPagoAbonoTC(\''+g.id+'\',\''+which+'\')">'+btnIcon('check',13)+'Pagar</button>'
+    +'</div>');
+}
+function pagoAbonoTCActualizarNota(total,destino){
+  const el=document.getElementById('pgtc-nota'); if(!el) return;
+  const val=moneyVal('pgtc-val')||0;
+  const resto=Math.round((total-val)*100)/100;
+  el.innerHTML=(val>0&&resto>0)
+    ?('Resto de <b style="color:var(--amb)">'+cop(resto)+'</b> pasa a la <b style="color:var(--txt)">'+destino+'</b>.')
+    :'Se paga el abono completo.';
+}
+function confirmarPagoAbonoTC(id,which){
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(function(x){return x.id===id;});
+  if(!g) return;
+  const total=Math.abs(g.presupuesto||0);
+  const val=moneyVal('pgtc-val')||0;
+  if(val<=0){ showAlert('El valor pagado debe ser mayor a 0'); return; }
+  const resto=Math.round((total-val)*100)/100;
+  if(resto<1){
+    marcarGastoPagado(g,m);
+    save();closeModal();render();toast('Abono a la tarjeta registrado');
+    return;
+  }
+  pasarRestoAbonoTC(g,m,val,resto);
+  save();closeModal();render();
+  toast('Pagaste '+cop(val)+'. El resto de '+cop(resto)+' pasó a la Q1 de '+nombreMesSiguiente(m)+'.',5000);
+}
+function pasarRestoAbonoTC(g,m,val,resto){
+  const tcCardId=tcCardIdDeGasto(g,m);
+  const parent=[...(m.q1_gastos||[]),...(m.q2_gastos||[])].find(function(x){return x.id===g.parentId;});
+  const kOrigen=Number(Object.keys(db).find(function(k){return db[k]===m;}));
+  g.presupuesto=val;
+  // El resto queda registrado ANTES de marcar el abono: syncTCGrupo (que corre al marcarlo) ya
+  // lo descuenta del valor del grupo en esta quincena.
+  g.tcRestoInfo={monto:resto,gastoId:null,mesKey:null,pagado:false};
+  marcarGastoPagado(g,m); // registra el abono por lo pagado y sincroniza el grupo
+  const restoGasto={
+    id:uid(),nombre:'Resto '+(parent?nombreGasto(parent):'tarjeta'),presupuesto:resto,
+    metodo:(parent&&parent.metodo)||g.metodo||'',pagado_real:null,estado:null,pagado_flag:false,
+    sinpagar:false,parentId:null,esGrupo:false,cuotas_total:0,cuota_actual:0,
+    tcResto:{tcCardId:tcCardId,fechaLimite:tcFechaLimitePago(m,tcCardId),mesOrigen:kOrigen,abonoId:g.id}
+  };
+  const kSig=kOrigen+1;
+  const mesSig=db[kSig];
+  if(mesSig){
+    if(!mesSig.q1_gastos) mesSig.q1_gastos=[];
+    mesSig.q1_gastos.push(restoGasto);
+    agregarRefRestoTC(mesSig,restoGasto,m);
+  } else {
+    if(!m.tcRestosPendientes) m.tcRestosPendientes=[];
+    m.tcRestosPendientes.push(restoGasto);
+  }
+  g.tcRestoInfo.gastoId=restoGasto.id;
+  g.tcRestoInfo.mesKey=mesSig?kSig:null;
+  syncTCGrupo(m);
+}
+// Resto trasladado que todavía NO se ha pagado, por tarjeta, en un mes (ver syncTCGrupo): esa
+// parte del saldo ya no se paga en esta quincena sino en la Q1 siguiente, así que no debe
+// sumarse aquí al valor del grupo de la tarjeta (se contaría dos veces).
+function tcRestoPendienteMes(m,tcCardId){
+  return [...(m.q1_gastos||[]),...(m.q2_gastos||[])].reduce(function(a,g){
+    if(!g.tcRestoInfo||g.tcRestoInfo.pagado) return a;
+    const grupo=[...(m.q1_gastos||[]),...(m.q2_gastos||[])].find(function(x){return x.id===g.parentId;});
+    return (grupo&&grupo.tcCardId===tcCardId)?a+(g.tcRestoInfo.monto||0):a;
+  },0);
+}
+// Pagar el "Resto <tarjeta>" registra el abono en la tarjeta del mes de ORIGEN (es la deuda de
+// ese extracto) y marca el traslado como pagado; desmarcarlo quita ese abono. Así la tarjeta
+// solo muestra como abonado lo que de verdad se pagó.
+function restoTCAlPagar(r,monto,mesDelResto){
+  const info=r.tcResto, mo=db[info.mesOrigen];
+  marcarRefRestoTC(mesDelResto,r,true);
+  if(!mo) return;
+  const ab=[...(mo.q1_gastos||[]),...(mo.q2_gastos||[])].find(function(x){return x.id===info.abonoId;});
+  const t=getTC(mo,info.tcCardId);
+  const movId=uid();
+  t.movimientos.push({id:movId,descripcion:nombreGasto(r)+' (Q1 '+(db[info.mesOrigen+1]?db[info.mesOrigen+1].nombre:'siguiente')+')',
+    tipo:'Abono',valor:-Math.abs(monto||r.presupuesto||0),fecha:new Date().toISOString().slice(0,10),saldo:null});
+  r.tcMovimientoId=movId;
+  if(ab&&ab.tcRestoInfo) ab.tcRestoInfo.pagado=true;
+  syncTCGrupo(mo);
+}
+function restoTCAlDesmarcar(r,mesDelResto){
+  const info=r.tcResto, mo=db[info.mesOrigen];
+  marcarRefRestoTC(mesDelResto,r,false);
+  if(!mo) return;
+  if(r.tcMovimientoId){
+    const t=getTC(mo,info.tcCardId);
+    t.movimientos=t.movimientos.filter(function(x){return x.id!==r.tcMovimientoId;});
+    r.tcMovimientoId=null;
+  }
+  const ab=[...(mo.q1_gastos||[]),...(mo.q2_gastos||[])].find(function(x){return x.id===info.abonoId;});
+  if(ab&&ab.tcRestoInfo) ab.tcRestoInfo.pagado=false;
+  syncTCGrupo(mo);
+}
+// Movimiento de REFERENCIA en la tarjeta del mes siguiente: "Saldo pendiente de <mes>". Es solo
+// informativo (tipo 'SaldoAnterior': calcTCSaldo y los totales solo suman 'Compra'/'Abono', así
+// que no cambia el saldo de este mes ni su Abono TC). Queda "Pendiente" hasta que se paga el
+// Resto, entonces pasa a "Pagado" — no se borra, para dejar constancia de que ese saldo se movió.
+// Solo desaparece si se deshace el traslado (desmarcar el Abono TC del mes de origen).
+function agregarRefRestoTC(mesDestino,restoGasto,mesOrigen){
+  const tcCardId=restoGasto.tcResto.tcCardId;
+  if(!mesDestino.tarjetas||!mesDestino.tarjetas[tcCardId]) return;
+  const t=mesDestino.tarjetas[tcCardId];
+  if(!Array.isArray(t.movimientos)) t.movimientos=[];
+  if(t.movimientos.some(function(x){return x.restoGastoId===restoGasto.id;})) return;
+  const mi=MESES.indexOf(mesDestino.nombre);
+  t.movimientos.push({
+    id:uid(),tipo:'SaldoAnterior',descripcion:'Saldo pendiente de '+(mesOrigen?mesOrigen.nombre:'el mes anterior'),
+    valor:Math.abs(restoGasto.presupuesto||0),
+    fecha:(mi>=0&&mesDestino.año)?(mesDestino.año+'-'+String(mi+1).padStart(2,'0')+'-01'):new Date().toISOString().slice(0,10),
+    saldo:null,restoGastoId:restoGasto.id,pagado:!!restoGasto.pagado_flag
+  });
+}
+function marcarRefRestoTC(mes,restoGasto,pagado){
+  if(!mes||!restoGasto.tcResto) return;
+  const t=(mes.tarjetas||{})[restoGasto.tcResto.tcCardId];
+  const ref=t&&(t.movimientos||[]).find(function(x){return x.restoGastoId===restoGasto.id;});
+  if(ref) ref.pagado=pagado;
+}
+function quitarRefRestoTC(mes,restoGastoId){
+  Object.values(mes.tarjetas||{}).forEach(function(t){
+    t.movimientos=(t.movimientos||[]).filter(function(x){return x.restoGastoId!==restoGastoId;});
+  });
+}
+// Busca el gasto "Resto" que generó este Abono TC (en la Q1 del mes siguiente o, si ese mes
+// aún no existía, en la lista de pendientes del mes del abono).
+function buscarRestoTC(g,m){
+  const info=g.tcRestoInfo; if(!info) return null;
+  if(info.mesKey!=null&&db[info.mesKey]){
+    const lista=db[info.mesKey].q1_gastos||[];
+    const r=lista.find(function(x){return x.id===info.gastoId;});
+    if(r) return {lista:lista,gasto:r};
+  }
+  const pend=(m||getM()).tcRestosPendientes||[];
+  const r2=pend.find(function(x){return x.id===info.gastoId;});
+  return r2?{lista:pend,gasto:r2}:null;
+}
+function restoTCYaPagado(g){
+  if(!g||!g.tcRestoInfo) return false;
+  const r=buscarRestoTC(g,getM());
+  return !!(r&&r.gasto.pagado_flag);
+}
+function deshacerRestoTC(g,m){
+  const info=g.tcRestoInfo;
+  const r=buscarRestoTC(g,m);
+  // Si el resto ya se pagó (p. ej. al desmarcar todo el grupo de un tirón), no se toca nada.
+  if(r&&r.gasto.pagado_flag) return;
+  if(r){ const i=r.lista.indexOf(r.gasto); if(i>=0) r.lista.splice(i,1); }
+  if(info.mesKey!=null&&db[info.mesKey]) quitarRefRestoTC(db[info.mesKey],info.gastoId);
+  // Compatibilidad con la primera versión, que registraba un movimiento de "traslado".
+  if(info.movId){
+    const tcCardId=tcCardIdDeGasto(g,m);
+    if(tcCardId){ const t=getTC(m,tcCardId); t.movimientos=t.movimientos.filter(function(x){return x.id!==info.movId;}); }
+  }
+  delete g.tcRestoInfo;
+}
 // Tarjeta a la que pertenece el grupo de este gasto (esGrupo+tcCardId), o null si no vive
 // dentro de un grupo así — usado para decidir si al pagar corresponde preguntar a qué
 // movimiento se asocia el abono (ver toggleP y abrirAsociarPagosGrupoTC).
@@ -200,8 +405,15 @@ function toggleP(e,id,which){
     return;
   }
   if(g.pagado_flag){
+    if(restoTCYaPagado(g)){
+      showAlert('El resto de este abono ('+cop(g.tcRestoInfo.monto)+') ya se pagó en la quincena siguiente. Desmárcalo allá primero.',{title:'No se puede desmarcar'});
+      return;
+    }
     desmarcarGastoPagado(g,m);
     save();render();
+  } else if(esAbonoTC(g,m)){
+    if(bloquearPagoFueraDeOrden(g)) return;
+    abrirPagoAbonoTC(g,which);
   } else if(g.metodo==='PSE' || g.mensualidad){
     openPagoModal(g,which);
   } else {
@@ -440,6 +652,7 @@ function confirmarPago(id,which){
   setGastoEstado(g,'pagado');
   g.pagado_real=val;
   g.fecha_pago=fecha;
+  if(g.tcResto){ if(g.tcMovimientoId) restoTCAlDesmarcar(g,m); restoTCAlPagar(g,val,m); }
   g.comprobante=comp;
   if(mens!==null) g.mensualidad=mens;
 

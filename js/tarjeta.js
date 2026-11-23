@@ -154,6 +154,7 @@ function editTCInfo(){
 }
 function saveTCInfo(){
   const m=getM(); const t=getTC(m);
+  if(!t.info) t.info={fechaCorte:null,fechaPago:null,cupo:null,marca:null,ultimos4:null};
   const nombre=document.getElementById('tci-nombre').value.trim();
   if(nombre) t.nombre=nombre;
   const marcaSel=document.getElementById('tci-marca');
@@ -190,7 +191,12 @@ function syncTCGrupo(m){
     if(idx>=0) listas.q1.splice(idx,1);
   });
   ['q1','q2'].forEach(function(which){
-    gruposPorQ[which].forEach(function(g){ g.presupuesto=calcTCSaldo(m, g.tcCardId); });
+    // Menos el resto trasladado a la Q1 siguiente que aún no se paga (ver pasarRestoAbonoTC en
+    // gasto-pago.js): sigue siendo saldo de la tarjeta, pero ya no se paga en esta quincena.
+    gruposPorQ[which].forEach(function(g){
+      var restoFuera=(typeof tcRestoPendienteMes==='function')?tcRestoPendienteMes(m,g.tcCardId):0;
+      g.presupuesto=Math.round((calcTCSaldo(m, g.tcCardId)-restoFuera)*100)/100;
+    });
   });
 
   gruposPorQ.q2.forEach(function(g){
