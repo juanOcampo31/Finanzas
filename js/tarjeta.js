@@ -46,7 +46,7 @@ function setTC(tipo){
 }
 function calcFechaSugerida(fechaPagoStr){
   // La fecha de pago se guarda con un día fijo (ej. día 15).
-  // La fecha sugerida = último día del mes en que cae la Q2 del mes actual del gasto.
+  // La fecha sugerida = día de pago de la Q2 (Mi perfil → Días de pago) del mes actual del gasto.
   // Ej: mes actual = Junio, pago el día 15 → sugerida = último día de Junio (30 jun)
   // porque el pago del siguiente mes (15 Jul) se debe hacer con Q2 de Junio.
   if(!fechaPagoStr) return null;
@@ -65,10 +65,10 @@ function calcFechaSugerida(fechaPagoStr){
   var añoPago = añoActual;
   if(mesPago > 11){ mesPago = 0; añoPago++; }
 
-  // Fecha sugerida = último día de MES ACTUAL (= Q2 del mes actual)
-  const ultimoDiaMesActual = new Date(añoActual, mesActual + 1, 0).getDate();
-  const sug = new Date(añoActual, mesActual, ultimoDiaMesActual);
-  return sug.toISOString().slice(0,10);
+  // Fecha sugerida = día de pago de la Q2 del mes actual, según Mi perfil → Días de pago (antes
+  // era siempre el último día del mes, sin importar qué día te paguen la Q2).
+  const sug = getPago(añoActual, mesActual).q2;
+  return new Date(sug.getFullYear(), sug.getMonth(), sug.getDate(), 12).toISOString().slice(0,10);
 }
 
 function toggleSummary(){
@@ -146,7 +146,7 @@ function editTCInfo(){
     +'<div class="field"><label>Fecha de pago</label>'
     +'<input id="tci-pago" type="date" value="'+(info.fechaPago||'')+'"></div>'
     +'<p style="font-size:12px;color:var(--mut);margin-top:4px;line-height:1.5">'
-    +'La <b style="color:var(--txt)">fecha sugerida</b> se calcula automáticamente como la quincena (día 15 o fin de mes) inmediatamente anterior a tu fecha de pago.</p>'
+    +'La <b style="color:var(--txt)">fecha sugerida</b> es tu día de pago de la Q2 (Mi perfil → Días de pago), antes de la fecha de pago de la tarjeta. Al pagar el Abono TC puedes pasar una parte o todo a la Q1 siguiente.</p>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="saveTCInfo()">Guardar</button>'

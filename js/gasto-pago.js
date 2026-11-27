@@ -144,6 +144,7 @@ function marcarGastoPagado(g,m,opts){
   if(g.agendaId && typeof agSincronizarDesdeGasto==='function') agSincronizarDesdeGasto(g,m,true);
 }
 function desmarcarGastoPagado(g,m){
+  const teniaResto=!!g.tcRestoInfo;
   if(g.tcRestoInfo) deshacerRestoTC(g,m);
   if(g.tcResto) restoTCAlDesmarcar(g,m);
   setGastoEstado(g,null);
@@ -183,6 +184,7 @@ function desmarcarGastoPagado(g,m){
     }
   }
   if(g.agendaId && typeof agSincronizarDesdeGasto==='function') agSincronizarDesdeGasto(g,m,false);
+  if(teniaResto) syncTCGrupo(m); // el Abono TC vuelve a pedir el saldo completo
 }
 // ── Abono TC con resto para la quincena siguiente ───────────────────────────────────────────
 // La fecha sugerida de pago de la tarjeta es la Q2 (ver calcFechaSugerida), pero la fecha
@@ -226,10 +228,24 @@ function abrirPagoAbonoTC(g,which){
     +'<input id="pgtc-val" type="text" inputmode="numeric" value="'+moneyInputFmt(g.presupuesto)+'" oninput="maskMoneyInput(this);pagoAbonoTCActualizarNota('+Math.abs(g.presupuesto||0)+',\''+destino+'\')"></div>'
     +'<p id="pgtc-nota" style="font-size:12px;color:var(--mut);line-height:1.5;margin:-4px 0 14px">'
     +'Si pagas menos, el resto pasa a la <b style="color:var(--txt)">'+destino+'</b>'+(limite?(' (fecha límite '+fmtD(limite)+')'):'')+'.</p>'
+    +'<button class="btn-sutil" style="width:100%;padding:9px 10px;font-size:12.5px;margin-bottom:12px;border-radius:var(--r2)" onclick="pasarTodoAbonoTC(\''+g.id+'\',\''+which+'\')">Pagar todo en la '+destino+'</button>'
     +'<div class="macts">'
     +'<button class="bcnl" onclick="closeModal()">Cancelar</button>'
     +'<button class="bpri" onclick="confirmarPagoAbonoTC(\''+g.id+'\',\''+which+'\')">'+btnIcon('check',13)+'Pagar</button>'
     +'</div>');
+}
+// La quincena en que se paga la tarjeta la decide el usuario en cada pago: si la fecha límite
+// cae en la Q1 del mes siguiente, puede no abonar nada ahora y pasar todo el saldo allá (mismo
+// mecanismo que el resto parcial, ver pasarRestoAbonoTC).
+function pasarTodoAbonoTC(id,which){
+  const m=getM(),list=which==='q1'?m.q1_gastos:m.q2_gastos;
+  const g=list.find(function(x){return x.id===id;});
+  if(!g) return;
+  const total=Math.abs(g.presupuesto||0);
+  if(total<1){ showAlert('No hay saldo para pasar.'); return; }
+  pasarRestoAbonoTC(g,m,0,total);
+  save();closeModal();render();
+  toast('El pago de '+cop(total)+' pasó a la Q1 de '+nombreMesSiguiente(m)+'.',5000);
 }
 function pagoAbonoTCActualizarNota(total,destino){
   const el=document.getElementById('pgtc-nota'); if(!el) return;
@@ -264,9 +280,10 @@ function pasarRestoAbonoTC(g,m,val,resto){
   // El resto queda registrado ANTES de marcar el abono: syncTCGrupo (que corre al marcarlo) ya
   // lo descuenta del valor del grupo en esta quincena.
   g.tcRestoInfo={monto:resto,gastoId:null,mesKey:null,pagado:false};
-  marcarGastoPagado(g,m); // registra el abono por lo pagado y sincroniza el grupo
+  // Sin abono (todo pasa a la Q1 siguiente): se marca resuelto aquí sin movimiento en la tarjeta.
+  marcarGastoPagado(g,m,val>0?{}:{sinMovimientoTC:true}); // registra el abono por lo pagado y sincroniza el grupo
   const restoGasto={
-    id:uid(),nombre:'Resto '+(parent?nombreGasto(parent):'tarjeta'),presupuesto:resto,
+    id:uid(),nombre:(val>0?'Resto ':'Pago ')+(parent?nombreGasto(parent):'tarjeta'),presupuesto:resto,
     metodo:(parent&&parent.metodo)||g.metodo||'',pagado_real:null,estado:null,pagado_flag:false,
     sinpagar:false,parentId:null,esGrupo:false,cuotas_total:0,cuota_actual:0,
     tcResto:{tcCardId:tcCardId,fechaLimite:tcFechaLimitePago(m,tcCardId),mesOrigen:kOrigen,abonoId:g.id}

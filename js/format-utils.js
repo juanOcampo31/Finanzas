@@ -355,13 +355,18 @@ function nextBiz(d) {
 }
 // Lo que venga guardado (o nada, en datos/respaldos de antes de esta opción) → configuración
 // válida. Por defecto, el comportamiento de siempre: 15, último día y día hábil anterior.
+// cuotaDiasAntes: las cuotas de crédito que vencen entre el día 1 y este día del mes se
+// muestran en la Q2 del mes ANTERIOR, para tener con qué pagarlas antes de que venzan (ver
+// calcQuincenaCuota en catalogos.js). 10 es la regla de siempre; 0 = cada cuota en la
+// quincena de su fecha (1-15 → Q1, 16-fin → Q2).
 function normalizarPerfilPago(p){
   p=p||{};
-  const d1=parseInt(p.diaQ1,10), d2=parseInt(p.diaQ2,10);
+  const d1=parseInt(p.diaQ1,10), d2=parseInt(p.diaQ2,10), da=parseInt(p.cuotaDiasAntes,10);
   return {
     diaQ1:(d1>=1&&d1<=15)?d1:15,
     diaQ2:(d2>=16&&d2<=31)?d2:0, // 0 = último día del mes
-    ajuste:p.ajuste==='siguiente'?'siguiente':'anterior'
+    ajuste:p.ajuste==='siguiente'?'siguiente':'anterior',
+    cuotaDiasAntes:(da>=0&&da<=15)?da:10
   };
 }
 // Fechas de pago de la nómina del mes: el día configurado (Mi perfil → Días de pago, ver

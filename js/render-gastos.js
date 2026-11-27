@@ -177,7 +177,7 @@ function renderGastos(gastos,which) {
     // La forma de pago ya no va acá debajo del nombre (queda solo debajo del valor, ver
     // subRealLine) — este renglón ahora es para "Pagado"/"Sin pagar"/"Vencido"/"Vence hoy". "Sin
     // pagar" y "Vencido" son mutuamente excluyentes (ver buildGastoBadges), uno reemplaza al otro.
-    var subMeta=sp?('Pagado'+(s.tcRestoInfo?' · resto '+cop(s.tcRestoInfo.monto)+' a la Q1 siguiente':'')):st?'<span class="nopag-badge">Aplazado</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
+    var subMeta=sp?((s.tcRestoInfo&&!s.presupuesto)?'Pasó a la Q1 siguiente':('Pagado'+(s.tcRestoInfo?' · resto '+cop(s.tcRestoInfo.monto)+' a la Q1 siguiente':''))):st?'<span class="nopag-badge">Aplazado</span>':(badges.vencidoBadge||(badges.hoyFlag?'<span class="gst-alerta">Vence hoy</span>':''));
     var chkTxt=sp?icon('check',11):st?icon('arrowRight',11):'';
     // "Pag: $X" de pagos parciales (ver abrirAbonosGasto en gasto-pago.js) va debajo del monto;
     // si no hay pago parcial, cae a "Real: $X" (pagó distinto a lo presupuestado) y si tampoco,

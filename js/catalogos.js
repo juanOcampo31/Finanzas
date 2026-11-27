@@ -606,13 +606,15 @@ function openNewMonth(){
     +'<button class="bpri" onclick="createMonth()">Crear '+sig+'</button></div>');
 }
 // A qué (año, mes, quincena) pertenece una cuota según su fecha real de vencimiento — no es
-// simplemente "día≤15 → Q1 del mismo mes": los primeros 10 días del mes se consideran parte
+// simplemente "día≤15 → Q1 del mismo mes": los primeros N días del mes (N configurable en
+// Mi perfil → Días de pago, 10 por defecto, ver normalizarPerfilPago) se consideran parte
 // del Q2 del mes ANTERIOR (para que la cuota se vea con tiempo de pagarla antes de que venza,
 // en vez de aparecer recién el mismo día 1). Si sigue sin pagar cuando el mes siguiente ya
 // existe, moverCuotasVencidasAlMesSiguiente() la reubica en Q1 de ese mes como vencida.
 function calcQuincenaCuota(fechaDate){
   var dia=fechaDate.getDate(), y=fechaDate.getFullYear(), m=fechaDate.getMonth();
-  if(dia<=10){
+  var diasAntes=normalizarPerfilPago(typeof perfilPago!=='undefined'?perfilPago:null).cuotaDiasAntes;
+  if(dia<=diasAntes){
     m=m-1;
     if(m<0){ m=11; y=y-1; }
     return {año:y,mes:m,which:'q2'};

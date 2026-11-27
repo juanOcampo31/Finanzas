@@ -180,6 +180,8 @@ function buildDraftMonth(){
   // recurrente sí debe seguir generándose para el mes nuevo, pero eso ya lo hace por su cuenta
   // agGenerarSiguienteRecurrente (agenda.js) al pagar el periodo actual, no esta copia.
   nm.agenda = [];
+  // Recordatorios creados para este mes antes de que existiera (ver agMaterializarFuturos).
+  if(typeof agMaterializarFuturos==="function") agMaterializarFuturos(lm,nm); else delete nm.agendaFutura;
   // Los gastos hormiga son compras ya hechas en el mes que se cierra — el mes nuevo arranca
   // sin ninguna (si no, la copia profunda las duplicaba y restaban del disponible nuevo).
   nm.hormiga = {q1:[], q2:[]};
@@ -367,6 +369,7 @@ function confirmCreateMonth(){
     // el Abono TC que los generó ahora debe encontrarlos ahí (ver buscarRestoTC).
     (db[nk-1].q2_gastos||[]).forEach(function(g){ if(g.tcRestoInfo&&g.tcRestoInfo.mesKey==null) g.tcRestoInfo.mesKey=nk; });
     delete db[nk-1].tcRestosPendientes;
+    delete db[nk-1].agendaFutura; // ya pasaron al mes nuevo (ver agMaterializarFuturos)
   }
   db[nk]=nm;
   save();curM=nk;curTab=0;homeQ=homeQParaMes(nm);curNomQ=homeQ;

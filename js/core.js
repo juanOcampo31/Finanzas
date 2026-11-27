@@ -85,7 +85,15 @@ let lockMode    = 'unlock';// 'unlock' | 'setup1' | 'setup2'
 let lockInput   = '';
 let lockFirstPin= '';
 
-function b64enc(buf){ return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+// Por partes de 32 KB: String.fromCharCode.apply con TODOS los bytes de una vez excede el límite
+// de argumentos del navegador cuando los datos crecen (~200 KB: "Maximum call stack size
+// exceeded"), y entonces save() fallaba con "No se pudieron guardar los últimos cambios".
+function b64enc(buf){
+  const bytes=new Uint8Array(buf), CH=0x8000;
+  let bin='';
+  for(let i=0;i<bytes.length;i+=CH) bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+CH));
+  return btoa(bin);
+}
 function b64dec(str){ const bin=atob(str); const arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i); return arr.buffer; }
 
 // Antes este número vivía duplicado (aquí y en encryptString) — con riesgo de que se

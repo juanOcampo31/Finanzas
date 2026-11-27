@@ -228,6 +228,8 @@ footer .wrap{padding-block:18px calc(28px + env(safe-area-inset-bottom,0px))}
     <li>El valor del grupo es el <b>saldo de la tarjeta</b>.</li>
     <li>En la <b>Q2</b>, la app crea un gasto <b>"Abono TC"</b> por lo que tienes que pagar: el saldo menos los gastos del grupo que todavía no pagas, para no cobrarte dos veces.</li>
     <li>Si en la Q2 no alcanzas a pagarlo todo, al marcar el <b>Abono TC</b> escribe lo que sí pagaste: el resto pasa como gasto <b>"Resto &lt;tarjeta&gt;"</b> a la <b>Q1 del mes siguiente</b>, con su fecha límite. Si ese mes aún no existe, aparece al crearlo. La tarjeta sigue mostrando ese saldo hasta que pagues el resto; desmarcarlo quita el abono. Desmarcar el Abono TC deshace todo.</li>
+    <li>Si tu fecha límite cae en la Q1 del mes siguiente y prefieres pagar ahí, en esa misma ventana toca <b>"Pagar todo en la Q1 de &lt;mes&gt;"</b>: no abonas nada en la Q2 y el pago completo pasa como <b>"Pago &lt;tarjeta&gt;"</b> a esa Q1.</li>
+    <li>La <b>fecha sugerida de pago</b> que muestra la tarjeta es tu día de pago de la Q2 (Mi perfil → Días de pago).</li>
     <li>En la <b>Q1</b>, el saldo se muestra solo como información y no resta del disponible. Los gastos que agregues al grupo sí restan.</li>
     <li>Pagar un gasto del grupo registra un <b>abono</b> en la tarjeta.</li>
   </ul>
@@ -245,6 +247,7 @@ footer .wrap{padding-block:18px calc(28px + env(safe-area-inset-bottom,0px))}
       <tr><td class="num">16 a fin de mes</td><td>Q2 del mismo mes</td></tr>
     </tbody>
   </table></div>
+  <p class="rule">El "1 al 10" es el valor por defecto. Lo cambias en <b>Mi perfil → Días de pago → Cuotas de crédito que vencen a inicio de mes</b>: del 1 al 15, o ninguno para que cada cuota quede en la quincena de su fecha. Aplica a las cuotas que se generen desde ese momento.</p>
   <ul>
     <li><b>Al crear un crédito</b>, sus cuotas se agregan en los meses que ya existen, desde el mes actual en adelante. Los meses nuevos reciben la suya al crearlos.</li>
     <li>Las cuotas se pagan <b>en orden</b>: no puedes marcar una si la anterior sigue pendiente.</li>

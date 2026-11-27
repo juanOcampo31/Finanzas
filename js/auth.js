@@ -613,7 +613,8 @@ function guardarTipoIngreso(t){
 // ── Días de pago de la nómina (ver getPago en format-utils.js) ────────────────
 function textoDiasPago(){
   const p=normalizarPerfilPago(perfilPago);
-  return 'Q1 el '+p.diaQ1+' · Q2 '+(p.diaQ2?('el '+p.diaQ2):'el último día')+' · festivo: hábil '+p.ajuste;
+  return 'Q1 el '+p.diaQ1+' · Q2 '+(p.diaQ2?('el '+p.diaQ2):'el último día')+' · festivo: hábil '+p.ajuste
+    +' · cuotas: '+(p.cuotaDiasAntes?('días 1-'+p.cuotaDiasAntes+' en la Q2 anterior'):'en su quincena');
 }
 function openDiasPago(){
   const p=normalizarPerfilPago(perfilPago);
@@ -632,7 +633,12 @@ function openDiasPago(){
     +'<button class="topt'+(p.ajuste==='anterior'?' sa':'')+'" id="dp-ant" onclick="setAjusteDiasPago(\'anterior\')">Día hábil anterior</button>'
     +'<button class="topt'+(p.ajuste==='siguiente'?' sa':'')+'" id="dp-sig" onclick="setAjusteDiasPago(\'siguiente\')">Día hábil siguiente</button>'
     +'</div></div>'
-    +'<p style="font-size:11.5px;color:var(--mut);line-height:1.5;margin-bottom:4px">Si eliges un día que el mes no tiene (por ejemplo 31 en un mes de 30), se toma el último día de ese mes.</p>'
+    +'<p style="font-size:11.5px;color:var(--mut);line-height:1.5;margin-bottom:12px">Si eliges un día que el mes no tiene (por ejemplo 31 en un mes de 30), se toma el último día de ese mes.</p>'
+    +'<div class="field"><label>Cuotas de crédito que vencen a inicio de mes</label><select id="dp-cuota">'
+    +'<option value="0"'+(p.cuotaDiasAntes===0?' selected':'')+'>Mostrarlas en su quincena (1-15 → Q1)</option>'
+    +(function(){var h='';for(var d=1;d<=15;d++) h+='<option value="'+d+'"'+(d===p.cuotaDiasAntes?' selected':'')+'>Del 1 al '+d+': en la Q2 del mes anterior</option>';return h;})()
+    +'</select></div>'
+    +'<p style="font-size:11.5px;color:var(--mut);line-height:1.5;margin-bottom:4px">Así una cuota que vence el día 5 aparece en la quincena anterior y alcanzas a pagarla con ese pago. Aplica a las cuotas que se generen de aquí en adelante.</p>'
     +'<div class="macts" style="margin-top:12px"><button class="bcnl" onclick="openSecurityMenu()">Cancelar</button>'
     +'<button class="bpri" onclick="guardarDiasPago()">Guardar</button></div>');
 }
@@ -645,7 +651,8 @@ function guardarDiasPago(){
   perfilPago=normalizarPerfilPago({
     diaQ1:document.getElementById('dp-q1').value,
     diaQ2:document.getElementById('dp-q2').value,
-    ajuste:window._diasPagoAjuste
+    ajuste:window._diasPagoAjuste,
+    cuotaDiasAntes:document.getElementById('dp-cuota').value
   });
   save(); render(); openSecurityMenu();
   toast('Días de pago actualizados ✓');

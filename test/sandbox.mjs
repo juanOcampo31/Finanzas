@@ -84,7 +84,7 @@ export function loadApp(){
   const sandbox = {
     console,
     Math, Date, JSON, RegExp, Error, Array, Object, Map, Set, Promise,
-    TextEncoder, TextDecoder,
+    TextEncoder, TextDecoder, btoa, atob,
     crypto: globalThis.crypto,
     localStorage: makeFakeLocalStorage(),
     document: fakeDocument,

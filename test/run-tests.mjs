@@ -432,8 +432,8 @@ test('getPago: días configurables y corrimiento al día hábil siguiente', () =
   ctx.__internals.perfilPago = { diaQ1: 15, diaQ2: 31, ajuste: 'anterior' };
   assert.equal(f(ctx.getPago(2026, 8).q2), '2026-09-30');
   // Datos viejos/inválidos → valores por defecto
-  assert.equal(JSON.stringify(ctx.normalizarPerfilPago(undefined)), JSON.stringify({ diaQ1: 15, diaQ2: 0, ajuste: 'anterior' }));
-  assert.equal(JSON.stringify(ctx.normalizarPerfilPago({ diaQ1: 40, diaQ2: 3, ajuste: 'x' })), JSON.stringify({ diaQ1: 15, diaQ2: 0, ajuste: 'anterior' }));
+  assert.equal(JSON.stringify(ctx.normalizarPerfilPago(undefined)), JSON.stringify({ diaQ1: 15, diaQ2: 0, ajuste: 'anterior', cuotaDiasAntes: 10 }));
+  assert.equal(JSON.stringify(ctx.normalizarPerfilPago({ diaQ1: 40, diaQ2: 3, ajuste: 'x' })), JSON.stringify({ diaQ1: 15, diaQ2: 0, ajuste: 'anterior', cuotaDiasAntes: 10 }));
 });
 
 // ── Ingresos directo al disponible y tipo de ingreso ────────────────────────
@@ -526,4 +526,64 @@ test('abono TC parcial: el resto pasa a la Q1 siguiente sin contarse dos veces; 
   assert.equal(ab.presupuesto, 1000000);
   assert.equal(dic.q1_gastos.length, 0);
   assert.equal(ref(), undefined);
+});
+
+// ── Cuotas de crédito: días de inicio de mes que pasan a la Q2 anterior (configurable) ──
+test('calcQuincenaCuota: regla de días antes configurable (10 por defecto, 0 = su quincena)', () => {
+  const ctx = loadApp();
+  const q = (f) => { const r = ctx.calcQuincenaCuota(new Date(f + 'T12:00:00')); return r.año + '-' + (r.mes + 1) + '-' + r.which; };
+  // Por defecto (10): el 5 y el 10 van a la Q2 del mes anterior, el 11 a la Q1
+  assert.equal(q('2026-12-05'), '2026-11-q2');
+  assert.equal(q('2026-12-10'), '2026-11-q2');
+  assert.equal(q('2026-12-11'), '2026-12-q1');
+  assert.equal(q('2027-01-03'), '2026-12-q2');
+  // 0: cada cuota en la quincena de su fecha
+  ctx.__internals.perfilPago = { diaQ1: 15, diaQ2: 0, ajuste: 'anterior', cuotaDiasAntes: 0 };
+  assert.equal(q('2026-12-05'), '2026-12-q1');
+  assert.equal(q('2026-12-20'), '2026-12-q2');
+  // 15: toda la primera quincena se adelanta a la Q2 anterior
+  ctx.__internals.perfilPago = { diaQ1: 15, diaQ2: 0, ajuste: 'anterior', cuotaDiasAntes: 15 };
+  assert.equal(q('2026-12-15'), '2026-11-q2');
+  assert.equal(q('2026-12-16'), '2026-12-q2');
+  // Valor inválido: vuelve a 10
+  assert.equal(ctx.normalizarPerfilPago({ cuotaDiasAntes: 40 }).cuotaDiasAntes, 10);
+});
+
+// ── b64enc con datos grandes (save() fallaba al pasar ~200 KB) ──────────────
+test('b64enc/b64dec: datos grandes (1 MB) sin "Maximum call stack size exceeded"', () => {
+  const ctx = loadApp();
+  const big = new Uint8Array(1024 * 1024);
+  for (let i = 0; i < big.length; i++) big[i] = (i * 31 + 7) & 255;
+  const back = new Uint8Array(ctx.b64dec(ctx.b64enc(big.buffer)));
+  assert.equal(back.length, big.length);
+  assert.ok(back.every((v, i) => v === big[i]));
+  assert.equal(ctx.b64enc(new Uint8Array([1, 2, 250]).buffer), 'AQL6');
+});
+
+// ── Agenda: recordatorios en meses que todavía no existen ────────────────────
+test('agenda: un recordatorio de un mes sin crear queda guardado y pasa a ese mes al crearlo', () => {
+  const ctx = loadApp(); const I = ctx.__internals;
+  I.db = {0:{nombre:'Noviembre',año:2026,q1_gastos:[],q2_gastos:[],nomina:{},hormiga:{q1:[],q2:[]},ingresos:{q1:[],q2:[]},agenda:[],tarjetas:{}}};
+  const nov = I.db[0];
+  assert.equal(ctx.agFechaEsFutura('2026-12-05'), true);
+  assert.equal(ctx.agFechaEsFutura('2026-11-20'), false);
+  assert.equal(ctx.agFechaEsFutura('2026-10-05'), false); // pasado sin crear: no es "futuro"
+  // Pago de diciembre con su gasto en la Q1
+  const item = {id:'R1',tipo:'pago',concepto:'Seguro',fecha:'2026-12-05',monto:80000,repetir:'nunca',tildado:false,gastoId:'G1',which:'q1',formaPago:'Débito'};
+  ctx.agGuardarFuturo(item, {id:'G1',nombre:'Seguro',presupuesto:80000,metodo:'Débito',estado:null,pagado_flag:false,sinpagar:false,agendaId:'R1'});
+  // El siguiente periodo de un recurrente de noviembre también queda guardado (antes se perdía)
+  ctx.agGenerarSiguienteRecurrente({id:'R0',tipo:'pago',concepto:'Arriendo',fecha:'2026-11-20',monto:1000000,repetir:'mensual',gastoId:'X',formaPago:'Débito'});
+  assert.equal(nov.agendaFutura.length, 2);
+  assert.equal(nov.agenda.length, 0);
+  assert.equal(nov.q1_gastos.length + nov.q2_gastos.length, 0); // nada cayó en noviembre
+  // Al crear diciembre, ambos pasan a su agenda y sus gastos a su quincena
+  const d = ctx.buildDraftMonth();
+  ctx.window._draftMonth = d.nm; ctx.window._draftKey = d.nk;
+  ctx.confirmCreateMonth();
+  const dic = I.db[1];
+  assert.equal(dic.agenda.map(x => x.concepto).sort().join(','), 'Arriendo,Seguro');
+  assert.ok(dic.q1_gastos.some(g => g.id === 'G1'));
+  assert.ok(dic.q2_gastos.some(g => g.nombre === 'Arriendo'));
+  assert.equal(nov.agendaFutura, undefined);
+  assert.equal(dic.agendaFutura, undefined);
 });

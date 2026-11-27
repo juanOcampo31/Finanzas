@@ -64,6 +64,73 @@ function agBuscarMesPorFecha(fecha){
   return k!=null?db[k]:null;
 }
 
+// ── Recordatorios de meses que todavía no existen ────────────────────────────
+// Antes, un recordatorio con fecha en un mes aún no creado (ej. diciembre estando en noviembre)
+// caía en el mes que se estaba viendo, con su gasto en la quincena equivocada; y el siguiente
+// periodo de uno recurrente simplemente se perdía. Ahora quedan guardados en el ÚLTIMO mes
+// creado (m.agendaFutura = [{item, gasto}]) y buildDraftMonth los pasa a su mes al crearlo
+// (ver agMaterializarFuturos). Mientras tanto se ven en la Agenda en su propia sección.
+function agUltimoMes(){
+  var keys=Object.keys(db).map(Number);
+  return keys.length?db[Math.max.apply(null,keys)]:null;
+}
+function agIdxMes(año,mi){ return año*12+mi; }
+function agFechaEsFutura(fecha){
+  if(!fecha||agBuscarMesPorFecha(fecha)) return false;
+  var u=agUltimoMes(); if(!u) return false;
+  var p=fecha.split('-');
+  return agIdxMes(parseInt(p[0],10),parseInt(p[1],10)-1)>agIdxMes(u.año,MESES.indexOf(u.nombre));
+}
+function agFuturos(){
+  var u=agUltimoMes();
+  return (u&&Array.isArray(u.agendaFutura))?u.agendaFutura:[];
+}
+function agGuardarFuturo(item,gasto){
+  var u=agUltimoMes(); if(!u) return;
+  if(!Array.isArray(u.agendaFutura)) u.agendaFutura=[];
+  u.agendaFutura.push({item:item,gasto:gasto||null});
+}
+function agNombreMesDeFecha(fecha){
+  var p=(fecha||'').split('-');
+  return (MESES[parseInt(p[1],10)-1]||'ese mes');
+}
+// Al crear el mes nm (copia de lm): los futuros que caen en nm pasan a su agenda y, si traen
+// gasto, a su quincena; los de meses posteriores siguen esperando, ahora en nm (el nuevo último).
+function agMaterializarFuturos(lm,nm){
+  var pend=JSON.parse(JSON.stringify((lm&&lm.agendaFutura)||[]));
+  var mi=MESES.indexOf(nm.nombre), quedan=[];
+  pend.forEach(function(p){
+    var f=(p.item.fecha||'').split('-');
+    if(parseInt(f[0],10)===nm.año && parseInt(f[1],10)-1===mi){
+      agendaArr(nm).push(p.item);
+      if(p.gasto){
+        var key=(p.item.which==='q1')?'q1_gastos':'q2_gastos';
+        if(!Array.isArray(nm[key])) nm[key]=[];
+        nm[key].push(p.gasto);
+      }
+    } else quedan.push(p);
+  });
+  if(quedan.length) nm.agendaFutura=quedan; else delete nm.agendaFutura;
+}
+function agAbrirDetalleFuturo(id){
+  var p=agFuturos().find(function(x){return x.item.id===id;});
+  if(!p) return;
+  var it=p.item;
+  openModal('<div class="mtitle">'+esc(it.concepto)+'</div>'
+    +'<p style="font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:16px">'
+    +fmtD(it.fecha)+(it.monto?(' · '+cop(it.monto)):'')+'<br>'
+    +'<b style="color:var(--txt)">'+esc(agNombreMesDeFecha(it.fecha))+'</b> todavía no está creado. Este '+(it.tipo==='tarea'?'recordatorio':'pago')
+    +(p.gasto?(' y su gasto en la '+(it.which||'').toUpperCase()):'')+' se agregan solos cuando lo crees.</p>'
+    +'<div class="macts"><button class="bcnl" style="color:var(--red)" onclick="agBorrarFuturo(\''+id+'\')">Eliminar</button>'
+    +'<button class="bpri" onclick="closeModal()">Listo</button></div>');
+}
+function agBorrarFuturo(id){
+  var u=agUltimoMes(); if(!u||!u.agendaFutura) return;
+  u.agendaFutura=u.agendaFutura.filter(function(x){return x.item.id!==id;});
+  if(!u.agendaFutura.length) delete u.agendaFutura;
+  save();closeModal();render();toast('Recordatorio eliminado');
+}
+
 // Automáticas: días de pago de nómina Q1/Q2 y fecha límite de cada tarjeta REAL (ver
 // tcEsPlaceholder en tarjeta.js) con saldo pendiente — se recalculan siempre desde la fuente,
 // nunca se guardan como agenda para que no puedan quedar desactualizadas.
@@ -268,7 +335,21 @@ function renderAgenda(m){
     return head+rowsHtml;
   }
 
-  var cuerpoHtml='<div style="padding:0 16px 20px">'+grupoHtml('q1')+grupoHtml('q2')+'</div>';
+  // Recordatorios de meses que todavía no existen (ver agGuardarFuturo): sección propia al final.
+  var futuros=agFuturos().map(function(p){
+    return Object.assign({},p.item,{origen:'futuro',esIngreso:false,gastoPagado:false,color:AG.txt5});
+  }).filter(function(e){
+    if(agFiltro==='dinero'&&e.tipo!=='pago') return false;
+    if(agFiltro==='tareas'&&e.tipo!=='tarea') return false;
+    return true;
+  }).sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
+  var futurosHtml=futuros.length
+    ?('<div style="padding:0 2px;display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px">'
+      +'<span style="font-size:10px;font-weight:800;letter-spacing:.1em;color:'+AG.txt5+'">MESES AÚN SIN CREAR</span>'
+      +'<span style="font-size:11px;font-weight:700;color:'+AG.txt5+'">'+futuros.length+'</span></div>'
+      +futuros.map(agFilaHtml).join(''))
+    :'';
+  var cuerpoHtml='<div style="padding:0 16px 20px">'+grupoHtml('q1')+grupoHtml('q2')+futurosHtml+'</div>';
   var calendarioHtml=agMesCompletoAbierto?mesGridHtml:tiraHtml;
   return headerHtml+filtroHtml+toggleMesHtml+calendarioHtml+cuerpoHtml;
 }
@@ -311,10 +392,12 @@ function agFilaHtml(e){
   // Antes solo las manuales eran clickeables: las "derivadas" (gastos sin pagar vencidos) no
   // tenían ninguna acción posible en la Agenda y se quedaban mostrando "vencido" para siempre,
   // sin forma de resolverlas sin salir a la pestaña Gastos (ver agAbrirDetalleGastoVencido).
-  var clickable=(e.origen==='manual'||e.origen==='derivado');
+  var clickable=(e.origen==='manual'||e.origen==='derivado'||e.origen==='futuro');
   var onclickRow=!clickable?'':(e.origen==='derivado'
     ?(' onclick="agAbrirDetalleGastoVencido(\''+e.gastoId+'\',\''+e.which+'\')"')
-    :(' onclick="agAbrirDetalle(\''+e.id+'\')"'));
+    :e.origen==='futuro'
+      ?(' onclick="agAbrirDetalleFuturo(\''+e.id+'\')"')
+      :(' onclick="agAbrirDetalle(\''+e.id+'\')"'));
 
   return '<div'+onclickRow+' style="padding:4px 12px 4px 0;background:'+bg+';border:1px solid '+bd+';border-radius:11px;display:flex;align-items:center;gap:10px;overflow:hidden;margin-bottom:4px;min-height:34px'+(clickable?';cursor:pointer':'')+'">'
     +'<div style="width:3px;align-self:stretch;border-radius:0 2px 2px 0;background:'+barra+';flex-shrink:0"></div>'
@@ -475,18 +558,27 @@ function agGenerarSiguienteRecurrente(it){
   else return;
   var nuevaFecha=d.toISOString().slice(0,10);
   var mesDestino=agBuscarMesPorFecha(nuevaFecha);
-  if(!mesDestino) return;
-  var yaExiste=agendaArr(mesDestino).some(function(x){return x.concepto===it.concepto&&x.fecha===nuevaFecha;});
+  // Si ese mes todavía no existe, el siguiente periodo queda guardado para cuando se cree (ver
+  // agGuardarFuturo) — antes simplemente se perdía.
+  var futuro=!mesDestino&&agFechaEsFutura(nuevaFecha);
+  if(!mesDestino&&!futuro) return;
+  var yaExiste=futuro
+    ?agFuturos().some(function(p){return p.item.concepto===it.concepto&&p.item.fecha===nuevaFecha;})
+    :agendaArr(mesDestino).some(function(x){return x.concepto===it.concepto&&x.fecha===nuevaFecha;});
   if(yaExiste) return;
   var which=agQuincenaDeFecha(nuevaFecha);
   var nuevo={id:uid(),tipo:'pago',concepto:it.concepto,fecha:nuevaFecha,monto:it.monto,repetir:it.repetir,tildado:false,gastoId:null,which:which,formaPago:it.formaPago};
+  var gastoNuevo=null;
   if(it.gastoId){
     // Sin chequear (estado null), no "sin pagar" — igual que cualquier gasto recién creado
     // (ver agGuardarNuevo): "sin pagar" es para uno aplazado a otra quincena, no para uno nuevo.
-    var gastoNuevo={id:uid(),nombre:it.concepto,presupuesto:Math.abs(it.monto||0),metodo:it.formaPago||'',estado:null,pagado_flag:false,sinpagar:false,agendaId:nuevo.id};
+    gastoNuevo={id:uid(),nombre:it.concepto,presupuesto:Math.abs(it.monto||0),metodo:it.formaPago||'',estado:null,pagado_flag:false,sinpagar:false,agendaId:nuevo.id};
+    nuevo.gastoId=gastoNuevo.id;
+  }
+  if(futuro){ agGuardarFuturo(nuevo,gastoNuevo); return; }
+  if(gastoNuevo){
     var lista=which==='q1'?(mesDestino.q1_gastos=mesDestino.q1_gastos||[]):(mesDestino.q2_gastos=mesDestino.q2_gastos||[]);
     lista.push(gastoNuevo);
-    nuevo.gastoId=gastoNuevo.id;
   }
   agendaArr(mesDestino).push(nuevo);
 }
@@ -611,12 +703,15 @@ function agBloqueRegistrarGastoHtml(){
     +'<button type="button" onclick="agSetQuincenaManual(\'q2\')" style="padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:'+(wh==='q2'?'800':'600')+';background:'+(wh==='q2'?AG.accBg2:'transparent')+';color:'+(wh==='q2'?AG.cian2:AG.txt5)+'">Q2</button>'
     +'</div></div>';
 
+  var esFuturo=agFechaEsFutura(fechaActual);
   var consecuenciaHtml=gastoExistente
     ?('Se enlaza con <b style="color:'+AG.txt2+'">'+esc(nombreGasto(gastoExistente))+'</b>, sin tocar su estado actual')
-    :('Queda en <b style="color:'+AG.cian+'">'+wh.toUpperCase()+'</b>, sin chequear (como cualquier gasto nuevo)');
+    :esFuturo
+      ?('Queda en la <b style="color:'+AG.cian+'">'+wh.toUpperCase()+' de '+esc(agNombreMesDeFecha(fechaActual))+'</b> cuando crees ese mes')
+      :('Queda en <b style="color:'+AG.cian+'">'+wh.toUpperCase()+'</b>, sin chequear (como cualquier gasto nuevo)');
 
   var asociarHtml='';
-  if(on){
+  if(on&&!esFuturo){
     asociarHtml=gastoExistente
       ?('<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid '+AG.bd4+';padding-top:12px">'
         +'<span style="font-size:12.5px;font-weight:600;color:'+AG.txt4+'">Gasto asociado</span>'
@@ -798,6 +893,8 @@ function agGuardarNuevo(){
   // vista salta a ese mes para que el recordatorio recién creado no "desaparezca" de pantalla.
   var m=agMesDeFecha(fecha);
   var mKey=Object.keys(db).find(function(k){return db[k]===m;});
+  // Fecha en un mes que todavía no existe: se guarda aparte y se agrega a ese mes al crearlo.
+  if(agFechaEsFutura(fecha)){ agGuardarNuevoFuturo(concepto,fecha,hora); return; }
 
   if(agFormTipo==='tarea'){
     var tarea={id:uid(),tipo:'tarea',concepto:concepto,fecha:fecha,hora:hora,monto:null,repetir:'nunca',tildado:false,gastoId:null,which:agQuincenaDeFecha(fecha),formaPago:null};
@@ -844,6 +941,31 @@ function agGuardarNuevo(){
   agFormGastoExistenteId=null;
   agFormQuincenaManual=null;
   agMostrarConfirmacion(item,gastoCreado||gastoAsociado,!!gastoAsociado);
+}
+
+function agGuardarNuevoFuturo(concepto,fecha,hora){
+  var mesNombre=agNombreMesDeFecha(fecha);
+  if(agFormTipo==='tarea'){
+    agGuardarFuturo({id:uid(),tipo:'tarea',concepto:concepto,fecha:fecha,hora:hora,monto:null,repetir:'nunca',tildado:false,gastoId:null,which:agQuincenaDeFecha(fecha),formaPago:null},null);
+  } else {
+    var monto=moneyVal('ag-monto')||0;
+    var registrarGasto=agFormRegistrarGasto;
+    if(registrarGasto&&monto<=0){ showAlert('Ingresa el valor del gasto'); return; }
+    var which=agQuincenaResuelta(fecha);
+    var item={id:uid(),tipo:'pago',concepto:concepto,fecha:fecha,hora:hora,monto:monto>0?monto:null,repetir:agFormRepetirActual,tildado:false,gastoId:null,which:which,formaPago:null};
+    var gasto=null;
+    if(registrarGasto){
+      var formaPago=agFormFormaPago||((catMetodos[0]||{}).nombre||'');
+      gasto={id:uid(),nombre:concepto,presupuesto:monto,metodo:formaPago,estado:null,pagado_flag:false,sinpagar:false,agendaId:item.id};
+      item.gastoId=gasto.id;
+      item.formaPago=formaPago;
+    }
+    agGuardarFuturo(item,gasto);
+  }
+  agFormGastoExistenteId=null;
+  agFormQuincenaManual=null;
+  save();closeModal();render();
+  toast(mesNombre+' todavía no existe: se agregará cuando lo crees.',5000);
 }
 
 function agMostrarConfirmacion(item,gasto,esExistente){
